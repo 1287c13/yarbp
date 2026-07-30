@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Оформление заказа — тестовая форма для рендерера</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: #f3f4f6;
+            padding: 2rem 1rem;
+            color: #111827;
+        }
+
+        /* Контейнер формы */
+        .form-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            padding: 2rem;
+        }
+
+        /* Основная сетка: две колонки (60% / 40%) */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        /* Левая колонка */
+        .left-column {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Правая колонка */
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 1.75rem;
+        }
+
+        /* Общие стили для групп полей */
+        .fieldset-card {
+            background: #f9fafb;
+            border-radius: 20px;
+            padding: 1.5rem;
+            border: 1px solid #e5e7eb;
+            transition: all 0.1s ease;
+        }
+
+        .fieldset-card legend {
+            font-weight: 600;
+            font-size: 1.125rem;
+            padding: 0 0.5rem;
+            width: auto;
+            margin-bottom: 0.5rem;
+            color: #1f2937;
+        }
+
+        fieldset {
+            border: none;
+        }
+
+        /* Вложенная сетка для имени/фамилии */
+        .two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Поля ввода */
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            margin-bottom: 1rem;
+        }
+
+        .input-group.full-width {
+            width: 100%;
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .required-star::after {
+            content: "*";
+            color: #ef4444;
+            margin-left: 0.25rem;
+        }
+
+        input, select {
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            font-size: 0.95rem;
+            transition: 0.2s;
+            background: white;
+            font-family: inherit;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+        }
+
+        /* Радиогруппа */
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            cursor: pointer;
+        }
+
+        .radio-option input {
+            width: 1.1rem;
+            height: 1.1rem;
+            margin: 0;
+            padding: 0;
+            accent-color: #3b82f6;
+        }
+
+        /* Условные блоки (CSS-only) */
+        .conditional-block {
+            display: none;
+            margin-top: 1rem;
+            padding-top: 0.5rem;
+            border-top: 1px dashed #e2e8f0;
+        }
+
+        /* Показываем блок курьерской доставки */
+        #delivery-courier:checked ~ .conditional-courier,
+        #delivery-courier:checked ~ * .conditional-courier {
+            display: block;
+        }
+
+        /* Показываем блок самовывоза */
+        #delivery-pickup:checked ~ .conditional-pickup,
+        #delivery-pickup:checked ~ * .conditional-pickup {
+            display: block;
+        }
+
+        /* Хитрость: так как радио-кнопки находятся выше в DOM, используем общий контейнер */
+        .delivery-switch {
+            position: relative;
+        }
+
+        .conditional-courier, .conditional-pickup {
+            display: none;
+        }
+
+        /* Соседние селекторы работают, если структура правильная */
+        .radio-wrapper:has(#delivery-courier:checked) ~ .conditional-courier {
+            display: block;
+        }
+        .radio-wrapper:has(#delivery-pickup:checked) ~ .conditional-pickup {
+            display: block;
+        }
+
+        /* более надежный вариант через :has() — современно и без js */
+        .delivery-container:has(#delivery-courier:checked) .conditional-courier {
+            display: block;
+        }
+        .delivery-container:has(#delivery-pickup:checked) .conditional-pickup {
+            display: block;
+        }
+
+        /* Карточка заказа */
+        .order-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+        }
+
+        .order-card h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1.2rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #f3f4f6;
+        }
+
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.7rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .cart-item-name {
+            font-weight: 500;
+        }
+
+        .cart-item-price {
+            color: #4b5563;
+        }
+
+        .promo-row {
+            display: flex;
+            gap: 0.75rem;
+            margin: 1rem 0;
+        }
+
+        .promo-row input {
+            flex: 1;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            padding: 0 1.2rem;
+            border-radius: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: inherit;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 700;
+            font-size: 1.2rem;
+            margin: 1rem 0 0.5rem;
+            padding-top: 0.75rem;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        .divider {
+            height: 1px;
+            background: #e5e7eb;
+            margin: 1rem 0;
+        }
+
+        /* Чекбокс согласия */
+        .checkbox-group {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.7rem;
+            margin: 0.5rem 0;
+        }
+
+        .checkbox-group input {
+            width: 1.1rem;
+            height: 1.1rem;
+            margin-top: 0.15rem;
+            accent-color: #3b82f6;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.9rem 1rem;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.2s;
+            width: 100%;
+            font-family: inherit;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(59,130,246,0.25);
+        }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+            .form-container {
+                padding: 1.25rem;
+            }
+            .two-columns {
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+        }
+
+        small {
+            color: #6b7280;
+            font-size: 0.7rem;
+        }
+        .mt-1 {
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+<body>
+<div class="form-container">
+    <form action="/order" method="post">
+        <div class="form-grid">
+            <!-- ЛЕВАЯ КОЛОНКА: данные покупателя и способ получения -->
+            <div class="left-column">
+                <!-- Блок 1: Контактные данные -->
+                <fieldset class="fieldset-card">
+                    <legend>📋 Контактные данные</legend>
+                    <div class="two-columns">
+                        <div class="input-group">
+                            <label class="required-star">Имя</label>
+                            <input type="text" name="first_name" required placeholder="Иван">
+                        </div>
+                        <div class="input-group">
+                            <label class="required-star">Фамилия</label>
+                            <input type="text" name="last_name" required placeholder="Петров">
+                        </div>
+                    </div>
+                    <div class="input-group full-width">
+                        <label class="required-star">Email</label>
+                        <input type="email" name="email" required placeholder="ivan@example.com">
+                    </div>
+                    <div class="input-group full-width">
+                        <label class="required-star">Телефон</label>
+                        <input type="tel" name="phone" placeholder="+7 (999) 123-45-67" required>
+                    </div>
+                </fieldset>
+
+                <!-- Блок 2: Способ получения (с CSS-условиями без JS) -->
+                <fieldset class="fieldset-card delivery-container">
+                    <legend>🚚 Способ получения</legend>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="delivery_method" value="courier" id="delivery-courier" checked>
+                            <span>Курьерская доставка</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="delivery_method" value="pickup" id="delivery-pickup">
+                            <span>Самовывоз из пункта выдачи</span>
+                        </label>
+                    </div>
+
+                    <!-- Условный блок: Курьер (адрес + квартира) -->
+                    <div class="conditional-courier">
+                        <div class="input-group full-width">
+                            <label>Улица, дом</label>
+                            <input type="text" name="street" placeholder="ул. Тверская, д. 12">
+                        </div>
+                        <div class="two-columns">
+                            <div class="input-group">
+                                <label>Квартира/офис</label>
+                                <input type="text" name="apartment" placeholder="45">
+                            </div>
+                            <div class="input-group">
+                                <label>Подъезд</label>
+                                <input type="text" name="entrance" placeholder="2">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Условный блок: Самовывоз (выбор ПВЗ) -->
+                    <div class="conditional-pickup">
+                        <div class="input-group full-width">
+                            <label>Пункт выдачи</label>
+                            <select name="pickup_point">
+                                <option value="moscow_center">Москва, ул. Тверская 1 (м. Охотный ряд)</option>
+                                <option value="moscow_dinamo">Москва, Ленинградский пр-т, 36 (м. Динамо)</option>
+                                <option value="spb_nevsky">СПб, Невский пр-т, 88</option>
+                            </select>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+
+            <!-- ПРАВАЯ КОЛОНКА: состав заказа + оплата -->
+            <div class="right-column">
+                <!-- Карточка заказа -->
+                <div class="order-card">
+                    <h3>🛒 Ваш заказ</h3>
+                    <div class="cart-item">
+                        <span class="cart-item-name">Кроссовки Air Max</span>
+                        <span class="cart-item-price">12 000 ₽</span>
+                    </div>
+                    <div class="cart-item">
+                        <span class="cart-item-name">Футболка Cotton Premium</span>
+                        <span class="cart-item-price">3 000 ₽</span>
+                    </div>
+                    <div class="cart-item" style="border-bottom: none;">
+                        <span class="cart-item-name">Количество:</span>
+                        <span>2 шт.</span>
+                    </div>
+
+                    <div class="promo-row">
+                        <input type="text" name="promocode" placeholder="Промокод">
+                        <button type="button" class="btn-secondary">Применить</button>
+                    </div>
+
+                    <div class="total-row">
+                        <span>Итого:</span>
+                        <span>15 000 ₽</span>
+                    </div>
+                    <small>включая НДС</small>
+                </div>
+
+                <!-- Блок способа оплаты -->
+                <div class="order-card">
+                    <h3>💳 Способ оплаты</h3>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="payment" value="card_online" checked>
+                            <span>Картой онлайн (без комиссии)</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="payment" value="cash">
+                            <span>Наличными при получении</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="payment" value="terminal">
+                            <span>Терминал курьеру</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Согласие и кнопка отправки -->
+                <div class="checkbox-group">
+                    <input type="checkbox" id="agreement" name="agreement" required>
+                    <label for="agreement">Согласен на обработку персональных данных</label>
+                </div>
+
+                <button type="submit" class="btn-primary">Подтвердить заказ</button>
+                <small class="mt-1" style="display: block; text-align: center;">Нажимая на кнопку, вы соглашаетесь с условиями</small>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Без JS, условное отображение работает через :has() -->
+<style>
+    /* Современный способ: управление видимостью через :has() — полностью CSS */
+    .delivery-container:has(#delivery-courier:checked) .conditional-pickup {
+        display: none;
+    }
+    .delivery-container:has(#delivery-courier:checked) .conditional-courier {
+        display: block;
+    }
+    .delivery-container:has(#delivery-pickup:checked) .conditional-courier {
+        display: none;
+    }
+    .delivery-container:has(#delivery-pickup:checked) .conditional-pickup {
+        display: block;
+    }
+    /* начальное состояние — курьер показан, самовывоз скрыт */
+    .conditional-pickup {
+        display: none;
+    }
+    .conditional-courier {
+        display: block;
+    }
+</style>
+</body>
+</html>

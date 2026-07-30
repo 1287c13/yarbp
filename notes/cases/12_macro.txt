@@ -1,0 +1,25 @@
+! as xml
+! use macro
+@a(xx)
+  b .c #(( d )).e
+    ab = ac (( ad ))
+    ..f
+      (( g ))
+      h .i j
+      ag
+k
+  r
+    a
+      .ad ae
+      .d k
+      ..g
+        l .m n
+        o .p q
+s
+  t
+    a
+      ..g
+        v .w x
+        y .z aa
+      .d u
+      .ad af

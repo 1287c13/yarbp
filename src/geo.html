@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбор геолокации</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e2f;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            background: #2a2a3e;
+            border-radius: 24px;
+            padding: 32px 28px 28px;
+            width: 100%;
+            max-width: 550px;
+            box-shadow: 0 25px 45px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        h2 {
+            color: #e8e8f0;
+            font-weight: 500;
+            font-size: 1.6rem;
+            letter-spacing: -0.3px;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h2::before {
+            content: "📍";
+            font-size: 1.7rem;
+        }
+
+        .map-wrapper {
+            border-radius: 18px;
+            overflow: hidden;
+            background: #3a3a52;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.3), 0 8px 20px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            height: 320px;
+            width: 100%;
+            position: relative;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            background: #d4d9e2;
+        }
+
+        /* Компактный список меток под картой */
+        .preset-list {
+            background: #222235;
+            border-radius: 16px;
+            padding: 14px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .preset-tag {
+            background: #3a3a55;
+            color: #d0d0f0;
+            border: 1px solid #5a5a7a;
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        .preset-tag:hover {
+            background: #6366f1;
+            border-color: #818cf8;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .coordinates-panel {
+            background: #222235;
+            border-radius: 16px;
+            padding: 18px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .coord-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .coord-label {
+            color: #9b9bb8;
+            font-weight: 450;
+            font-size: 0.9rem;
+            letter-spacing: 0.3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .coord-value {
+            background: #151523;
+            border-radius: 12px;
+            padding: 12px 15px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 1rem;
+            color: #d0d0ff;
+            border: 1px solid #3e3e5c;
+            flex: 1;
+            text-align: right;
+            letter-spacing: 0.4px;
+            box-shadow: inset 0 1px 4px rgba(0,0,0,0.5);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 4px;
+        }
+
+        button {
+            background: #3d3d5c;
+            border: none;
+            border-radius: 14px;
+            padding: 14px 20px;
+            font-weight: 500;
+            font-size: 0.95rem;
+            color: #f0f0fa;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            letter-spacing: 0.2px;
+            background: #4a4a6a;
+            border-bottom: 2px solid rgba(0,0,0,0.2);
+            flex: 1;
+        }
+
+        button:hover {
+            background: #5e5e82;
+            border-bottom-color: rgba(255,255,255,0.15);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(1px);
+            background: #3c3c58;
+        }
+
+        .primary-btn {
+            background: #6366f1;
+            border-bottom: 2px solid #4f46e5;
+            font-weight: 500;
+            box-shadow: 0 8px 18px rgba(99, 102, 241, 0.3);
+        }
+
+        .primary-btn:hover {
+            background: #7577f5;
+        }
+
+        .status-message {
+            font-size: 0.8rem;
+            color: #a0a0c0;
+            text-align: center;
+            min-height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Геолокация</h2>
+        
+        <div class="map-wrapper">
+            <div id="map"></div>
+        </div>
+
+        <!-- Список предустановленных меток -->
+        <div class="preset-list" id="presetList"></div>
+
+        <div class="coordinates-panel">
+            <div class="coord-row">
+                <span class="coord-label">🌐 Широта</span>
+                <span class="coord-value" id="latDisplay">—</span>
+            </div>
+            <div class="coord-row">
+                <span class="coord-label">🗺️ Долгота</span>
+                <span class="coord-value" id="lngDisplay">—</span>
+            </div>
+            
+            <div class="action-buttons">
+                <button id="detectBtn">
+                    <span>📡</span> Определить
+                </button>
+                <button id="clearBtn" class="primary-btn">
+                    <span>🎯</span> Сбросить
+                </button>
+            </div>
+            <div class="status-message" id="statusMessage"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        (function() {
+            const map = L.map('map', {
+                center: [48, 20],
+                zoom: 4,
+                zoomControl: true,
+                attributionControl: false
+            });
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                detectRetina: true
+            }).addTo(map);
+
+            // === ПРЕДУСТАНОВЛЕННЫЕ МЕТКИ (можно менять как угодно) ===
+            const presetLocations = [
+                { name: '🏛️ Москва', lat: 55.7558, lng: 37.6173 },
+                { name: '🗽 Нью-Йорк', lat: 40.7128, lng: -74.0060 },
+                { name: '🗼 Париж', lat: 48.8566, lng: 2.3522 },
+                { name: '🏯 Токио', lat: 35.6762, lng: 139.6503 },
+                { name: '🇧🇷 Рио-де-Жанейро', lat: -22.9068, lng: -43.1729 },
+                { name: '🦘 Сидней', lat: -33.8688, lng: 151.2093 },
+                { name: '🌍 Кейптаун', lat: -33.9249, lng: 18.4241 },
+                { name: '🏔️ Катманду', lat: 27.7172, lng: 85.3240 }
+            ];
+
+            let currentMarker = null;
+            let presetMarkers = []; // храним все предустановленные маркеры
+            
+            const latDisplay = document.getElementById('latDisplay');
+            const lngDisplay = document.getElementById('lngDisplay');
+            const statusEl = document.getElementById('statusMessage');
+            const detectBtn = document.getElementById('detectBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const presetList = document.getElementById('presetList');
+
+            // Иконка для пользовательского маркера
+            const userIcon = L.divIcon({
+                className: 'custom-marker',
+                html: `<div style="
+                    width: 22px;
+                    height: 22px;
+                    background: #6366f1;
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    box-shadow: 0 0 14px rgba(99,102,241,0.9), 0 2px 8px black;
+                    transform: translate(-50%, -50%);
+                "></div>`,
+                iconSize: [22, 22],
+                iconAnchor: [11, 11]
+            });
+
+            // Иконка для предустановленных меток
+            const presetIcon = L.divIcon({
+                className: 'preset-marker',
+                html: `<div style="
+                    width: 16px;
+                    height: 16px;
+                    background: #f59e0b;
+                    border: 2px solid white;
+                    border-radius: 50%;
+                    box-shadow: 0 0 10px rgba(245,158,11,0.7), 0 2px 6px black;
+                    transform: translate(-50%, -50%);
+                "></div>`,
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+
+            // === ОТРИСОВКА ПРЕДУСТАНОВЛЕННЫХ МЕТОК ===
+            function renderPresetMarkers() {
+                // Очищаем старые
+                presetMarkers.forEach(m => map.removeLayer(m));
+                presetMarkers = [];
+                presetList.innerHTML = '';
+
+                presetLocations.forEach((loc, index) => {
+                    // Маркер на карте
+                    const marker = L.marker([loc.lat, loc.lng], { icon: presetIcon })
+                        .addTo(map)
+                        .bindPopup(`<b>${loc.name}</b><br><small>${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}</small>`);
+                    
+                    // При клике на метку — выбираем её (ставим пользовательский маркер)
+                    marker.on('click', function(e) {
+                        L.DomEvent.stopPropagation(e); // чтобы не сработал клик по карте
+                        setUserMarker(loc.lat, loc.lng);
+                        statusEl.textContent = `📍 Выбрано: ${loc.name}`;
+                    });
+
+                    presetMarkers.push(marker);
+
+                    // Тег в списке под картой
+                    const tag = document.createElement('span');
+                    tag.className = 'preset-tag';
+                    tag.textContent = loc.name;
+                    tag.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        setUserMarker(loc.lat, loc.lng);
+                        // Плавно перемещаем карту к выбранной метке
+                        map.flyTo([loc.lat, loc.lng], 10, { duration: 0.7 });
+                        statusEl.textContent = `📍 Выбрано: ${loc.name}`;
+                    });
+                    presetList.appendChild(tag);
+                });
+            }
+
+            function formatCoord(value) {
+                if (value === null || isNaN(value)) return '—';
+                return Number(value).toFixed(6);
+            }
+
+            function updateCoordinates(lat, lng) {
+                latDisplay.textContent = formatCoord(lat);
+                lngDisplay.textContent = formatCoord(lng);
+            }
+
+            // Установка пользовательского маркера (без смены зума)
+            function setUserMarker(lat, lng) {
+                if (currentMarker) {
+                    map.removeLayer(currentMarker);
+                }
+                currentMarker = L.marker([lat, lng], { icon: userIcon }).addTo(map);
+                updateCoordinates(lat, lng);
+            }
+
+            // Клик по карте — ставим пользовательский маркер
+            function onMapClick(e) {
+                const { lat, lng } = e.latlng;
+                setUserMarker(lat, lng);
+                statusEl.textContent = '📍 Точка установлена вручную';
+            }
+
+            map.on('click', onMapClick);
+
+            // Определение геолокации
+function detectLocation() {
+    if (!navigator.geolocation) {
+        statusEl.textContent = '⚠️ Геолокация не поддерживается браузером';
+        return;
+    }
+
+    // Блокируем кнопку и показываем ожидание
+    detectBtn.disabled = true;
+    detectBtn.style.opacity = '0.6';
+    detectBtn.style.cursor = 'not-allowed';
+    detectBtn.innerHTML = '<span>⏳</span> Ищем...';
+    statusEl.textContent = '⏳ Поиск местоположения...';
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            setUserMarker(lat, lng);
+            map.flyTo([lat, lng], 13, { duration: 0.8 });
+            statusEl.textContent = '✅ Ваше местоположение найдено';
+            
+            // Восстанавливаем кнопку
+            detectBtn.disabled = false;
+            detectBtn.style.opacity = '1';
+            detectBtn.style.cursor = 'pointer';
+            detectBtn.innerHTML = '<span>📡</span> Определить';
+        },
+        (error) => {
+            let message = '❌ Ошибка доступа к геолокации';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    message = '❌ Доступ к геолокации запрещён';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message = '❌ Информация о местоположении недоступна';
+                    break;
+                case error.TIMEOUT:
+                    message = '❌ Время ожидания истекло';
+                    break;
+            }
+            statusEl.textContent = message;
+            
+            // Восстанавливаем кнопку
+            detectBtn.disabled = false;
+            detectBtn.style.opacity = '1';
+            detectBtn.style.cursor = 'pointer';
+            detectBtn.innerHTML = '<span>📡</span> Определить';
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+        }
+    );
+}
+
+            // Сброс
+            function resetSelection() {
+                if (currentMarker) {
+                    map.removeLayer(currentMarker);
+                    currentMarker = null;
+                }
+                updateCoordinates(null, null);
+                map.setView([48, 20], 4);
+                statusEl.textContent = '🗺️ Выберите точку на карте или из списка';
+            }
+
+            detectBtn.addEventListener('click', detectLocation);
+            clearBtn.addEventListener('click', resetSelection);
+
+            // Запуск
+            renderPresetMarkers();
+            updateCoordinates(null, null);
+            statusEl.textContent = '👆 Клик по карте или выберите метку из списка';
+
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 100);
+
+            window.addEventListener('resize', () => {
+                map.invalidateSize();
+            });
+
+        })();
+    </script>
+</body>
+</html>

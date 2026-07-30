@@ -1,0 +1,4 @@
+! as proto
+order
+  .order_number:string
+  .created_at:string

@@ -1,0 +1,2 @@
+! as lexer
+a = b .c d

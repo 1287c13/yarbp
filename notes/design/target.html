@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Производственная форма — выработка, материалы, выпуск</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: #f3f4f6;
+            padding: 2rem 1rem;
+            color: #111827;
+        }
+
+        .form-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            padding: 2rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        .left-column, .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .fieldset-card {
+            background: #f9fafb;
+            border-radius: 20px;
+            padding: 1.5rem;
+            border: 1px solid #e5e7eb;
+        }
+
+        .fieldset-card legend {
+            font-weight: 600;
+            font-size: 1.125rem;
+            padding: 0 0.5rem;
+            width: auto;
+            margin-bottom: 0.5rem;
+            color: #1f2937;
+        }
+
+        fieldset {
+            border: none;
+        }
+
+        .two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            margin-bottom: 1rem;
+        }
+
+        .input-group.full-width {
+            width: 100%;
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .required-star::after {
+            content: "*";
+            color: #ef4444;
+            margin-left: 0.25rem;
+        }
+
+        input, select, button {
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            font-size: 0.95rem;
+            transition: 0.2s;
+            background: white;
+            font-family: inherit;
+        }
+
+        input:focus, select:focus, button:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+        }
+
+        button {
+            background: #f3f4f6;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: #e5e7eb;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.9rem 1rem;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.2s;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(59,130,246,0.25);
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            padding: 0.7rem 1rem;
+            border-radius: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            cursor: pointer;
+        }
+
+        .radio-option input {
+            width: 1.1rem;
+            height: 1.1rem;
+            margin: 0;
+            padding: 0;
+            accent-color: #3b82f6;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.7rem;
+            margin: 0.5rem 0;
+        }
+
+        .checkbox-group input {
+            width: 1.1rem;
+            height: 1.1rem;
+            margin-top: 0.15rem;
+            accent-color: #3b82f6;
+        }
+
+        /* Динамические блоки через CSS :has */
+        .dynamic-block {
+            display: none;
+        }
+
+        .release-type-container:has(#release-type-finished:checked) .conditional-finished {
+            display: block;
+        }
+        .release-type-container:has(#release-type-semifinished:checked) .conditional-semifinished {
+            display: block;
+        }
+
+        .send-method-container:has(#send-to-accounting:checked) .conditional-accounting,
+        .send-method-container:has(#send-draft:checked) .conditional-draft,
+        .send-method-container:has(#send-print:checked) .conditional-print {
+            display: block;
+        }
+
+        .conditional-finished, .conditional-semifinished,
+        .conditional-accounting, .conditional-draft, .conditional-print {
+            display: none;
+        }
+
+        /* Стили для списка (вертикальные блоки) */
+        .items-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .list-item {
+            background: white;
+            border-radius: 16px;
+            padding: 0.75rem 1rem;
+            border: 1px solid #e5e7eb;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .list-item .item-label {
+            font-weight: 500;
+            color: #4b5563;
+            font-size: 0.85rem;
+        }
+        .list-item .item-value {
+            font-weight: 500;
+            color: #111827;
+        }
+
+        /* Повторяющиеся блоки (форма добавления) */
+        .repeatable-item {
+            background: white;
+            border-radius: 16px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid #e5e7eb;
+        }
+
+        .repeatable-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .order-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+        }
+
+        .order-card h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1.2rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #f3f4f6;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin: 1rem 0 0.5rem;
+            padding-top: 0.75rem;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        small {
+            color: #6b7280;
+            font-size: 0.7rem;
+        }
+
+        /* Управление переключением между списком и формой */
+        .list-view, .form-view {
+            transition: 0.2s;
+        }
+        .form-view {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+            .two-columns {
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="form-container">
+    <form action="/production/submit" method="post">
+        <div class="form-grid">
+            <!-- ЛЕВАЯ КОЛОНКА -->
+            <div class="left-column">
+                <!-- Блок: Привязка к заказу -->
+                <fieldset class="fieldset-card">
+                    <legend>🏭 Производственный заказ</legend>
+                    <div class="input-group full-width">
+                        <label class="required-star">Штрихкод заказа</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" name="order_barcode" placeholder="Отсканируйте или введите код" required>
+                            <button type="button" class="btn-secondary">Очистить</button>
+                        </div>
+                    </div>
+                    <div class="order-card" style="margin-top: 1rem;">
+                        <div class="info-row"><span>Номер заказа:</span><strong>ПЗ-2025-042</strong></div>
+                        <div class="info-row"><span>Изделия:</span><strong>Корпусная мебель "Элегия"</strong></div>
+                        <div class="info-row"><span>Плановое количество:</span><strong>50 шт.</strong></div>
+                        <div class="info-row"><span>Выполнено:</span><strong>32 шт.</strong></div>
+                    </div>
+                </fieldset>
+
+                <!-- Блок: Трудовые операции (два представления) -->
+                <fieldset class="fieldset-card" id="operations-card">
+                    <legend>👷 Трудовые операции</legend>
+                    <!-- Список (вертикальные блоки) -->
+                    <div class="list-view" id="operations-list-view">
+                        <div class="items-list">
+                            <div class="list-item">
+                                <span class="item-label">Раскрой</span>
+                                <span class="item-value">12 шт.</span>
+                                <span class="item-label">Примечание:</span>
+                                <span class="item-value">—</span>
+                            </div>
+                            <div class="list-item">
+                                <span class="item-label">Пошив</span>
+                                <span class="item-value">8 шт.</span>
+                                <span class="item-label">Примечание:</span>
+                                <span class="item-value">срочный заказ</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary show-form-btn" style="width: 100%;">+ Добавить операцию</button>
+                    </div>
+                    <!-- Форма добавления -->
+                    <div class="form-view" id="operations-form-view">
+                        <div id="operations-form-list">
+                            <div class="repeatable-item">
+                                <div class="repeatable-header">
+                                    <span>Операция 1</span>
+                                    <button type="button" class="btn-secondary remove-item" style="padding: 0.3rem 0.8rem;">✖</button>
+                                </div>
+                                <div class="two-columns">
+                                    <div class="input-group">
+                                        <label>Тип операции</label>
+                                        <select name="operations[0][type]">
+                                            <option>Раскрой</option>
+                                            <option>Пошив</option>
+                                            <option>Сборка</option>
+                                            <option>Упаковка</option>
+                                        </select>
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Количество (шт.)</label>
+                                        <input type="number" name="operations[0][quantity]" value="12">
+                                    </div>
+                                </div>
+                                <div class="input-group full-width">
+                                    <label>Примечание</label>
+                                    <input type="text" name="operations[0][comment]" placeholder="Необязательно">
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary add-copy" style="width: 100%; margin-top: 0.5rem;">+ Добавить ещё</button>
+                        <button type="button" class="btn-secondary back-to-list" style="width: 100%; margin-top: 0.5rem;">← Назад к списку</button>
+                    </div>
+                </fieldset>
+
+                <!-- Блок: Материалы и полуфабрикаты (два представления) -->
+                <fieldset class="fieldset-card" id="materials-card">
+                    <legend>🛠️ Материалы и полуфабрикаты</legend>
+                    <div class="list-view" id="materials-list-view">
+                        <div class="items-list">
+                            <div class="list-item">
+                                <span class="item-label">ЛДСП 16 мм</span>
+                                <span class="item-value">4.5 м²</span>
+                            </div>
+                            <div class="list-item">
+                                <span class="item-label">Кромка ПВХ 2 мм</span>
+                                <span class="item-value">32 пог. м</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary show-form-btn" style="width: 100%;">+ Добавить материал</button>
+                    </div>
+                    <div class="form-view" id="materials-form-view">
+                        <div id="materials-form-list">
+                            <div class="repeatable-item">
+                                <div class="repeatable-header">
+                                    <span>Материал 1</span>
+                                    <button type="button" class="btn-secondary remove-item" style="padding: 0.3rem 0.8rem;">✖</button>
+                                </div>
+                                <div class="two-columns">
+                                    <div class="input-group">
+                                        <label>Наименование</label>
+                                        <input type="text" name="materials[0][name]" value="ЛДСП 16 мм">
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Количество</label>
+                                        <input type="text" name="materials[0][quantity]" value="4.5">
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <label>Ед. изм.</label>
+                                    <select name="materials[0][unit]">
+                                        <option>м²</option>
+                                        <option>шт</option>
+                                        <option>кг</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary add-copy" style="width: 100%; margin-top: 0.5rem;">+ Добавить ещё</button>
+                        <button type="button" class="btn-secondary back-to-list" style="width: 100%; margin-top: 0.5rem;">← Назад к списку</button>
+                    </div>
+                </fieldset>
+            </div>
+
+            <!-- ПРАВАЯ КОЛОНКА -->
+            <div class="right-column">
+                <!-- Блок: Выпуск продукции (два представления) -->
+                <fieldset class="fieldset-card release-type-container" id="release-card">
+                    <legend>📦 Выпуск продукции</legend>
+                    <div class="list-view" id="release-list-view">
+                        <div class="items-list">
+                            <div class="list-item">
+                                <span class="item-label">Готовая продукция</span>
+                                <span class="item-value">25 шт.</span>
+                                <span class="item-label">Склад:</span>
+                                <span class="item-value">Цех №1</span>
+                            </div>
+                            <div class="list-item">
+                                <span class="item-label">Полуфабрикат</span>
+                                <span class="item-value">10 шт.</span>
+                                <span class="item-label">След. операция:</span>
+                                <span class="item-value">Сборка</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary show-form-btn" style="width: 100%;">+ Добавить выпуск</button>
+                    </div>
+                    <div class="form-view" id="release-form-view">
+                        <div id="release-form-list">
+                            <div class="repeatable-item">
+                                <div class="repeatable-header">
+                                    <span>Выпуск 1</span>
+                                    <button type="button" class="btn-secondary remove-item" style="padding: 0.3rem 0.8rem;">✖</button>
+                                </div>
+                                <div class="two-columns">
+                                    <div class="input-group">
+                                        <label>Тип продукции</label>
+                                        <select name="release[0][type]">
+                                            <option>Готовая продукция</option>
+                                            <option>Полуфабрикат</option>
+                                        </select>
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Количество (шт.)</label>
+                                        <input type="number" name="release[0][quantity]" value="10">
+                                    </div>
+                                </div>
+                                <div class="input-group full-width">
+                                    <label>Примечание</label>
+                                    <input type="text" name="release[0][comment]" placeholder="Склад, смена и т.п.">
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary add-copy" style="width: 100%; margin-top: 0.5rem;">+ Добавить ещё</button>
+                        <button type="button" class="btn-secondary back-to-list" style="width: 100%; margin-top: 0.5rem;">← Назад к списку</button>
+                    </div>
+                </fieldset>
+
+                <!-- Блок: Способ передачи данных (без изменений) -->
+                <fieldset class="fieldset-card send-method-container">
+                    <legend>📡 Передача данных</legend>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="send_method" value="accounting" id="send-to-accounting" checked>
+                            <span>Отправить в учётную систему</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="send_method" value="draft" id="send-draft">
+                            <span>Сохранить черновик</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="send_method" value="print" id="send-print">
+                            <span>Распечатать наряд</span>
+                        </label>
+                    </div>
+                    <div class="conditional-accounting dynamic-block">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="confirm_accounting" checked>
+                            <label for="confirm_accounting">Списать материалы по факту</label>
+                        </div>
+                    </div>
+                    <div class="conditional-draft dynamic-block">
+                        <div class="input-group full-width">
+                            <label>Комментарий к черновику</label>
+                            <input type="text" placeholder="Причина отложенной отправки">
+                        </div>
+                    </div>
+                    <div class="conditional-print dynamic-block">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="include_details">
+                            <label for="include_details">Включить расшифровку операций</label>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- Итоговая информация и согласие -->
+                <div class="order-card">
+                    <h3>📊 Итоговая сводка</h3>
+                    <div class="info-row"><span>Выпуск продукции:</span><span>35 шт.</span></div>
+                    <div class="info-row"><span>Трудовые операции:</span><span>2 записи</span></div>
+                    <div class="info-row"><span>Материалы:</span><span>2 позиции</span></div>
+                    <div class="total-row">
+                        <span>Статус:</span>
+                        <span>Заполняется</span>
+                    </div>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="agreement" required>
+                    <label for="agreement">Подтверждаю достоверность внесённых данных</label>
+                </div>
+
+                <button type="submit" class="btn-primary">Отправить отчёт о выработке</button>
+                <small class="mt-1" style="display: block; text-align: center;">После отправки данные поступят в учётную систему</small>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    // Простой JS только для переключения между списком и формой
+    document.querySelectorAll('.show-form-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const parentCard = this.closest('.fieldset-card');
+            const listView = parentCard.querySelector('.list-view');
+            const formView = parentCard.querySelector('.form-view');
+            if (listView && formView) {
+                listView.style.display = 'none';
+                formView.style.display = 'block';
+            }
+        });
+    });
+
+    document.querySelectorAll('.back-to-list').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const parentCard = this.closest('.fieldset-card');
+            const listView = parentCard.querySelector('.list-view');
+            const formView = parentCard.querySelector('.form-view');
+            if (listView && formView) {
+                listView.style.display = 'block';
+                formView.style.display = 'none';
+            }
+        });
+    });
+
+    // Кнопки "Добавить ещё" в формах (просто клонируют первый элемент)
+    document.querySelectorAll('.add-copy').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const formList = this.closest('.form-view').querySelector('[id$="-form-list"]');
+            const firstItem = formList.querySelector('.repeatable-item');
+            if (firstItem) {
+                const newItem = firstItem.cloneNode(true);
+                // Очищаем значения полей
+                newItem.querySelectorAll('input, select').forEach(field => {
+                    if (field.type === 'text' || field.type === 'number') field.value = '';
+                    if (field.tagName === 'SELECT') field.selectedIndex = 0;
+                });
+                // Обновляем заголовок
+                const header = newItem.querySelector('.repeatable-header span');
+                if (header) {
+                    const count = formList.querySelectorAll('.repeatable-item').length;
+                    header.innerText = header.innerText.replace(/\d+/, count + 1);
+                }
+                formList.appendChild(newItem);
+                // Привязываем удаление
+                const delBtn = newItem.querySelector('.remove-item');
+                if (delBtn) {
+                    delBtn.addEventListener('click', () => newItem.remove());
+                }
+            }
+        });
+    });
+
+    // Удаление позиций в формах
+    document.querySelectorAll('.remove-item').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const item = this.closest('.repeatable-item');
+            if (item) item.remove();
+        });
+    });
+</script>
+
+</body>
+</html>
