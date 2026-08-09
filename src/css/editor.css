@@ -13,10 +13,10 @@ height: 100%; background: transparent; cursor: col-resize; z-index: 10; }
 
 @font-face {
 font-family: 'JetBrains Mono'; font-weight: normal; font-style: normal;
-src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2'); }
+src: url('/src/fonts/JetBrainsMono-Regular.woff2') format('woff2'); }
 @font-face {
 font-family: 'JetBrains Mono'; font-weight: bold; font-style: normal;
-src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff2'); }
+src: url('/src/fonts/JetBrainsMono-Bold.woff2') format('woff2'); }
 @media (orientation: portrait) {
 #work-area { flex-direction: column; }
 #code-pane, #render-pane { min-height: 200px; } }

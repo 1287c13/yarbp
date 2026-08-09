@@ -25,18 +25,22 @@ export function splitWithEscaping(str, escapingSymbols, separator) {
   for (let i = 0; i < str.length; i++) {
     const char = str[i];
 
-    if (escapingSymbols.includes(char)) {
-      if (!escaped) {
-        escaped = true;
-        quoteChar = char;
-        current += char;
-      } else if (escaped && char === quoteChar) {
-        escaped = false;
-        quoteChar = '';
-        current += char;
-      } else {
-        current += char;
-      }
+    if (escapingSymbols.includes(char) && !escaped) {
+      escaped = true;
+      quoteChar = char;
+      current += char;
+    }
+
+    else if (escaped && char === ')' && quoteChar === '(') {
+      escaped = false;
+      quoteChar = '';
+      current += char;
+    }
+
+    else if (escaped && char === quoteChar && quoteChar !== '(') {
+      escaped = false;
+      quoteChar = '';
+      current += char;
     } else if (char === separator && !escaped) {
       if (current.length > 0) {
         result.push(current);

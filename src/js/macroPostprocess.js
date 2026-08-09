@@ -17,7 +17,7 @@ export function expandMacros(ast) {
       return match;
     });
   };
-  
+
   const macroDefRegex = /^@(\w+)(?:\((\w+)\))?$/;
 
   const macros = new Map();
