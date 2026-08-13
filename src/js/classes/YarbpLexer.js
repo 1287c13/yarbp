@@ -314,7 +314,6 @@ export class YarbpLexer {
     const frameSize = 4;
 
     const emptyObjectIndices = [];
-    let isInArrayScope = false;
 
     for (let i = 0; i <= this.tokens.length - frameSize; i++) {
       const scopeIn = this.tokens[i];
@@ -331,20 +330,17 @@ export class YarbpLexer {
         && third.type === TokenTypes.COMMENT
         && fourth.type === TokenTypes.SCOPE_OUT;
 
-      if (isEmptyObject && isInArrayScope) {
+      if (isEmptyObject) {
         emptyObjectIndices.push(i);
         emptyObjectIndices.push(i + 2);
         object.type = TokenTypes.ANY_VALUE;
       }
 
-      if (isEmptyObjectWithComment && isInArrayScope) {
+      if (isEmptyObjectWithComment) {
         emptyObjectIndices.push(i);
         emptyObjectIndices.push(i + 3);
         object.type = TokenTypes.ANY_VALUE;
       }
-
-      isInArrayScope = object.type === TokenTypes.ARRAY
-        || isInArrayScope && object.type !== TokenTypes.OBJECT;
     }
 
     [...new Set(emptyObjectIndices)]

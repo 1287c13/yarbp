@@ -233,7 +233,7 @@ function updateViews() {
 
   let flavor;
   if (!firstDirective) {
-    flavor = new YarbpFlavor('as lexer');
+    flavor = new YarbpFlavor('as lexer-output');
   } else {
     flavor = new YarbpFlavor(firstDirective.value);
   }
