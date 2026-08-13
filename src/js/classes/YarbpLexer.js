@@ -394,9 +394,6 @@ export class YarbpLexer {
     if (this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE && YarbpLexer.spaceSymbols.includes(char))
       return YarbpLexer.states.WAITING_AFTER_NEWLINE;
 
-    if (this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE && YarbpLexer.spaceSymbols.includes(char))
-      return YarbpLexer.states.WAITING_AFTER_NEWLINE;
-
     if ((this.state === YarbpLexer.states.WAITING
         || this.state === YarbpLexer.states.WAITING_FOR_VALUE
         || this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE)
