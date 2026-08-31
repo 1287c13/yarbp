@@ -21,13 +21,6 @@ export const valueTypes = Object.freeze({
   ARRAY: 'ARRAY'
 });
 
-const declarationSpecific = Object.freeze({
-  IS_ANONYMOUS: 'IS_ANONYMOUS', /* no name given */
-  IS_IMPLICIT: 'IS_IMPLICIT',   /* type is calculated by rules, not specified */
-  IS_ATTRIBUTE: 'IS_ATTRIBUTE', /* declared as named attr, not child */
-  IS_SUGAR: 'IS_SUGAR'          /* shorthands used */
-});
-
 class ASTNode {
   static attrs = Object.freeze({
     nodeType: 'parsedTokenType',  /* enum nodeTypes */
@@ -147,13 +140,19 @@ export class YarbpParser {
         } else if (root.valueType === valueTypes.ARRAY
                   && !YarbpParser.QUOTES.includes(token.value[0])) {
 
-          let arrayValues = splitWithEscaping(
-            token.value, YarbpParser.QUOTES, YarbpParser.ARRAY_SEPARATOR);
+          const match = this.lexer.text.slice(0, token.start).match(/\s+$/);
+          const leadingWhitespace = match ? match[0] : '';
+          let arrayValues = [token.value];
+          if (!leadingWhitespace.includes('\n'))
+            { arrayValues = splitWithEscaping(
+              token.value, YarbpParser.QUOTES, YarbpParser.ARRAY_SEPARATOR); }
 
           enrichedEntities = arrayValues.map(
             val => new ASTNode({
-              valueType: this.resolveType(val), value: this.resolveValue(val) })
-          );
+              valueType: this.resolveType(val), value: this.resolveValue(val) }));
+
+        } else if (root.valueType === valueTypes.OBJECT && !isNestedKeyMet) {
+          root.value = this.resolveValue(token.value);
 
         } else {
           enrichedEntities = [ new ASTNode({

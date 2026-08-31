@@ -304,16 +304,18 @@ export class YarbpLexer {
 
   /* endregion */
 
-  /* region pre(post)processing */
+  /* region postprocessing */
 
   postprocessTokens() {
     this.retypeEmptyObjectsArray();
+    this.reshapeInlineArrayValues();
   };
 
   retypeEmptyObjectsArray() {
     const frameSize = 4;
 
     const emptyObjectIndices = [];
+    let isInArrayScope = false;
 
     for (let i = 0; i <= this.tokens.length - frameSize; i++) {
       const scopeIn = this.tokens[i];
@@ -330,22 +332,36 @@ export class YarbpLexer {
         && third.type === TokenTypes.COMMENT
         && fourth.type === TokenTypes.SCOPE_OUT;
 
-      if (isEmptyObject) {
+      if (isEmptyObject && isInArrayScope) {
         emptyObjectIndices.push(i);
         emptyObjectIndices.push(i + 2);
         object.type = TokenTypes.ANY_VALUE;
+
+        const unparsedTail = object.end < third.end ? this.text.slice(object.end, third.end) : '';
+        if (unparsedTail) {
+          object.value += unparsedTail;
+          object.value = object.value.replaceAll('\n', '');
+          object.end += unparsedTail.length;
+        }
       }
 
-      if (isEmptyObjectWithComment) {
+      if (isEmptyObjectWithComment && isInArrayScope) {
         emptyObjectIndices.push(i);
         emptyObjectIndices.push(i + 3);
         object.type = TokenTypes.ANY_VALUE;
       }
+
+      isInArrayScope = object.type === TokenTypes.ARRAY
+        || isInArrayScope && object.type !== TokenTypes.OBJECT;
     }
 
     [...new Set(emptyObjectIndices)]
       .sort((a, b) => b - a)
       .forEach(index => this.tokens.splice(index, 1));
+  }
+
+  reshapeInlineArrayValues() {
+
   }
 
   /* endregion */
@@ -428,7 +444,7 @@ export class YarbpLexer {
       return YarbpLexer.states.VALUE_ENDED;
 
     if (this.state !== YarbpLexer.states.IN_QUOTED_VALUE
-        && char === '-' && this.currentToken.at(-1) === '-')
+         && ['-', '!', '/', '?'].includes(char) && this.currentToken.slice(-2) === '--')
       return YarbpLexer.states.COMMENT_ENCOUNTERED;
 
     if (this.state === YarbpLexer.states.IN_COMMENT
@@ -611,9 +627,6 @@ export class YarbpLexer {
     const value = this.currentToken;
 
     this.addToken(
-      TokenTypes.PRIMITIVE, pos - value.length,
-      'shorthand', '=');
-    this.addToken(
       TokenTypes.ANY_VALUE, pos - value.length + 1, value);
 
     this.state = YarbpLexer.states.WAITING_AFTER_NEWLINE;
@@ -689,18 +702,18 @@ export class YarbpLexer {
       return;
     }
 
-    if (this.currentToken.slice(0, -1) && expectedTypeWhenCommentMet) {
-      this.currentToken = this.currentToken.slice(0, -1);
+    if (this.currentToken.slice(0, -2) && expectedTypeWhenCommentMet) {
+      this.currentToken = this.currentToken.slice(0, -2);
       this.addToken(expectedTypeWhenCommentMet);
     }
 
     if ([TokenTypes.PRIMITIVE, TokenTypes.TYPE].includes(this.tokens.at(-1).type)) {
-      this.addToken(TokenTypes.ANY_VALUE, pos - 2, '');
+      this.addToken(TokenTypes.ANY_VALUE, pos - 3, '');
     }
 
     this.state = YarbpLexer.states.IN_COMMENT;
-    this.currentToken = '-' + char;
-    this.currentMatchPosition = pos - 1;
+    this.currentToken = '--' + char;
+    this.currentMatchPosition = pos - 2;
   };
 
   handleCommentEnded(char) {
