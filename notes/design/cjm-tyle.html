@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Рендерер тайла (чистый модуль)</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 900px; width: 100%; }
+        textarea { width: 100%; min-height: 300px; font-family: monospace; font-size: 12px; margin-bottom: 10px; }
+        button { padding: 8px 16px; cursor: pointer; margin-right: 10px; }
+        svg { border: 1px solid #ccc; background: white; margin-top: 10px; display: block; }
+        .info { font-weight: bold; margin: 5px 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Рендерер тайла</h2>
+    <label><strong>Конфигурация тайла (JSON):</strong></label>
+    <textarea id="jsonConfig"></textarea>
+    <div>
+        <button id="renderMeasureBtn">Измерить (measure)</button>
+        <button id="renderFullBtn">Рендер (render)</button>
+        <label style="margin-left: 10px;">Ширина: <input type="number" id="overrideWidth" placeholder="auto"></label>
+        <label style="margin-left: 10px;">Высота: <input type="number" id="overrideHeight" placeholder="auto"></label>
+    </div>
+    <div class="info">Минимальная ширина: <span id="minWidth">0</span></div>
+    <div class="info">Минимальная высота: <span id="minHeight">0</span></div>
+    <div id="svgContainer"></div>
+</div>
+
+<script>
+(function () {
+    const NS = 'http://www.w3.org/2000/svg';
+
+    // ---------- Утилиты ----------
+    function createSvgElement(tag, attrs = {}) {
+        const el = document.createElementNS(NS, tag);
+        for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
+        return el;
+    }
+
+    function createMarkers() {
+        const defs = createSvgElement('defs');
+        ['Solid', 'Dashed', 'Dotted'].forEach(type => {
+            const markerOut = createSvgElement('marker', {
+                id: `arrow${type}`, viewBox: '0 0 10 10', refX: '9', refY: '5',
+                markerWidth: '6', markerHeight: '6', orient: 'auto'
+            });
+            markerOut.appendChild(createSvgElement('path', { d: 'M 0 0 L 10 5 L 0 10 z', fill: 'black' }));
+            defs.appendChild(markerOut);
+
+            const markerIn = createSvgElement('marker', {
+                id: `arrow${type}In`, viewBox: '0 0 10 10', refX: '1', refY: '5',
+                markerWidth: '6', markerHeight: '6', orient: 'auto'
+            });
+            markerIn.appendChild(createSvgElement('path', { d: 'M 10 0 L 0 5 L 10 10 z', fill: 'black' }));
+            defs.appendChild(markerIn);
+        });
+        return defs;
+    }
+
+    function measureElements(elements) {
+        const tempSvg = createSvgElement('svg');
+        const tempGroup = createSvgElement('g');
+        elements.forEach(el => tempGroup.appendChild(el));
+        tempSvg.appendChild(tempGroup);
+        document.body.appendChild(tempSvg);
+        const bbox = tempGroup.getBBox();
+        document.body.removeChild(tempSvg);
+        return { x: bbox.x, y: bbox.y, width: Math.ceil(bbox.width), height: Math.ceil(bbox.height) };
+    }
+
+    // ---------- Базовые элементы ----------
+    function drawPoint(style, dotX, dotY, dotRadius) {
+        const g = createSvgElement('g');
+        if (style === 'filled') {
+            g.appendChild(createSvgElement('circle', { cx: dotX, cy: dotY, r: dotRadius, fill: 'black', stroke: 'none' }));
+        } else if (style === 'hollow') {
+            g.appendChild(createSvgElement('circle', { cx: dotX, cy: dotY, r: dotRadius, fill: 'white', stroke: 'black', 'stroke-width': 2 }));
+        } else if (style === 'diamond') {
+            const hd = dotRadius * 1.2;
+            const pts = `${dotX},${dotY - hd} ${dotX + hd},${dotY} ${dotX},${dotY + hd} ${dotX - hd},${dotY}`;
+            g.appendChild(createSvgElement('polygon', { points: pts, fill: 'white', stroke: 'black', 'stroke-width': 2 }));
+        }
+        return g;
+    }
+
+    function drawText(title, listText, dotX, dotY) {
+        const g = createSvgElement('g');
+        const titleX = dotX + 30, titleY = dotY + 30;
+        const titleEl = createSvgElement('text', {
+            x: titleX, y: titleY, 'font-family': 'Arial', 'font-size': '16', 'font-weight': 'bold', fill: 'black'
+        });
+        titleEl.textContent = title;
+        g.appendChild(titleEl);
+
+        const lines = listText.split('\n');
+        let y = titleY + 18;
+        lines.forEach(line => {
+            const t = createSvgElement('text', { x: titleX, y, 'font-family': 'Arial', 'font-size': '12', fill: 'black' });
+            t.textContent = line;
+            g.appendChild(t);
+            y += 16;
+        });
+        return g;
+    }
+
+    function drawArrow(arrowType, cfg, connectionPoints, bypassEnabled, tileWidth, tileHeight) {
+        const { show, style, hasMarker, hasInMarker } = cfg;
+        let x1, y1, x2, y2;
+        const pts = connectionPoints;
+        const shortLen = 20;
+
+        switch (arrowType) {
+            case 'out-right':
+                x1 = pts.right.x - (!bypassEnabled ? 8 : 0);
+                y1 = pts.right.y;
+                x2 = tileWidth;            // <-- убрано вычитание
+                y2 = y1;
+                break;
+            case 'out-down':
+                x1 = pts.bottom.x;
+                y1 = pts.bottom.y - (!bypassEnabled ? 8 : 0);
+                x2 = x1;
+                y2 = tileHeight;           // <-- убрано вычитание
+                break;
+            case 'in-left':
+                x2 = pts.left.x + (!bypassEnabled ? 8 : 0);
+                y2 = pts.left.y;
+                x1 = x2 - shortLen - (!bypassEnabled ? 8 : 0);
+                y1 = y2;
+                break;
+            case 'in-top':
+                x2 = pts.top.x;
+                y2 = pts.top.y + (!bypassEnabled ? 8 : 0);
+                x1 = x2;
+                y1 = y2 - shortLen - (!bypassEnabled ? 8 : 0);
+                break;
+        }
+
+        const isIncoming = arrowType.startsWith('in-');
+        const line = createSvgElement('line', {
+            x1, y1, x2, y2,
+            stroke: (show || isIncoming) ? 'black' : 'none',
+            'stroke-width': 2,
+            opacity: show ? 1 : (isIncoming ? 0 : 1)
+        });
+
+        if (show && style === 'dashed') line.setAttribute('stroke-dasharray', '8,4');
+        else if (show && style === 'dotted') line.setAttribute('stroke-dasharray', '2,3');
+
+        if (show && hasMarker) {
+            line.setAttribute('marker-end', `url(#arrow${style.charAt(0).toUpperCase() + style.slice(1)})`);
+        }
+        if (show && hasInMarker && !isIncoming) {
+            line.setAttribute('marker-start', `url(#arrow${style.charAt(0).toUpperCase() + style.slice(1)}In)`);
+        }
+
+        if (!show && !isIncoming) return null;
+        return line;
+    }
+
+    function drawBypassArc(arrows, connectionPoints, style) {
+        let sp = null, ep = null;
+        if (arrows['in-left'].show && arrows['in-left'].style !== 'dotted') {
+            sp = { x: connectionPoints.left.x, y: connectionPoints.left.y, angle: 180 };
+        } else if (arrows['in-top'].show && arrows['in-top'].style !== 'dotted') {
+            sp = { x: connectionPoints.top.x, y: connectionPoints.top.y, angle: 270 };
+        }
+        if (arrows['out-down'].show && arrows['out-down'].style !== 'dotted') {
+            ep = { x: connectionPoints.bottom.x, y: connectionPoints.bottom.y, angle: 90 };
+        } else if (arrows['out-right'].show && arrows['out-right'].style !== 'dotted') {
+            ep = { x: connectionPoints.right.x, y: connectionPoints.right.y, angle: 0 };
+        }
+        if (!sp || !ep) return null;
+
+        const delta = (ep.angle - sp.angle + 360) % 360;
+        const largeArc = delta > 180 ? 1 : 0;
+        const sweep = 1;
+
+        const path = createSvgElement('path', {
+            d: `M ${sp.x} ${sp.y} A ${connectionPoints.radius} ${connectionPoints.radius} 0 ${largeArc} ${sweep} ${ep.x} ${ep.y}`,
+            fill: 'none', stroke: 'black', 'stroke-width': 2
+        });
+        if (style === 'dashed') path.setAttribute('stroke-dasharray', '8,4');
+        else if (style === 'dotted') path.setAttribute('stroke-dasharray', '2,3');
+        return path;
+    }
+
+    // ---------- Сборка содержимого тайла ----------
+    function buildTileElements(config, offsetX, offsetY, tileWidth, tileHeight, includeDynamicArrows) {
+        const { pointStyle='filled', bypassEnabled=false, title='', listText='', arrows={} } = config;
+        const baseDotX = 130, baseDotY = 150;
+        const dotRadius = 15;
+        const connectionRadius = dotRadius * 1.5;
+
+        const dotX = baseDotX + offsetX;
+        const dotY = baseDotY + offsetY;
+
+        const connectionPoints = {
+            top:    { x: dotX, y: dotY - connectionRadius },
+            right:  { x: dotX + connectionRadius, y: dotY },
+            bottom: { x: dotX, y: dotY + connectionRadius },
+            left:   { x: dotX - connectionRadius, y: dotY },
+            radius: connectionRadius
+        };
+
+        const fullArrows = {
+            'out-right': { show: true, style: 'solid', hasMarker: true, hasInMarker: false, ...arrows['out-right'] },
+            'out-down':  { show: true, style: 'solid', hasMarker: true, hasInMarker: false, ...arrows['out-down'] },
+            'in-left':   { show: true, style: 'solid', hasMarker: true, ...arrows['in-left'] },
+            'in-top':    { show: true, style: 'solid', hasMarker: true, ...arrows['in-top'] }
+        };
+
+        const elements = [];
+
+        for (const type of ['out-right', 'out-down', 'in-left', 'in-top']) {
+            if (!includeDynamicArrows && (type === 'out-right' || type === 'out-down')) continue;
+            const arrow = drawArrow(type, fullArrows[type], connectionPoints, bypassEnabled, tileWidth, tileHeight);
+            if (arrow) elements.push(arrow);
+        }
+
+        if (includeDynamicArrows && bypassEnabled) {
+            const styleForArc = fullArrows['in-left'].show && fullArrows['in-left'].style !== 'dotted'
+                ? fullArrows['in-left'].style
+                : (fullArrows['in-top'].show && fullArrows['in-top'].style !== 'dotted'
+                    ? fullArrows['in-top'].style : 'solid');
+            const arc = drawBypassArc(fullArrows, connectionPoints, styleForArc);
+            if (arc) elements.push(arc);
+        }
+
+        elements.push(drawPoint(pointStyle, dotX, dotY, dotRadius));
+        elements.push(drawText(title, listText, dotX, dotY));
+
+        return elements;
+    }
+
+    // ---------- Главная функция рендера тайла ----------
+    function renderTile(config, tileWidth = null, tileHeight = null, mode = 'render') {
+        const staticElements = buildTileElements(config, 0, 0, 0, 0, false);
+        const staticBBox = measureElements(staticElements);
+
+        if (mode === 'measure') {
+            return {
+                minWidth: staticBBox.width,
+                minHeight: staticBBox.height,
+                minX: staticBBox.x,
+                minY: staticBBox.y
+            };
+        }
+
+        const effectiveWidth = tileWidth || staticBBox.width;
+        const effectiveHeight = tileHeight || staticBBox.height;
+
+        const offsetX = -staticBBox.x;
+        const offsetY = -staticBBox.y;
+        const elements = buildTileElements(config, offsetX, offsetY, effectiveWidth, effectiveHeight, true);
+
+        const svg = createSvgElement('svg', {
+            width: effectiveWidth,
+            height: effectiveHeight,
+            'data-min-width': staticBBox.width,
+            'data-min-height': staticBBox.height
+        });
+        svg.appendChild(createMarkers());
+
+        const group = createSvgElement('g');
+        elements.forEach(el => group.appendChild(el));
+        svg.appendChild(group);
+
+        return {
+            svg,
+            minWidth: staticBBox.width,
+            minHeight: staticBBox.height
+        };
+    }
+
+    // ---------- Привязка к UI ----------
+    const jsonTextarea = document.getElementById('jsonConfig');
+    const svgContainer = document.getElementById('svgContainer');
+    const minWidthSpan = document.getElementById('minWidth');
+    const minHeightSpan = document.getElementById('minHeight');
+    const overrideWidth = document.getElementById('overrideWidth');
+    const overrideHeight = document.getElementById('overrideHeight');
+
+    const defaultConfig = {
+        pointStyle: 'filled',
+        bypassEnabled: false,
+        title: 'Оформление заказа',
+        listText: 'Каналы\n-телефон\n-сайт\nДействия\n-выбор пиццы',
+        arrows: {
+            'out-right': { show: true, style: 'solid', hasMarker: true, hasInMarker: false },
+            'out-down':  { show: true, style: 'solid', hasMarker: true, hasInMarker: false },
+            'in-left':   { show: true, style: 'solid', hasMarker: true },
+            'in-top':    { show: true, style: 'solid', hasMarker: true }
+        }
+    };
+
+    function getConfigFromTextarea() {
+        try {
+            return JSON.parse(jsonTextarea.value);
+        } catch(e) {
+            alert('Ошибка JSON: ' + e.message);
+            return null;
+        }
+    }
+
+    function renderMeasure() {
+        const config = getConfigFromTextarea();
+        if (!config) return;
+        const measure = renderTile(config, null, null, 'measure');
+        minWidthSpan.textContent = measure.minWidth;
+        minHeightSpan.textContent = measure.minHeight;
+        svgContainer.innerHTML = '';
+        const renderResult = renderTile(config, null, null, 'render');
+        svgContainer.appendChild(renderResult.svg);
+    }
+
+    function renderFull() {
+        const config = getConfigFromTextarea();
+        if (!config) return;
+        const w = overrideWidth.value ? parseInt(overrideWidth.value) : null;
+        const h = overrideHeight.value ? parseInt(overrideHeight.value) : null;
+        const result = renderTile(config, w, h, 'render');
+        svgContainer.innerHTML = '';
+        svgContainer.appendChild(result.svg);
+        minWidthSpan.textContent = result.minWidth;
+        minHeightSpan.textContent = result.minHeight;
+    }
+
+    document.getElementById('renderMeasureBtn').addEventListener('click', renderMeasure);
+    document.getElementById('renderFullBtn').addEventListener('click', renderFull);
+
+    jsonTextarea.value = JSON.stringify(defaultConfig, null, 2);
+    renderFull();
+})();
+</script>
+</body>
+</html>
