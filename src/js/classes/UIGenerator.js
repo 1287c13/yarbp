@@ -8,47 +8,152 @@ export class UIGenerator {
       { test: (node) => node.key === 'кнопка', render: this.button },
       { test: (node) => node.key === 'надпись', render: this.label },
       { test: (node) => node.key === 'табы', render: this.tabs },
-      { test: (node) => node.key === 'таб', render: this.tab }
+      { test: (node) => node.key === 'таб', render: this.tab },
+      { test: (node) => node.key === 'опция', render: this.option },
     ];
+    this.cardCounter = 0;
   }
 
   generateHTML(ast) {
     if (!ast || !ast.children) return '';
-    return ast.children.map(child => this.renderNode(child)).join('');
+    return `
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; background: #f3f4f6; padding: 20px; }
+        .form-container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 16px; padding: 24px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .fieldset-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .fieldset-card legend { font-weight: 600; font-size: 1.1rem; margin-bottom: 12px; padding: 0; }
+        .input-group { margin-bottom: 12px; }
+        .input-group label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 4px; }
+        .input-group input, .input-group select { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.95rem; }
+        .items-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+        .list-item { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; }
+        .btn-secondary { background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 0.9rem; width: 100%; }
+        .btn-secondary:hover { background: #e5e7eb; }
+        .order-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-top: 12px; }
+        .info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+        .form-view { display: none; }
+        .repeatable-item { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+        .repeatable-header { display: flex; justify-content: space-between; margin-bottom: 12px; font-weight: 600; }
+        @media (max-width: 768px) {
+          .form-grid { grid-template-columns: 1fr; }
+        }
+      </style>
+      <div class="form-container">
+        <form>
+          <div class="form-grid">
+            ${ast.children.map(child => this.renderNode(child)).join('')}
+          </div>
+        </form>
+      </div>
+    `;
   }
 
   generateRuntimeJS() {
     return `
 (function() {
-  console.log('YARBP Runtime started');
+  // Показать форму
+  document.querySelectorAll('.show-form-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const card = this.closest('.fieldset-card');
+      card.querySelector('.list-view').style.display = 'none';
+      card.querySelector('.form-view').style.display = 'block';
+    });
+  });
+
+  // Назад к списку
+  document.querySelectorAll('.back-to-list').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const card = this.closest('.fieldset-card');
+      card.querySelector('.list-view').style.display = 'block';
+      card.querySelector('.form-view').style.display = 'none';
+    });
+  });
+
+  // Добавить из формы в список
+  document.querySelectorAll('.submit-item').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const card = this.closest('.fieldset-card');
+      const formView = card.querySelector('.form-view');
+      const itemsList = card.querySelector('.items-list');
+      
+      // Собираем данные
+      const data = [];
+      formView.querySelectorAll('input, select').forEach(field => {
+        const label = field.closest('.input-group')?.querySelector('label')?.textContent || field.name;
+        const value = field.value || '—';
+        data.push({ label, value });
+      });
+      
+      // Создаем элемент списка
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.innerHTML = data.map(d => 
+        '<span>' + d.label + ': ' + d.value + '</span>'
+      ).join('');
+      
+      itemsList.appendChild(item);
+      
+      // Очищаем и возвращаемся
+      formView.querySelectorAll('input').forEach(f => f.value = '');
+      formView.querySelectorAll('select').forEach(f => f.selectedIndex = 0);
+      card.querySelector('.list-view').style.display = 'block';
+      formView.style.display = 'none';
+    });
+  });
 })();`;
+  }
+
+  extractShorthand(astNode) {
+    if (!astNode.children) return;
+    const shorthandChild = astNode.children.find(c => c.key === 'shorthand');
+    if (shorthandChild && typeof shorthandChild.value === 'string') {
+      // Убираем "= " и лишние пробелы
+      astNode.value = shorthandChild.value.replace(/^=\s*/, '').trim();
+    }
   }
 
   renderNode(astNode) {
     if (astNode.nodeType !== 'MEANING') return '';
 
     this.parseKeyAndId(astNode);
+    this.extractShorthand(astNode);
 
     const props = {};
-    let childrenHTML = '';
+    if (astNode.children) {
+      astNode.children.forEach(child => {
+        if (child.nodeType === 'MEANING' && child.key !== 'shorthand' && child.prefix === '.') {
+          props[child.key] = child.value;
+        }
+      });
+    }
+    astNode.props = props;
+    astNode.parsedValue = this.parseSugaredValue(astNode.value);
 
+    if (astNode.type === 'таблица-соответствий') {
+      return this.renderCorrespondenceTable(astNode);
+    }
+    if (astNode.type === 'набор-соответствий') {
+      return this.renderCorrespondenceSet(astNode);
+    }
+    if (astNode.key === 'табы') {
+      return this.renderTabs(astNode);
+    }
+
+    let childrenHTML = '';
     if (astNode.children) {
       astNode.children.forEach(child => {
         if (child.nodeType === 'MEANING') {
-          if (child.prefix === '.') {
-            props[child.key] = child.value;
-          } else {
-            childrenHTML += this.renderNode(child);
-          }
+          if (child.key === 'shorthand') return;
+          if (child.prefix === '.') return;
+          childrenHTML += this.renderNode(child);
         }
       });
     }
 
-    const parsedValue = this.parseSugaredValue(astNode.value);
-    const normalized = { ...astNode, props, parsedValue };
-    const renderer = this.renderers.find(r => r.test(normalized));
-
-    return renderer ? renderer.render.call(this, normalized, childrenHTML) : childrenHTML;
+    const renderer = this.renderers.find(r => r.test(astNode));
+    return renderer ? renderer.render.call(this, astNode, childrenHTML) : childrenHTML;
   }
 
   parseKeyAndId(astNode) {
@@ -70,37 +175,27 @@ export class UIGenerator {
 
   parseSugaredValue(value) {
     if (typeof value !== 'string') return { raw: value };
-    const parts = value.split('/').map(p => p.trim());
-    const result = { raw: value };
-    if (parts.length >= 1) result.label = parts[0];
-    if (parts.length >= 2) {
-      if (['*', 'да', 'yes', 'обязательно'].includes(parts[1])) result.required = true;
+    const cleanValue = value.replace(/^=\s*/, '').trim();
+    const parts = cleanValue.split('/').map(p => p.trim());
+    const result = { raw: cleanValue };
+
+    if (parts[0]) result.label = parts[0];
+    if (parts.length >= 2 && parts[1]) {
+      if (['*', 'да', 'yes'].includes(parts[1])) result.required = true;
       else result.placeholder = parts[1];
     }
-    if (parts.length >= 3 && ['*', 'да', 'yes', 'обязательно'].includes(parts[2])) result.required = true;
+    if (parts.length >= 3 && parts[2]) {
+      if (['*', 'да', 'yes'].includes(parts[2])) result.required = true;
+      else result.postfix = parts[2];
+    }
     return result;
   }
 
-  buildStyles(props, base = {}) {
-    const styles = { ...base };
-
-    if (props['ширина']) styles.width = props['ширина'];
-    if (props['высота']) styles.height = props['высота'];
-    if (props['отступ']) styles.padding = props['отступ'];
-    if (props['фон']) styles.background = '#' + props['фон'];
-    if (props['цветТекста']) styles.color = '#' + props['цветТекста'];
-    if (props['направление'] === 'вертикально') styles.flexDirection = 'column';
-    if (props['направление'] === 'горизонтально') styles.flexDirection = 'row';
-    if (props['зазор']) styles.gap = props['зазор'];
-    if (props['обводка']) styles.border = '1px solid #' + props['обводка'];
-    if (props['скругление']) styles.borderRadius = props['скругление'];
-    if (props['тень']) styles.boxShadow = props['тень'];
-
-    if (props['сетка']) return props['сетка'];
-
-    return Object.entries(styles)
-      .map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v}`)
-      .join('; ');
+  parseOptionValue(value) {
+    if (typeof value !== 'string') return { label: '', value: '' };
+    const cleanValue = value.replace(/^=\s*/, '').trim();
+    const parts = cleanValue.split('/').map(p => p.trim());
+    return { label: parts[0] || '', value: parts[1] || parts[0] || '' };
   }
 
   escapeHtml(str) {
@@ -108,222 +203,140 @@ export class UIGenerator {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // РЕНДЕРЕРЫ
-
   form(n, children) {
-    const styles = this.buildStyles(n.props, {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '16px'
-    });
-    const id = n.id ? ` id="${this.escapeHtml(n.id)}"` : '';
-    return `<div style="${styles}"${id}>${children}</div>`;
+    return children;
   }
 
   group(n, children) {
-    const title = n.props['заголовок'] || '';
-    const isTile = n.props['плитка'] === 'да' || n.type === 'плитка';
+    const title = n.parsedValue?.label || '';
+    const isTile = n.type === 'плитка';
 
-    const defaultBg = n.props['фон'] ? null : (isTile
-      ? (this.isDark ? '#4a4a4a' : '#ffffff')
-      : (this.isDark ? '#3d3d3d' : '#f9fafb'));
-    const defaultBorder = this.isDark ? '#444' : '#e5e7eb';
-    const defaultText = this.isDark ? '#e0e0e0' : '#374151';
+    if (isTile) {
+      return `<fieldset class="fieldset-card"><legend>${this.escapeHtml(title)}</legend>${children}</fieldset>`;
+    }
+    return children;
+  }
 
-    const baseStyles = {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '12px',
-      padding: n.props['отступ'] || '16px',
-      border: n.props['обводка'] ? `1px solid #${n.props['обводка']}` : `1px solid ${defaultBorder}`,
-      borderRadius: n.props['скругление'] || '12px',
-      background: n.props['фон'] ? '#' + n.props['фон'] : defaultBg,
-      boxShadow: isTile && !this.isDark ? '0 2px 8px rgba(0,0,0,0.05)' : 'none'
-    };
+  renderCorrespondenceTable(n) {
+    const rows = n.children.map(field => {
+      if (field.nodeType !== 'MEANING') return '';
+      this.parseKeyAndId(field);
+      this.extractShorthand(field);
+      const label = field.value || field.key || '';
+      const postfix = field.props?.['постфикс'] || '';
+      return `<div class="info-row"><span>${this.escapeHtml(label)}:</span><strong>${postfix ? this.escapeHtml(postfix) : '—'}</strong></div>`;
+    }).join('');
+    return `<div class="order-card">${rows}</div>`;
+  }
 
-    const styles = this.buildStyles(n.props, baseStyles);
-    const id = n.id ? ` id="${this.escapeHtml(n.id)}"` : '';
+  renderCorrespondenceSet(n) {
+    if (!n.children || n.children.length === 0) {
+      return '<div class="items-list"><div style="text-align:center;color:#999;">Список пуст</div></div>';
+    }
+    const items = n.children.map(field => {
+      if (field.nodeType !== 'MEANING') return '';
+      this.parseKeyAndId(field);
+      this.extractShorthand(field);
+      const label = field.value || field.id || field.key || '';
+      return `<div class="list-item"><span>${this.escapeHtml(label)}</span><span>—</span></div>`;
+    }).join('');
+    return `<div class="items-list">${items}</div>`;
+  }
 
-    const titleStyles = {
-      fontWeight: '600',
-      fontSize: '1.1rem',
-      marginBottom: '4px',
-      color: n.props['цветТекста'] ? '#' + n.props['цветТекста'] : defaultText
-    };
-    const titleStyleAttr = Object.entries(titleStyles)
-      .map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v}`)
-      .join('; ');
+  renderTabs(n) {
+    const cardId = n.props['ид'] || `card-${++this.cardCounter}`;
+    const tabNodes = n.children.filter(c => c.nodeType === 'MEANING' && c.key.startsWith('таб'));
 
-    const titleHtml = title ?
-      `<div style="${titleStyleAttr}">${this.escapeHtml(title)}</div>` : '';
+    const listTab = tabNodes.find(t => t.id === 'список' || t.key.includes('список'));
+    const formTab = tabNodes.find(t => t.id === 'добавить' || t.key.includes('добавить'));
 
-    return `
-      <div style="${styles}"${id}>
-        ${titleHtml}
-        ${children}
-      </div>
-    `;
+    let listHTML = '';
+    let formHTML = '';
+
+    if (listTab) {
+      this.parseKeyAndId(listTab);
+      const listContent = this.renderNode(listTab);
+      listHTML = `
+        <div class="list-view">
+          ${listContent}
+          <button type="button" class="btn-secondary show-form-btn">+ Добавить</button>
+        </div>`;
+    }
+
+    if (formTab) {
+      this.parseKeyAndId(formTab);
+      const formContent = this.renderNode(formTab);
+      formHTML = `
+        <div class="form-view">
+          <div class="repeatable-item">
+            <div class="repeatable-header">
+              <span>Новая запись</span>
+              <button type="button" class="btn-secondary remove-item" style="width:auto;padding:4px 8px;">✖</button>
+            </div>
+            ${formContent}
+            <button type="button" class="btn-secondary submit-item" style="margin-top:12px;">Добавить</button>
+          </div>
+          <button type="button" class="btn-secondary back-to-list" style="margin-top:8px;">← Назад к списку</button>
+        </div>`;
+    }
+
+    return listHTML + formHTML;
   }
 
   field(n, children) {
-    const fieldType = n.type || (n.key?.includes(':') ? n.key.split(':')[1] : 'текст');
-    const label = n.parsedValue?.label || n.props['имя'] || n.key || '';
-    const placeholder = n.parsedValue?.placeholder || n.props['плейсхолдер'] || '';
-    const required = n.parsedValue?.required || n.props['обязательный'] === 'да';
-    const postfix = n.parsedValue?.postfix || n.props['постфикс'] || '';
+    const fieldType = n.type || 'текст';
+    const label = n.parsedValue?.label || n.key || '';
+    const placeholder = n.parsedValue?.placeholder || '';
+    const required = n.parsedValue?.required;
     const isSelect = fieldType === 'выбор';
-    const tag = isSelect ? 'select' : 'input';
-
-    const defaultBg = this.isDark ? '#2d2d2d' : '#ffffff';
-    const defaultBorder = this.isDark ? '#555' : '#d1d5db';
-    const defaultText = this.isDark ? '#e0e0e0' : '#111827';
-    const labelColor = this.isDark ? '#d0d0d0' : '#374151';
-
-    const inputStyles = this.buildStyles(n.props, {
-      flex: '1',
-      padding: n.props['отступВнутри'] || '10px 12px',
-      border: n.props['обводка'] ? `1px solid #${n.props['обводка']}` : `1px solid ${defaultBorder}`,
-      borderRadius: n.props['скругление'] || '8px',
-      fontSize: '0.95rem',
-      background: n.props['фон'] ? '#' + n.props['фон'] : defaultBg,
-      color: n.props['цветТекста'] ? '#' + n.props['цветТекста'] : defaultText,
-      boxSizing: 'border-box'
-    });
-
-    if (n.props['ширинаПоля']) inputStyles.width = n.props['ширинаПоля'];
 
     const attrs = [];
     if (!isSelect) attrs.push(`type="${this.mapFieldType(fieldType)}"`);
     attrs.push(`name="${this.escapeHtml(n.id || n.key || label)}"`);
     if (placeholder) attrs.push(`placeholder="${this.escapeHtml(placeholder)}"`);
     if (required) attrs.push('required');
-    if (n.props['автофокус'] === 'да') attrs.push('autofocus');
-    if (n.props['хук']) attrs.push(`data-hook="${this.escapeHtml(n.props['хук'])}"`);
-    if (n.props['значение']) attrs.push(`value="${this.escapeHtml(n.props['значение'])}"`);
 
-    const labelStyles = {
-      fontSize: '0.875rem',
-      fontWeight: '500',
-      color: n.props['цветТекста'] ? '#' + n.props['цветТекста'] : labelColor
-    };
-    const labelStyleAttr = Object.entries(labelStyles)
-      .map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v}`)
-      .join('; ');
-
-    const postfixStyles = {
-      fontSize: '0.875rem',
-      color: this.isDark ? '#a0a0a0' : '#6b7280'
-    };
-    const postfixStyleAttr = Object.entries(postfixStyles)
-      .map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v}`)
-      .join('; ');
-
-    const fieldStyleAttr = this.buildStyles(n.props, {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '4px'
-    });
+    if (isSelect) {
+      return `
+        <div class="input-group">
+          <label>${this.escapeHtml(label)}</label>
+          <select ${attrs.join(' ')}>${children}</select>
+        </div>`;
+    }
 
     return `
-      <div style="${fieldStyleAttr}">
-        <label style="${labelStyleAttr}" class="${required ? 'required-star' : ''}">${this.escapeHtml(label)}</label>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <${tag} style="${inputStyles}" ${attrs.join(' ')}>
-            ${isSelect ? children : ''}
-          </${tag}>
-          ${postfix ? `<span style="${postfixStyleAttr}">${this.escapeHtml(postfix)}</span>` : ''}
-        </div>
-      </div>
-    `;
+      <div class="input-group">
+        <label>${this.escapeHtml(label)}</label>
+        <input ${attrs.join(' ')} />
+      </div>`;
   }
 
   button(n) {
-    const label = n.rawValue || n.props['имя'] || 'Кнопка';
-    const type = n.props['тип'] || 'button';
-    const isPrimary = type === 'submit' || n.props['основная'] === 'да';
-
-    const baseStyles = {
-      padding: n.props['отступВнутри'] || '10px 20px',
-      background: n.props['фон'] ? '#' + n.props['фон'] : (isPrimary ? '#3b82f6' : (this.isDark ? '#4a4a4a' : '#f3f4f6')),
-      color: n.props['цветТекста'] ? '#' + n.props['цветТекста'] : (isPrimary ? '#ffffff' : (this.isDark ? '#e0e0e0' : '#374151')),
-      border: n.props['обводка'] ? `1px solid #${n.props['обводка']}` : (isPrimary ? 'none' : `1px solid ${this.isDark ? '#666' : '#d1d5db'}`),
-      borderRadius: n.props['скругление'] || '8px',
-      fontSize: '0.95rem',
-      fontWeight: '500',
-      cursor: 'pointer',
-      transition: 'background 0.2s, transform 0.1s'
-    };
-
-    if (n.props['ширина']) baseStyles.width = n.props['ширина'];
-
-    const styles = this.buildStyles(n.props, baseStyles);
-    const attrs = [`type="${type}"`];
-    if (n.id) attrs.push(`id="${this.escapeHtml(n.id)}"`);
-    if (n.props['действие']) attrs.push(`data-action="${this.escapeHtml(n.props['действие'])}"`);
-
-    return `<button style="${styles}" ${attrs.join(' ')}>${this.escapeHtml(label)}</button>`;
+    return ''; // Кнопки рендерятся в renderTabs
   }
 
   label(n) {
-    const text = n.rawValue || n.props['текст'] || '';
-    const styles = this.buildStyles(n.props, {
-      fontSize: n.props['размерШрифта'] || '0.95rem',
-      fontWeight: n.props['жирный'] === 'да' ? '600' : '400',
-      margin: n.props['отступ'] || '0',
-      color: this.isDark ? '#e0e0e0' : '#374151'
-    });
-    const id = n.id ? ` id="${this.escapeHtml(n.id)}"` : '';
-    return `<div style="${styles}"${id}>${this.escapeHtml(text)}</div>`;
-  }
-
-  tabs(n, children) {
-    const styles = this.buildStyles(n.props, {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '12px'
-    });
-    const id = n.id ? ` id="${this.escapeHtml(n.id)}"` : '';
-    return `<div style="${styles}"${id}>${children}</div>`;
+    return `<div style="font-weight:500;margin-bottom:8px;">${this.escapeHtml(n.value || '')}</div>`;
   }
 
   tab(n, children) {
-    const title = n.rawValue || n.props['заголовок'] || '';
-    const defaultBorder = this.isDark ? '#444' : '#e5e7eb';
+    return children;
+  }
 
-    const styles = this.buildStyles(n.props, {
-      padding: n.props['отступ'] || '12px',
-      border: n.props['обводка'] ? `1px solid #${n.props['обводка']}` : `1px solid ${defaultBorder}`,
-      borderRadius: n.props['скругление'] || '8px'
-    });
-    const id = n.id ? ` id="${this.escapeHtml(n.id)}"` : '';
-
-    const titleStyles = {
-      fontWeight: '600',
-      marginBottom: '8px',
-      color: this.isDark ? '#e0e0e0' : '#374151'
-    };
-    const titleStyleAttr = Object.entries(titleStyles)
-      .map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v}`)
-      .join('; ');
-
-    return `
-      <div style="${styles}"${id}>
-        <div style="${titleStyleAttr}">${this.escapeHtml(title)}</div>
-        ${children}
-      </div>
-    `;
+  option(n) {
+    if (!n.value && n.children) {
+      const shorthand = n.children.find(c => c.key === 'shorthand');
+      if (shorthand?.value) n.value = shorthand.value.replace(/^=\s*/, '').trim();
+    }
+    const parsed = this.parseOptionValue(n.value);
+    return `<option value="${this.escapeHtml(parsed.value)}">${this.escapeHtml(parsed.label)}</option>`;
   }
 
   mapFieldType(t) {
     const m = {
-      'штрихкод': 'text',
-      'число': 'number',
-      'дата': 'date',
-      'почта': 'email',
-      'телефон': 'tel',
-      'строка': 'text',
-      'целое': 'number',
-      'текст': 'text'
+      'штрихкод': 'text', 'число': 'number', 'дата': 'date',
+      'почта': 'email', 'телефон': 'tel', 'строка': 'text',
+      'целое': 'number', 'текст': 'text'
     };
     return m[t] || 'text';
   }
