@@ -2,11 +2,12 @@
 import { YarbpJSONConverter } from './ast-converters/JSONConvertor.js'
 import { YarbpXMLConverter } from './ast-converters/XMLConvertor.js'
 import { YarbpProtoConverter } from './ast-converters/ProtobufConvertor.js'
-
+import { YarbpXPMConverter } from './ast-converters/XPMConverter.js'
 
 /* renderers */
 import { YarbpBasicRenderer } from './YarbpBasicRenderer.js'
 import { HTMLUIRenderer } from './renderers/HTMLUIRenderer.js'
+import { XPMRenderer } from './renderers/XPMRenderer.js'
 
 /* highlighters */
 import { XMLHighlighter } from './highlighters/XMLHighlighter.js'
@@ -191,6 +192,18 @@ class XMLRenderer extends YarbpBasicRenderer {
   };
 }
 
+// class XPMRenderer extends YarbpBasicRenderer {
+//   render() {
+//     const AST = this.parser.getAST();
+//     const converter = new YarbpXPMConverter(AST);
+//     const JSONView = JSON.stringify(converter.convert(), null, 2);
+//
+//     this.renderTextarea.value = JSONView;
+//     this.renderHighlightDiv.innerHTML = JSONView;
+//     this.syncRenderScroll();
+//   };
+// }
+
 class ProtobufRenderer extends YarbpBasicRenderer {
   render() {
     const AST = this.parser.getAST();
@@ -234,6 +247,11 @@ const KnownFlavors = Object.freeze({
     textExample: [YarbpTextExamples.UI],
     renderer: HTMLUIRenderer
   },
+  XPM: {
+    names: ['кпо', 'xpm'],
+    textExample: [YarbpTextExamples.UI],
+    renderer: XPMRenderer
+  }
 });
 
 const FlavorMap = new Map(

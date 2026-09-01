@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Компоновщик тайлов (отрефакторенный)</title>
+  <title>Компоновщик тайлов (с именем роли)</title>
   <style>
       body {
           font-family: Arial, sans-serif;
@@ -41,7 +41,7 @@
       svg {
           border: 1px solid #ccc;
           background: white;
-          margin-top: 10px;
+          margtop: 10px;
           display: block;
       }
 
@@ -59,7 +59,7 @@
 </head>
 <body>
 <div class="container">
-  <h2>Компоновщик тайлов</h2>
+  <h2>Компоновщик тайлов (с именем роли)</h2>
   <label><strong>JSON-конфигурация массива тайлов:</strong></label>
   <textarea id="jsonConfig"></textarea>
   <div>
@@ -97,7 +97,10 @@
     DIAMOND_RADIUS_FACTOR: 1.2,
     STROKE_WIDTH: 2,
     FONT_FAMILY: 'Arial',
-    COLOR: 'black'
+    COLOR: 'black',
+    ROLE_NAME_FONT_SIZE: 12,
+    ROLE_NAME_OFFSET_X: 5,
+    ROLE_NAME_MAX_WIDTH: 200
   });
 
   // ==================== Утилиты ====================
@@ -272,6 +275,21 @@
     return g;
   }
 
+  function drawRoleName(roleName, x, y) {
+    const textEl = createSvgElement('text', {
+      x,
+      y,
+      'font-family': DEFAULTS.FONT_FAMILY,
+      'font-size': DEFAULTS.ROLE_NAME_FONT_SIZE,
+      'font-weight': 'bold',
+      fill: DEFAULTS.COLOR,
+      'text-anchor': 'middle',
+      'dominant-baseline': 'middle'
+    });
+    textEl.textContent = roleName;
+    return textEl;
+  }
+
   function drawArrow(arrowType, arrowCfg, connectionPoints, bypassEnabled, tileWidth, tileHeight) {
     const {
       show = false,
@@ -287,25 +305,25 @@
     let x1, y1, x2, y2;
 
     switch (arrowType) {
-      case 'out-right':
+      case 'right':
         x1 = pts.right.x - (bypassEnabled ? 0 : inOffset);
         y1 = pts.right.y;
         x2 = tileWidth;
         y2 = y1;
         break;
-      case 'out-down':
+      case 'down':
         x1 = pts.bottom.x;
         y1 = pts.bottom.y - (bypassEnabled ? 0 : inOffset);
         x2 = x1;
         y2 = tileHeight;
         break;
-      case 'in-left':
+      case 'left':
         x2 = pts.left.x + (bypassEnabled ? 0 : inOffset);
         y2 = pts.left.y;
         x1 = x2 - shortLen - (bypassEnabled ? 0 : inOffset);
         y1 = y2;
         break;
-      case 'in-top':
+      case 'top':
         x2 = pts.top.x;
         y2 = pts.top.y + (bypassEnabled ? 0 : inOffset);
         x1 = x2;
@@ -342,13 +360,13 @@
     let start = null;
     let end = null;
 
-    if (arrows['in-left']?.show && arrows['in-left'].style !== 'dotted') {
+    if (arrows['left']?.show && arrows['left'].style !== 'dotted') {
       start = {
         x: connectionPoints.left.x,
         y: connectionPoints.left.y,
         angle: 180
       };
-    } else if (arrows['in-top']?.show && arrows['in-top'].style !== 'dotted') {
+    } else if (arrows['top']?.show && arrows['top'].style !== 'dotted') {
       start = {
         x: connectionPoints.top.x,
         y: connectionPoints.top.y,
@@ -356,13 +374,13 @@
       };
     }
 
-    if (arrows['out-down']?.show && arrows['out-down'].style !== 'dotted') {
+    if (arrows['down']?.show && arrows['down'].style !== 'dotted') {
       end = {
         x: connectionPoints.bottom.x,
         y: connectionPoints.bottom.y,
         angle: 90
       };
-    } else if (arrows['out-right']?.show && arrows['out-right'].style !== 'dotted') {
+    } else if (arrows['right']?.show && arrows['right'].style !== 'dotted') {
       end = {
         x: connectionPoints.right.x,
         y: connectionPoints.right.y,
@@ -423,7 +441,7 @@
       },
 
       buildStaticElements(config) {
-        // Возвращает только статические элементы (без out-right/out-down)
+        // Возвращает только статические элементы (без right/down)
         const {
           pointStyle = 'filled',
           bypassEnabled = false,
@@ -446,8 +464,8 @@
         };
 
         const elements = [];
-        // Статические стрелки: in-left, in-top
-        ['in-left', 'in-top'].forEach(type => {
+        // Статические стрелки: left, top
+        ['left', 'top'].forEach(type => {
           const arrowCfg = arrows[type] || {
             show: false,
             style: 'solid',
@@ -495,7 +513,7 @@
         const group = createSvgElement('g');
 
         // Все четыре стрелки
-        ['out-right', 'out-down', 'in-left', 'in-top'].forEach(type => {
+        ['right', 'down', 'left', 'top'].forEach(type => {
           const arrowCfg = arrows[type] || {
             show: false,
             style: 'solid',
@@ -507,10 +525,10 @@
 
         // Обходная дуга
         if (bypassEnabled) {
-          const styleForArc = arrows['in-left']?.show && arrows['in-left'].style !== 'dotted'
-            ? arrows['in-left'].style
-            : (arrows['in-top']?.show && arrows['in-top'].style !== 'dotted'
-              ? arrows['in-top'].style
+          const styleForArc = arrows['left']?.show && arrows['left'].style !== 'dotted'
+            ? arrows['left'].style
+            : (arrows['top']?.show && arrows['top'].style !== 'dotted'
+              ? arrows['top'].style
               : 'solid');
           const arc = drawBypassArc(arrows, connectionPoints, styleForArc);
           if (arc) group.appendChild(arc);
@@ -557,9 +575,29 @@
       measure(config) {
         const aspectRatio = config.aspectRatio || 1;
         const imageWidth = DEFAULTS.IMAGE_HEIGHT * aspectRatio;
+        const roleName = config.roleName || '';
+
+        let roleNameWidth = 0;
+        if (roleName) {
+          const tempText = createSvgElement('text', {
+            x: 0,
+            y: 0,
+            'font-family': DEFAULTS.FONT_FAMILY,
+            'font-size': DEFAULTS.TITLE_FONT_SIZE,
+            'font-weight': 'bold',
+            fill: DEFAULTS.COLOR
+          });
+          tempText.textContent = roleName;
+          const bbox = measureElements([tempText]);
+          roleNameWidth = Math.ceil(bbox.width);
+        }
+
+        const minWidth = imageWidth + roleNameWidth + DEFAULTS.ROLE_NAME_OFFSET_X;
+        const minHeight = Math.max(DEFAULTS.IMAGE_HEIGHT, DEFAULTS.TITLE_FONT_SIZE * 2);
+
         return {
-          minWidth: imageWidth,
-          minHeight: DEFAULTS.IMAGE_HEIGHT,
+          minWidth,
+          minHeight,
           minX: 0,
           minY: 0
         };
@@ -570,6 +608,7 @@
         const aspectRatio = config.aspectRatio || 1;
         const imageHeight = DEFAULTS.IMAGE_HEIGHT;
         const imageWidth = imageHeight * aspectRatio;
+        const roleName = config.roleName || '';
 
         if (src && cellWidth > 0 && cellHeight >= imageHeight) {
           const x = cellWidth - imageWidth;
@@ -583,7 +622,28 @@
           }));
         }
 
-        return {group, minWidth: imageWidth, minHeight: imageHeight};
+        if (roleName) {
+          const textX = cellWidth - imageWidth - DEFAULTS.ROLE_NAME_OFFSET_X;
+          const textY = imageHeight / 2;
+          const textEl = createSvgElement('text', {
+            x: textX,
+            y: textY,
+            'font-family': DEFAULTS.FONT_FAMILY,
+            'font-size': DEFAULTS.TITLE_FONT_SIZE,
+            'font-weight': 'bold',
+            fill: DEFAULTS.COLOR,
+            'text-anchor': 'end',
+            'dominant-baseline': 'middle'
+          });
+          textEl.textContent = roleName;
+          group.appendChild(textEl);
+        }
+
+        return {
+          group,
+          minWidth: this.measure(config).minWidth,
+          minHeight: this.measure(config).minHeight
+        };
       }
     },
 
@@ -694,7 +754,8 @@
       config: {
         tileType: 'image',
         src: 'data:image/svg+xml;utf8,%3Csvg%20width%3D%22800px%22%20height%3D%22800px%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cpath%20d%3D%22M8%207C9.65685%207%2011%205.65685%2011%204C11%202.34315%209.65685%201%208%201C6.34315%201%205%202.34315%205%204C5%205.65685%206.34315%207%208%207Z%22%20fill%3D%22%23000000%22%2F%3E%0A%3Cpath%20d%3D%22M14%2012C14%2010.3431%2012.6569%209%2011%209H5C3.34315%209%202%2010.3431%202%2012V15H14V12Z%22%20fill%3D%22%23000000%22%2F%3E%0A%3C%2Fsvg%3E',
-        aspectRatio: 2
+        aspectRatio: 2,
+        roleName: 'Клиент'
       }
     },
     {
@@ -706,13 +767,13 @@
         title: 'Оформление заказа',
         listText: 'Каналы\n-телефон\n-сайт\nДействия\n-выбор пиццы',
         arrows: {
-          'out-right': {
+          'right': {
             show: true,
             style: 'dashed',
             hasMarker: false,
             hasInMarker: false
           },
-          'out-down': {
+          'down': {
             show: true,
             style: 'solid',
             hasMarker: false,
@@ -738,15 +799,15 @@
         title: 'Оплата',
         listText: 'Каналы\n-карта\n-наличные',
         arrows: {
-          'out-right': {show: false},
-          'out-down': {
+          'right': {show: false},
+          'down': {
             show: true,
             style: 'solid',
             hasMarker: true,
             hasInMarker: false
           },
-          'in-left': {show: true, style: 'solid', hasMarker: true},
-          'in-top': {show: true, style: 'dotted', hasMarker: true}
+          'left': {show: true, style: 'solid', hasMarker: true},
+          'top': {show: true, style: 'dotted', hasMarker: true}
         }
       }
     },
@@ -763,15 +824,15 @@
         title: 'Доставка',
         listText: 'Действия\n-упаковка\n-отправка',
         arrows: {
-          'out-right': {
+          'right': {
             show: true,
             style: 'solid',
             hasMarker: true,
             hasInMarker: false
           },
-          'out-down': {show: false},
-          'in-left': {show: true, style: 'solid', hasMarker: true},
-          'in-top': {show: true, style: 'solid', hasMarker: true}
+          'down': {show: false},
+          'left': {show: true, style: 'solid', hasMarker: true},
+          'top': {show: true, style: 'solid', hasMarker: true}
         }
       }
     },
@@ -784,20 +845,20 @@
         title: 'Сборка',
         listText: 'Действия\n-проверка',
         arrows: {
-          'out-right': {
+          'right': {
             show: true,
             style: 'dashed',
             hasMarker: true,
             hasInMarker: false
           },
-          'out-down': {
+          'down': {
             show: true,
             style: 'solid',
             hasMarker: true,
             hasInMarker: false
           },
-          'in-left': {show: true, style: 'solid', hasMarker: true},
-          'in-top': {show: true, style: 'solid', hasMarker: true}
+          'left': {show: true, style: 'solid', hasMarker: true},
+          'top': {show: true, style: 'solid', hasMarker: true}
         }
       }
     },
@@ -810,10 +871,10 @@
         title: 'Завершение',
         listText: 'Оценка\n-отлично',
         arrows: {
-          'out-right': {show: false},
-          'out-down': {show: false},
-          'in-left': {show: true, style: 'dashed', hasMarker: true},
-          'in-top': {show: true, style: 'solid', hasMarker: true}
+          'right': {show: false},
+          'down': {show: false},
+          'left': {show: true, style: 'dashed', hasMarker: true},
+          'top': {show: true, style: 'solid', hasMarker: true}
         }
       }
     }
@@ -823,7 +884,6 @@
     errorContainer.textContent = '';
     try {
       const data = JSON.parse(jsonTextarea.value);
-      // Очистка контейнера
       while (svgContainer.firstChild) {
         svgContainer.removeChild(svgContainer.firstChild);
       }

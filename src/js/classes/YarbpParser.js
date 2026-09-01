@@ -152,7 +152,7 @@ export class YarbpParser {
               valueType: this.resolveType(val), value: this.resolveValue(val) }));
 
         } else if (root.valueType === valueTypes.OBJECT && !isNestedKeyMet) {
-          root.value = this.resolveValue(token.value);
+          root.value = this.resolveValue(token.value).slice(1).trim();
 
         } else {
           enrichedEntities = [ new ASTNode({
