@@ -7,6 +7,11 @@ export function calcLeadingSpaces(text) {
   return count;
 }
 
+export function findChildrenByKeyValue(node, key, value) {
+  if (!node || !Array.isArray(node.children)) return [];
+  return node.children.filter( child => child[key] === value );
+}
+
 export function calcTrailingSpaces(text) {
   let count = 0;
   for (let i = text.length - 1; i >= 0; i--) {

@@ -9,7 +9,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
   static DEFAULTS = Object.freeze({
     SVG_NS: 'http://www.w3.org/2000/svg',
-    DOT_RADIUS: 15,
+    DOT_RADIUS: 10,
     CONNECTION_RADIUS_MULTIPLIER: 1.5,
     DOT_BASE_X: 130,
     DOT_BASE_Y: 150,
@@ -28,11 +28,15 @@ export class XPMRenderer extends YarbpBasicRenderer {
     DIAMOND_RADIUS_FACTOR: 1.2,
     STROKE_WIDTH: 2,
     FONT_FAMILY: 'Arial',
-    COLOR: 'black',
     ROLE_NAME_FONT_SIZE: 12,
     ROLE_NAME_OFFSET_X: 5,
     ROLE_NAME_MAX_WIDTH: 200
   });
+
+  static getColor() {
+    const isDark = document.body.classList.contains('dark');
+    return isDark ? '#e0e0e0' : '#111827';
+  }
 
   render() {
     this.AST = this.parser.getAST();
@@ -80,7 +84,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     return el;
   }
 
-  capitalize(str) {
+  static capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
 
@@ -163,7 +167,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
       });
       markerOut.appendChild(XPMRenderer.createSvgElement('path', {
         d: 'M 0 0 L 10 5 L 0 10 z',
-        fill: XPMRenderer.DEFAULTS.COLOR
+        fill: XPMRenderer.getColor()
       }));
       defs.appendChild(markerOut);
 
@@ -178,7 +182,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
       });
       markerIn.appendChild(XPMRenderer.createSvgElement('path', {
         d: 'M 10 0 L 0 5 L 10 10 z',
-        fill: XPMRenderer.DEFAULTS.COLOR
+        fill: XPMRenderer.getColor()
       }));
       defs.appendChild(markerIn);
     });
@@ -192,7 +196,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
       case 'filled':
         g.appendChild(XPMRenderer.createSvgElement('circle', {
           cx: dotX, cy: dotY, r: dotRadius,
-          fill: XPMRenderer.DEFAULTS.COLOR, stroke: 'none'
+          fill: XPMRenderer.getColor(), stroke: 'none'
         }));
         break;
       case 'hollow':
@@ -201,7 +205,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
           cy: dotY,
           r: dotRadius,
           fill: 'white',
-          stroke: XPMRenderer.DEFAULTS.COLOR,
+          stroke: XPMRenderer.getColor(),
           'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH
         }));
         break;
@@ -211,7 +215,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
         g.appendChild(XPMRenderer.createSvgElement('polygon', {
           points,
           fill: 'white',
-          stroke: XPMRenderer.DEFAULTS.COLOR,
+          stroke: XPMRenderer.getColor(),
           'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH
         }));
         break;
@@ -231,7 +235,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
       'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
       'font-size': XPMRenderer.DEFAULTS.TITLE_FONT_SIZE,
       'font-weight': 'bold',
-      fill: XPMRenderer.DEFAULTS.COLOR
+      fill: XPMRenderer.getColor()
     });
     titleEl.textContent = title;
     g.appendChild(titleEl);
@@ -243,7 +247,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
         y: currentY,
         'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
         'font-size': XPMRenderer.DEFAULTS.LIST_FONT_SIZE,
-        fill: XPMRenderer.DEFAULTS.COLOR
+        fill: XPMRenderer.getColor()
       });
       textEl.textContent = line;
       g.appendChild(textEl);
@@ -251,21 +255,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     });
 
     return g;
-  }
-
-  drawRoleName(roleName, x, y) {
-    const textEl = XPMRenderer.createSvgElement('text', {
-      x,
-      y,
-      'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
-      'font-size': XPMRenderer.DEFAULTS.ROLE_NAME_FONT_SIZE,
-      'font-weight': 'bold',
-      fill: XPMRenderer.DEFAULTS.COLOR,
-      'text-anchor': 'middle',
-      'dominant-baseline': 'middle'
-    });
-    textEl.textContent = roleName;
-    return textEl;
   }
 
   static drawArrow(arrowType, arrowCfg, connectionPoints, bypassEnabled, tileWidth, tileHeight) {
@@ -311,7 +300,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
     const line = XPMRenderer.createSvgElement('line', {
       x1, y1, x2, y2,
-      stroke: XPMRenderer.DEFAULTS.COLOR,
+      stroke: XPMRenderer.getColor(),
       'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH,
       opacity: show ? 1 : 0
     });
@@ -323,18 +312,18 @@ export class XPMRenderer extends YarbpBasicRenderer {
     }
 
     if (hasMarker && show) {
-      const styleCap = this.capitalize(style);
+      const styleCap = XPMRenderer.capitalize(style);
       line.setAttribute('marker-end', `url(#arrow${styleCap})`);
     }
     if (hasInMarker && show) {
-      const styleCap = this.capitalize(style);
+      const styleCap = XPMRenderer.capitalize(style);
       line.setAttribute('marker-start', `url(#arrow${styleCap}In)`);
     }
 
     return line;
   }
 
-  drawBypassArc(arrows, connectionPoints, style) {
+  static drawBypassArc(arrows, connectionPoints, style) {
     let start = null;
     let end = null;
 
@@ -375,7 +364,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     const path = XPMRenderer.createSvgElement('path', {
       d: `M ${start.x} ${start.y} A ${connectionPoints.radius} ${connectionPoints.radius} 0 ${largeArc} ${sweep} ${end.x} ${end.y}`,
       fill: 'none',
-      stroke: XPMRenderer.DEFAULTS.COLOR,
+      stroke: XPMRenderer.getColor(),
       'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH
     });
 
@@ -391,7 +380,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
   drawSimpleLine(x1, y1, x2, y2, style) {
     const line = XPMRenderer.createSvgElement('line', {
       x1, y1, x2, y2,
-      stroke: XPMRenderer.DEFAULTS.COLOR,
+      stroke: XPMRenderer.getColor(),
       'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH
     });
     if (style === 'dashed') line.setAttribute('stroke-dasharray', '8,4');
@@ -511,7 +500,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
             : (arrows['top']?.show && arrows['top'].style !== 'dotted'
               ? arrows['top'].style
               : 'solid');
-          const arc = this.drawBypassArc(arrows, connectionPoints, styleForArc);
+          const arc = XPMRenderer.drawBypassArc(arrows, connectionPoints, styleForArc);
           if (arc) group.appendChild(arc);
         }
 
@@ -568,7 +557,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
             'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
             'font-size': XPMRenderer.DEFAULTS.TITLE_FONT_SIZE,
             'font-weight': 'bold',
-            fill: XPMRenderer.DEFAULTS.COLOR
+            fill: XPMRenderer.getColor()
           });
           tempText.textContent = roleName;
           const bbox = XPMRenderer.measureElements([tempText]);
@@ -614,7 +603,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
             'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
             'font-size': XPMRenderer.DEFAULTS.TITLE_FONT_SIZE,
             'font-weight': 'bold',
-            fill: XPMRenderer.DEFAULTS.COLOR,
+            fill: XPMRenderer.getColor(),
             'text-anchor': 'end',
             'dominant-baseline': 'middle'
           });
