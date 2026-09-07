@@ -1,9 +1,9 @@
-! as lexer -- this defines the render type
-:                 -- anon root obj
+! as lexer --- this defines the render type
+:          --- anon root obj
 .status ok
   :payload
     !elem-associated directive
-    .some_key some string value      -- comment for field
+    .some_key some string value      --- comment for field
 
     ..some_array_data
       object .id:uuid4 value .key_1 value .key_2 value
@@ -13,8 +13,8 @@
     ..vertical
       string-1
       obj-in-array .prop val
-      ..mixed-arr-in-arr str-1 str-2 -- comment for arr
-        str-3                        -- comment for arr value
+      ..mixed-arr-in-arr str-1 str-2 --- comment for arr
+        str-3                        --- comment for arr value
         :obj .key val
         ..empty-arr
 
@@ -22,9 +22,9 @@
       string-2
     .multiline_string 'f
                        o
-                         o'          -- comment for quoted val
+                         o'          --- comment for quoted val
     .key val
   .foo 2
 :obj:type .some_prop test
-trailing-implicit-obj:type           -- comment for obj name
+trailing-implicit-obj:type           --- comment for obj name
  .key val

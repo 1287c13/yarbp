@@ -1,7 +1,7 @@
-! as ast   -- k
-:          -- l
-  .a b     -- m
+! as ast   --- k
+:          --/ l
+  .a b     --- m
   :c:d     --! n
-    .e:f g -- o
+    .e:f g --- o
     --/.h
   .i g     --? p

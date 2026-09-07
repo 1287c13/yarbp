@@ -5,41 +5,88 @@ export class XPMRenderer extends YarbpBasicRenderer {
   constructor(...args) {
     super(...args);
     this.uiContainer = null;
+    this.tileRenderers = this._createTileRenderers();
   }
 
   static DEFAULTS = Object.freeze({
     SVG_NS: 'http://www.w3.org/2000/svg',
-    DOT_RADIUS: 10,
-    CONNECTION_RADIUS_MULTIPLIER: 1.5,
+
+    // Точки
+    DOT_RADIUS: 7,
+    CONNECTION_RADIUS_MULTIPLIER: 2,
     DOT_BASE_X: 130,
     DOT_BASE_Y: 150,
+    DIAMOND_RADIUS_FACTOR: 1.2,
+
+    // Текст
     TEXT_OFFSET_X: 30,
     TEXT_OFFSET_Y: 30,
-    TITLE_FONT_SIZE: 16,
-    LIST_FONT_SIZE: 12,
+    TITLE_FONT_SIZE: 18,
+    LIST_FONT_SIZE: 14,
     LIST_LINE_HEIGHT: 16,
     TITLE_LINE_SPACING: 18,
+    FONT_FAMILY: 'Arial',
+
+    // Стрелки
     SHORT_LINE_LEN: 20,
     IN_ARROW_OFFSET: 8,
-    LINE_Y: 42.5,
-    VERTICAL_LINE_X_OFFSET: 40,
-    IMAGE_HEIGHT: 80,
-    DEFAULT_TILE_SIZE: 40,
-    DIAMOND_RADIUS_FACTOR: 1.2,
     STROKE_WIDTH: 2,
-    FONT_FAMILY: 'Arial',
-    ROLE_NAME_FONT_SIZE: 12,
+
+    // Маркеры
+    MARKER_WIDTH: 6,
+    MARKER_HEIGHT: 6,
+
+    // Стили линий
+    DASHED_LINE_PATTERN: '8,4',
+    DOTTED_LINE_PATTERN: '2,3',
+
+    // Изображения
+    IMAGE_HEIGHT: 80,
+
+    // Тайлы
+    DEFAULT_TILE_SIZE: 40,
+
+    // Роли
+    ROLE_NAME_FONT_SIZE: 20,
     ROLE_NAME_OFFSET_X: 5,
-    ROLE_NAME_MAX_WIDTH: 200
+    ROLE_NAME_MAX_WIDTH: 200,
+
+    // UI
+    UI_PADDING: '10px 20px 10px 20px',
+    UI_BACKGROUND_LIGHT: '#ffffff',
+    UI_BACKGROUND_DARK: '#2d2d2d',
+    UI_COLOR_LIGHT: '#111827',
+    UI_COLOR_DARK: '#e0e0e0',
+    UI_FONT_FAMILY: 'system-ui, sans-serif',
+
+    // Ошибки
+    ERROR_FONT_SIZE: 14,
+    ERROR_LINE_HEIGHT: 20,
+    ERROR_EMOJI_OFFSET: 24,
+    ERROR_COMPACT_SIZE: 400,
+
+    // Цвета
+    COLOR_MAIN_LIGHT: '#335272',
+    COLOR_MAIN_DARK: '#c3cdd0',
+    COLOR_WHITE: '#ffffff'
   });
 
   static getColor(colorType='main') {
     const isDark = document.body.classList.contains('dark');
     switch (colorType) {
-      case 'main': return isDark ? '#dbe5e7' : '#335272';
-      case 'ide-code-val': return isDark ? '#c3cdd0' : '#335272';
+      case 'main':
+        return isDark
+          ? XPMRenderer.DEFAULTS.COLOR_MAIN_DARK
+          : XPMRenderer.DEFAULTS.COLOR_MAIN_LIGHT;
+      case 'ide-code-val':
+        return isDark
+          ? XPMRenderer.DEFAULTS.COLOR_MAIN_DARK
+          : XPMRenderer.DEFAULTS.COLOR_MAIN_LIGHT;
+      default:
+        return isDark
+          ? XPMRenderer.DEFAULTS.COLOR_MAIN_DARK
+          : XPMRenderer.DEFAULTS.COLOR_MAIN_LIGHT;
     }
-
   }
 
   render() {
@@ -65,13 +112,13 @@ export class XPMRenderer extends YarbpBasicRenderer {
     }
 
     this.uiContainer.style.cssText = `
-      padding: 10px 20px 10px 20px;
+      padding: ${XPMRenderer.DEFAULTS.UI_PADDING};
       overflow-y: auto;
       height: 100%;
       box-sizing: border-box;
-      background: ${isDark ? '#2d2d2d' : '#ffffff'};
-      color: ${isDark ? '#e0e0e0' : '#111827'};
-      font-family: system-ui, sans-serif;
+      background: ${isDark ? XPMRenderer.DEFAULTS.UI_BACKGROUND_DARK : XPMRenderer.DEFAULTS.UI_BACKGROUND_LIGHT};
+      color: ${isDark ? XPMRenderer.DEFAULTS.UI_COLOR_DARK : XPMRenderer.DEFAULTS.UI_COLOR_LIGHT};
+      font-family: ${XPMRenderer.DEFAULTS.UI_FONT_FAMILY};
       position: relative;
     `;
 
@@ -99,6 +146,8 @@ export class XPMRenderer extends YarbpBasicRenderer {
   static measureSvg;
 
   createHiddenSVGContainer() {
+    if (XPMRenderer.measureSvg) return;
+
     const measureSvg = document.createElementNS(XPMRenderer.DEFAULTS.SVG_NS, 'svg');
     measureSvg.style.position = 'absolute';
     measureSvg.style.visibility = 'hidden';
@@ -165,8 +214,8 @@ export class XPMRenderer extends YarbpBasicRenderer {
         viewBox: '0 0 10 10',
         refX: '9',
         refY: '5',
-        markerWidth: '6',
-        markerHeight: '6',
+        markerWidth: XPMRenderer.DEFAULTS.MARKER_WIDTH,
+        markerHeight: XPMRenderer.DEFAULTS.MARKER_HEIGHT,
         orient: 'auto'
       });
       markerOut.appendChild(XPMRenderer.createSvgElement('path', {
@@ -180,8 +229,8 @@ export class XPMRenderer extends YarbpBasicRenderer {
         viewBox: '0 0 10 10',
         refX: '1',
         refY: '5',
-        markerWidth: '6',
-        markerHeight: '6',
+        markerWidth: XPMRenderer.DEFAULTS.MARKER_WIDTH,
+        markerHeight: XPMRenderer.DEFAULTS.MARKER_HEIGHT,
         orient: 'auto'
       });
       markerIn.appendChild(XPMRenderer.createSvgElement('path', {
@@ -208,7 +257,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
           cx: dotX,
           cy: dotY,
           r: dotRadius,
-          fill: 'white',
+          fill: XPMRenderer.DEFAULTS.COLOR_WHITE,
           stroke: XPMRenderer.getColor(),
           'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH
         }));
@@ -218,7 +267,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
         const points = `${dotX},${dotY - half} ${dotX + half},${dotY} ${dotX},${dotY + half} ${dotX - half},${dotY}`;
         g.appendChild(XPMRenderer.createSvgElement('polygon', {
           points,
-          fill: 'white',
+          fill: XPMRenderer.DEFAULTS.COLOR_WHITE,
           stroke: XPMRenderer.getColor(),
           'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH
         }));
@@ -310,9 +359,9 @@ export class XPMRenderer extends YarbpBasicRenderer {
     });
 
     if (style === 'dashed') {
-      line.setAttribute('stroke-dasharray', '8,4');
+      line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DASHED_LINE_PATTERN);
     } else if (style === 'dotted') {
-      line.setAttribute('stroke-dasharray', '2,3');
+      line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DOTTED_LINE_PATTERN);
     }
 
     if (hasMarker && show) {
@@ -373,9 +422,9 @@ export class XPMRenderer extends YarbpBasicRenderer {
     });
 
     if (style === 'dashed') {
-      path.setAttribute('stroke-dasharray', '8,4');
+      path.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DASHED_LINE_PATTERN);
     } else if (style === 'dotted') {
-      path.setAttribute('stroke-dasharray', '2,3');
+      path.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DOTTED_LINE_PATTERN);
     }
 
     return path;
@@ -387,8 +436,11 @@ export class XPMRenderer extends YarbpBasicRenderer {
       stroke: XPMRenderer.getColor(),
       'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH
     });
-    if (style === 'dashed') line.setAttribute('stroke-dasharray', '8,4');
-    else if (style === 'dotted') line.setAttribute('stroke-dasharray', '2,3');
+    if (style === 'dashed') {
+      line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DASHED_LINE_PATTERN);
+    } else if (style === 'dotted') {
+      line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DOTTED_LINE_PATTERN);
+    }
     return line;
   }
 
@@ -396,259 +448,257 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
   /* region Рендер элементов ============================================ */
 
-  tileRenderers = {
-    point: {
-      measure(config) {
-        const cached = XPMRenderer.getCachedSize(config);
-        if (cached) return cached;
+  _createTileRenderers() {
+    const self = this;
 
-        const elements = this.buildStaticElements(config);
-        const bbox = XPMRenderer.measureElements(elements);
-        const size = {
-          minWidth: bbox.width,
-          minHeight: bbox.height,
-          minX: bbox.x,
-          minY: bbox.y
-        };
-        XPMRenderer.setCachedSize(config, size);
-        return size;
-      },
+    return {
+      point: {
+        measure(config) {
+          const cached = XPMRenderer.getCachedSize(config);
+          if (cached) return cached;
 
-      buildStaticElements(config) {
-        // Возвращает только статические элементы (без right/down)
-        const {
-          pointStyle = 'filled',
-          bypassEnabled = false,
-          title = '',
-          listText = '',
-          arrows = {}
-        } = config;
-
-        const dotX = XPMRenderer.DEFAULTS.DOT_BASE_X;
-        const dotY = XPMRenderer.DEFAULTS.DOT_BASE_Y;
-        const dotRadius = XPMRenderer.DEFAULTS.DOT_RADIUS;
-        const connectionRadius = dotRadius * XPMRenderer.DEFAULTS.CONNECTION_RADIUS_MULTIPLIER;
-
-        const connectionPoints = {
-          top: {x: dotX, y: dotY - connectionRadius},
-          right: {x: dotX + connectionRadius, y: dotY},
-          bottom: {x: dotX, y: dotY + connectionRadius},
-          left: {x: dotX - connectionRadius, y: dotY},
-          radius: connectionRadius
-        };
-
-        const elements = [];
-        // Статические стрелки: left, top
-        ['left', 'top'].forEach(type => {
-          const arrowCfg = arrows[type] || {
-            show: false,
-            style: 'solid',
-            hasMarker: false,
-            hasInMarker: false
+          const elements = this.buildStaticElements(config);
+          const bbox = XPMRenderer.measureElements(elements);
+          const size = {
+            minWidth: bbox.width,
+            minHeight: bbox.height,
+            minX: bbox.x,
+            minY: bbox.y
           };
-          elements.push(XPMRenderer.drawArrow(type, arrowCfg, connectionPoints, bypassEnabled, 0, 0));
-        });
+          XPMRenderer.setCachedSize(config, size);
+          return size;
+        },
 
-        elements.push(XPMRenderer.drawPoint(pointStyle, dotX, dotY, dotRadius));
-        elements.push(XPMRenderer.drawText(title, listText, dotX, dotY));
+        buildStaticElements(config) {
+          const {
+            pointStyle = 'filled',
+            bypassEnabled = false,
+            title = '',
+            listText = '',
+            arrows = {}
+          } = config;
 
-        return elements;
-      },
+          const dotX = XPMRenderer.DEFAULTS.DOT_BASE_X;
+          const dotY = XPMRenderer.DEFAULTS.DOT_BASE_Y;
+          const dotRadius = XPMRenderer.DEFAULTS.DOT_RADIUS;
+          const connectionRadius = dotRadius * XPMRenderer.DEFAULTS.CONNECTION_RADIUS_MULTIPLIER;
 
-      render(config, cellWidth, cellHeight) {
-        const staticSize = this.measure(config);
-        const effectiveWidth = cellWidth || staticSize.minWidth;
-        const effectiveHeight = cellHeight || staticSize.minHeight;
-
-        const offsetX = -staticSize.minX;
-        const offsetY = -staticSize.minY;
-
-        const {
-          pointStyle = 'filled',
-          bypassEnabled = false,
-          title = '',
-          listText = '',
-          arrows = {}
-        } = config;
-
-        const dotX = XPMRenderer.DEFAULTS.DOT_BASE_X + offsetX;
-        const dotY = XPMRenderer.DEFAULTS.DOT_BASE_Y + offsetY;
-        const dotRadius = XPMRenderer.DEFAULTS.DOT_RADIUS;
-        const connectionRadius = dotRadius * XPMRenderer.DEFAULTS.CONNECTION_RADIUS_MULTIPLIER;
-
-        const connectionPoints = {
-          top: {x: dotX, y: dotY - connectionRadius},
-          right: {x: dotX + connectionRadius, y: dotY},
-          bottom: {x: dotX, y: dotY + connectionRadius},
-          left: {x: dotX - connectionRadius, y: dotY},
-          radius: connectionRadius
-        };
-
-        const group = XPMRenderer.createSvgElement('g');
-
-        // Все четыре стрелки
-        ['right', 'down', 'left', 'top'].forEach(type => {
-          const arrowCfg = arrows[type] || {
-            show: false,
-            style: 'solid',
-            hasMarker: false,
-            hasInMarker: false
+          const connectionPoints = {
+            top: {x: dotX, y: dotY - connectionRadius},
+            right: {x: dotX + connectionRadius, y: dotY},
+            bottom: {x: dotX, y: dotY + connectionRadius},
+            left: {x: dotX - connectionRadius, y: dotY},
+            radius: connectionRadius
           };
-          group.appendChild(XPMRenderer.drawArrow(type, arrowCfg, connectionPoints, bypassEnabled, effectiveWidth, effectiveHeight));
-        });
 
-        // Обходная дуга
-        if (bypassEnabled) {
-          const styleForArc = arrows['left']?.show && arrows['left'].style !== 'dotted'
-            ? arrows['left'].style
-            : (arrows['top']?.show && arrows['top'].style !== 'dotted'
-              ? arrows['top'].style
-              : 'solid');
-          const arc = XPMRenderer.drawBypassArc(arrows, connectionPoints, styleForArc);
-          if (arc) group.appendChild(arc);
-        }
-
-        group.appendChild(XPMRenderer.drawPoint(pointStyle, dotX, dotY, dotRadius));
-        group.appendChild(XPMRenderer.drawText(title, listText, dotX, dotY));
-
-        return {
-          group,
-          minWidth: staticSize.minWidth,
-          minHeight: staticSize.minHeight
-        };
-      }
-    },
-
-    lines: {
-      measure() {
-        return {
-          minWidth: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE,
-          minHeight: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE,
-          minX: 0,
-          minY: 0
-        };
-      },
-      render(config, cellWidth, cellHeight) {
-        const group = XPMRenderer.createSvgElement('g');
-        const hLine = config.horizontalLine;
-        const vLine = config.verticalLine;
-
-        if (hLine?.show !== false) {
-          group.appendChild(
-            this.drawSimpleLine(
-              0, XPMRenderer.DEFAULTS.LINE_Y, cellWidth, XPMRenderer.DEFAULTS.LINE_Y, hLine?.style || 'solid'));
-        }
-        if (vLine?.show !== false) {
-          const x = cellWidth - XPMRenderer.DEFAULTS.VERTICAL_LINE_X_OFFSET;
-          group.appendChild(this.drawSimpleLine(x, 0, x, cellHeight, vLine?.style || 'solid'));
-        }
-
-        return {group, minWidth: cellWidth, minHeight: cellHeight};
-      }
-    },
-
-    image: {
-      measure(config) {
-        const aspectRatio = config.aspectRatio || 1;
-        const imageWidth = XPMRenderer.DEFAULTS.IMAGE_HEIGHT * aspectRatio;
-        const roleName = config.roleName || '';
-
-        let roleNameWidth = 0;
-        if (roleName) {
-          const tempText = XPMRenderer.createSvgElement('text', {
-            x: 0,
-            y: 0,
-            'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
-            'font-size': XPMRenderer.DEFAULTS.TITLE_FONT_SIZE,
-            'font-weight': 'bold',
-            fill: XPMRenderer.getColor()
+          const elements = [];
+          ['left', 'top'].forEach(type => {
+            const arrowCfg = arrows[type] || {
+              show: false,
+              style: 'solid',
+              hasMarker: false,
+              hasInMarker: false
+            };
+            elements.push(XPMRenderer.drawArrow(type, arrowCfg, connectionPoints, bypassEnabled, 0, 0));
           });
-          tempText.textContent = roleName;
-          const bbox = XPMRenderer.measureElements([tempText]);
-          roleNameWidth = Math.ceil(bbox.width);
-        }
 
-        const minWidth = imageWidth + roleNameWidth + XPMRenderer.DEFAULTS.ROLE_NAME_OFFSET_X;
-        const minHeight = Math.max(XPMRenderer.DEFAULTS.IMAGE_HEIGHT, XPMRenderer.DEFAULTS.TITLE_FONT_SIZE * 2);
+          elements.push(XPMRenderer.drawPoint(pointStyle, dotX, dotY, dotRadius));
+          elements.push(XPMRenderer.drawText(title, listText, dotX, dotY));
 
-        return {
-          minWidth,
-          minHeight,
-          minX: 0,
-          minY: 0
-        };
-      },
-      render(config, cellWidth, cellHeight) {
-        const group = XPMRenderer.createSvgElement('g');
-        const src = config.src || config.dataUrl || config.externalUrl || '';
-        const aspectRatio = config.aspectRatio || 1;
-        const imageHeight = XPMRenderer.DEFAULTS.IMAGE_HEIGHT;
-        const imageWidth = imageHeight * aspectRatio;
-        const roleName = config.roleName || '';
+          return elements;
+        },
 
-        if (src && cellWidth > 0 && cellHeight >= imageHeight) {
-          const x = cellWidth - imageWidth;
-          const y = 0;
-          group.appendChild(XPMRenderer.createSvgElement('image', {
-            x, y,
-            width: imageWidth,
-            height: imageHeight,
-            'preserveAspectRatio': 'xMaxYMid meet',
-            'href': src
-          }));
-        }
+        render(config, cellWidth, cellHeight) {
+          const staticSize = this.measure(config);
+          const effectiveWidth = cellWidth || staticSize.minWidth;
+          const effectiveHeight = cellHeight || staticSize.minHeight;
 
-        if (roleName) {
-          const textX = cellWidth - imageWidth - XPMRenderer.DEFAULTS.ROLE_NAME_OFFSET_X;
-          const textY = imageHeight / 2;
-          const textEl = XPMRenderer.createSvgElement('text', {
-            x: textX,
-            y: textY,
-            'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
-            'font-size': XPMRenderer.DEFAULTS.TITLE_FONT_SIZE,
-            'font-weight': 'bold',
-            fill: XPMRenderer.getColor(),
-            'text-anchor': 'end',
-            'dominant-baseline': 'middle'
+          const offsetX = -staticSize.minX;
+          const offsetY = -staticSize.minY;
+
+          const {
+            pointStyle = 'filled',
+            bypassEnabled = false,
+            title = '',
+            listText = '',
+            arrows = {}
+          } = config;
+
+          const dotX = XPMRenderer.DEFAULTS.DOT_BASE_X + offsetX;
+          const dotY = XPMRenderer.DEFAULTS.DOT_BASE_Y + offsetY;
+          const dotRadius = XPMRenderer.DEFAULTS.DOT_RADIUS;
+          const connectionRadius = dotRadius * XPMRenderer.DEFAULTS.CONNECTION_RADIUS_MULTIPLIER;
+
+          const connectionPoints = {
+            top: {x: dotX, y: dotY - connectionRadius},
+            right: {x: dotX + connectionRadius, y: dotY},
+            bottom: {x: dotX, y: dotY + connectionRadius},
+            left: {x: dotX - connectionRadius, y: dotY},
+            radius: connectionRadius
+          };
+
+          const group = XPMRenderer.createSvgElement('g');
+
+          ['right', 'down', 'left', 'top'].forEach(type => {
+            const arrowCfg = arrows[type] || {
+              show: false,
+              style: 'solid',
+              hasMarker: false,
+              hasInMarker: false
+            };
+            group.appendChild(XPMRenderer.drawArrow(type, arrowCfg, connectionPoints, bypassEnabled, effectiveWidth, effectiveHeight));
           });
-          textEl.textContent = roleName;
-          group.appendChild(textEl);
+
+          if (bypassEnabled) {
+            const styleForArc = arrows['left']?.show && arrows['left'].style !== 'dotted'
+              ? arrows['left'].style
+              : (arrows['top']?.show && arrows['top'].style !== 'dotted'
+                ? arrows['top'].style
+                : 'solid');
+            const arc = XPMRenderer.drawBypassArc(arrows, connectionPoints, styleForArc);
+            if (arc) group.appendChild(arc);
+          }
+
+          group.appendChild(XPMRenderer.drawPoint(pointStyle, dotX, dotY, dotRadius));
+          group.appendChild(XPMRenderer.drawText(title, listText, dotX, dotY));
+
+          return {
+            group,
+            minWidth: staticSize.minWidth,
+            minHeight: staticSize.minHeight
+          };
         }
-
-        return {
-          group,
-          minWidth: this.measure(config).minWidth,
-          minHeight: this.measure(config).minHeight
-        };
-      }
-    },
-
-    empty: {
-      measure() {
-        return {
-          minWidth: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE,
-          minHeight: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE,
-          minX: 0,
-          minY: 0
-        };
       },
-      render() {
-        return {
-          group: XPMRenderer.createSvgElement('g'),
-          minWidth: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE,
-          minHeight: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE
-        };
-      }
-    }
-  };
 
-    /**
-   * Создаёт SVG с сообщением об ошибке
-   * @param {string} errorMessage - Текст ошибки
-   * @param {number} width - Ширина SVG
-   * @param {number} height - Высота SVG
-   * @returns {SVGSVGElement} SVG элемент с ошибкой
-   */
+      lines: {
+        measure() {
+          return {
+            minWidth: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE,
+            minHeight: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE,
+            minX: 0,
+            minY: 0
+          };
+        },
+        render(config, cellWidth, cellHeight) {
+          const group = XPMRenderer.createSvgElement('g');
+          const hLine = config.horizontalLine;
+          const vLine = config.verticalLine;
+
+          if (hLine?.show) {
+            // Используем DOT_BASE_Y для горизонтальных линий
+            const y = hLine.y !== undefined ? hLine.y : XPMRenderer.DEFAULTS.DOT_BASE_Y;
+            group.appendChild(
+              self.drawSimpleLine(0, y, cellWidth, y, hLine?.style || 'solid')
+            );
+          }
+          if (vLine?.show) {
+            // Используем DOT_BASE_X для вертикальных линий
+            const x = vLine.x !== undefined ? vLine.x : XPMRenderer.DEFAULTS.DOT_BASE_X;
+            group.appendChild(
+              self.drawSimpleLine(x, 0, x, cellHeight, vLine?.style || 'solid')
+            );
+          }
+
+          return {group, minWidth: cellWidth, minHeight: cellHeight};
+        }
+      },
+
+      image: {
+        measure(config) {
+          const aspectRatio = config.aspectRatio || 1;
+          const imageWidth = XPMRenderer.DEFAULTS.IMAGE_HEIGHT * aspectRatio;
+          const roleName = config.roleName || '';
+
+          let roleNameWidth = 0;
+          if (roleName) {
+            const tempText = XPMRenderer.createSvgElement('text', {
+              x: 0,
+              y: 0,
+              'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+              'font-size': XPMRenderer.DEFAULTS.TITLE_FONT_SIZE,
+              'font-weight': 'bold',
+              fill: XPMRenderer.getColor()
+            });
+            tempText.textContent = roleName;
+            const bbox = XPMRenderer.measureElements([tempText]);
+            roleNameWidth = Math.ceil(bbox.width);
+          }
+
+          const minWidth = imageWidth + roleNameWidth + XPMRenderer.DEFAULTS.ROLE_NAME_OFFSET_X;
+          const minHeight = Math.max(XPMRenderer.DEFAULTS.IMAGE_HEIGHT, XPMRenderer.DEFAULTS.TITLE_FONT_SIZE * 2);
+
+          return {
+            minWidth,
+            minHeight,
+            minX: 0,
+            minY: 0
+          };
+        },
+        render(config, cellWidth, cellHeight) {
+          const group = XPMRenderer.createSvgElement('g');
+          const src = config.src || config.dataUrl || config.externalUrl || '';
+          const aspectRatio = config.aspectRatio || 1;
+          const imageHeight = XPMRenderer.DEFAULTS.IMAGE_HEIGHT;
+          const imageWidth = imageHeight * aspectRatio;
+          const roleName = config.roleName || '';
+
+          if (src && cellWidth > 0 && cellHeight >= imageHeight) {
+            const x = cellWidth - imageWidth;
+            const y = 0;
+            group.appendChild(XPMRenderer.createSvgElement('image', {
+              x, y,
+              width: imageWidth,
+              height: imageHeight,
+              'preserveAspectRatio': 'xMaxYMid meet',
+              'href': src
+            }));
+          }
+
+          if (roleName) {
+            const textX = cellWidth - imageWidth - XPMRenderer.DEFAULTS.ROLE_NAME_OFFSET_X;
+            const textY = imageHeight / 2;
+            const textEl = XPMRenderer.createSvgElement('text', {
+              x: textX,
+              y: textY,
+              'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+              'font-size': XPMRenderer.DEFAULTS.TITLE_FONT_SIZE,
+              'font-weight': 'bold',
+              fill: XPMRenderer.getColor(),
+              'text-anchor': 'end',
+              'dominant-baseline': 'middle'
+            });
+            textEl.textContent = roleName;
+            group.appendChild(textEl);
+          }
+
+          return {
+            group,
+            minWidth: this.measure(config).minWidth,
+            minHeight: this.measure(config).minHeight
+          };
+        }
+      },
+
+      empty: {
+        measure() {
+          return {
+            minWidth: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE,
+            minHeight: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE,
+            minX: 0,
+            minY: 0
+          };
+        },
+        render() {
+          return {
+            group: XPMRenderer.createSvgElement('g'),
+            minWidth: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE,
+            minHeight: XPMRenderer.DEFAULTS.DEFAULT_TILE_SIZE
+          };
+        }
+      }
+    };
+  }
+
   createErrorSvg(errorMessage, width = 800, height = 400) {
     const svg = XPMRenderer.createSvgElement('svg', {
       width,
@@ -662,13 +712,13 @@ export class XPMRenderer extends YarbpBasicRenderer {
       'text-anchor': 'start',
       'dominant-baseline': 'hanging',
       'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
-      'font-size': 14,
+      'font-size': XPMRenderer.DEFAULTS.ERROR_FONT_SIZE,
       fill: XPMRenderer.getColor('ide-code-val')
     });
 
     const lines = errorMessage.split('\n');
-    const lineHeight = 20;
-    const emojiOffset = 24; // ширина эмодзи + пробел
+    const lineHeight = XPMRenderer.DEFAULTS.ERROR_LINE_HEIGHT;
+    const emojiOffset = XPMRenderer.DEFAULTS.ERROR_EMOJI_OFFSET;
 
     lines.forEach((line, index) => {
       const tspan = XPMRenderer.createSvgElement('tspan', {
@@ -688,14 +738,18 @@ export class XPMRenderer extends YarbpBasicRenderer {
   /* region Компоновка ================================================== */
 
   composeTiles(tiles) {
-
     if (tiles.some(tile => tile.config === undefined || tile.config === null)) {
-      return {svg: this.createErrorSvg(
-        `Синтаксическая ошибка:\nнеизвестный тэг.`, 400, 400),
-        totalWidth: 400, totalHeight: 400};
+      return {
+        svg: this.createErrorSvg(
+          'Синтаксическая ошибка:\nнеизвестный тэг.',
+          XPMRenderer.DEFAULTS.ERROR_COMPACT_SIZE,
+          XPMRenderer.DEFAULTS.ERROR_COMPACT_SIZE
+        ),
+        totalWidth: XPMRenderer.DEFAULTS.ERROR_COMPACT_SIZE,
+        totalHeight: XPMRenderer.DEFAULTS.ERROR_COMPACT_SIZE
+      };
     }
 
-    // 1. Измеряем все тайлы
     this.createHiddenSVGContainer();
     const measured = tiles.map(tile => {
       const renderer = this.tileRenderers[tile.config.tileType || 'lines'];
@@ -705,7 +759,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
       };
     });
 
-    // 2. Вычисляем максимальные размеры по колонкам и строкам
     const colMaxWidth = {};
     const rowMaxHeight = {};
     measured.forEach(t => {
@@ -733,7 +786,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     const totalWidth = cumX;
     const totalHeight = cumY;
 
-    // 3. Создаём итоговый SVG с маркерами
     const composedSvg = XPMRenderer.createSvgElement('svg', {
       width: totalWidth,
       height: totalHeight,
@@ -741,7 +793,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     });
     composedSvg.appendChild(this.getMarkersDefs().cloneNode(true));
 
-    // 4. Рендерим каждый тайл и помещаем в общий SVG
     tiles.forEach(tile => {
       const renderer = this.tileRenderers[tile.config.tileType || 'point'];
       const cellWidth = colMaxWidth[tile.grid.x];
@@ -750,7 +801,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
         group, minWidth, minHeight
       } = renderer.render(tile.config, cellWidth, cellHeight);
 
-      // Добавляем информацию о минимальных размерах (для отладки)
       group.setAttribute('data-min-width', minWidth);
       group.setAttribute('data-min-height', minHeight);
 
@@ -765,5 +815,4 @@ export class XPMRenderer extends YarbpBasicRenderer {
   };
 
   /* endregion ========================================================== */
-
 }

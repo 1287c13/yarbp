@@ -355,7 +355,6 @@ export class YarbpLexer {
       if (object.type === TokenTypes.SCOPE_IN) scopeBalance++;
       if (object.type === TokenTypes.SCOPE_OUT) scopeBalance--;
 
-
       isInArrayScope =
         scopeBalance > 0 &&
         (

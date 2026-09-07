@@ -1,4 +1,4 @@
 ! as json
-..a 'b c' d "e'" f
+..a 'b c' '1' d "e'" f
  g h
- "1"
+ '2'
