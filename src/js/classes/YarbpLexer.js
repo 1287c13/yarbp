@@ -253,7 +253,7 @@ export class YarbpLexer {
 
       if (tokenValue && tokenType) {
         token.end = token.end - tokenType.length - 1;
-        token.value = tokenValue;
+        token.value = tokenValue.trim();
 
         typeToken = new Token({
           type: TokenTypes.TYPE,
@@ -316,6 +316,7 @@ export class YarbpLexer {
 
     const emptyObjectIndices = [];
     let isInArrayScope = false;
+    let scopeBalance = 0;
 
     for (let i = 0; i <= this.tokens.length - frameSize; i++) {
       const scopeIn = this.tokens[i];
@@ -340,7 +341,7 @@ export class YarbpLexer {
         const unparsedTail = object.end < third.end ? this.text.slice(object.end, third.end) : '';
         if (unparsedTail) {
           object.value += unparsedTail;
-          object.value = object.value.replaceAll('\n', '');
+          object.value = object.value.replaceAll('\n', '').trim();
           object.end += unparsedTail.length;
         }
       }
@@ -351,8 +352,16 @@ export class YarbpLexer {
         object.type = TokenTypes.ANY_VALUE;
       }
 
-      isInArrayScope = object.type === TokenTypes.ARRAY
-        || isInArrayScope && object.type !== TokenTypes.OBJECT;
+      if (object.type === TokenTypes.SCOPE_IN) scopeBalance++;
+      if (object.type === TokenTypes.SCOPE_OUT) scopeBalance--;
+
+
+      isInArrayScope =
+        scopeBalance > 0 &&
+        (
+          object.type === TokenTypes.ARRAY
+          || isInArrayScope && object.type !== TokenTypes.OBJECT
+        );
     }
 
     [...new Set(emptyObjectIndices)]
@@ -437,8 +446,14 @@ export class YarbpLexer {
     if (this.state === YarbpLexer.states.IN_QUOTED_VALUE
         && ((this.currentToken.trim())[0] === this.currentToken.at(-1) && this.currentToken.at(-1) !== '('
             || (this.currentToken.trim()[0] === '(' && this.currentToken.at(-1) === ')'))
-        &&  YarbpLexer.spaceSymbols.includes(char))
+        &&  char === '\n')
       return YarbpLexer.states.VALUE_ENDED;
+
+    if (this.state === YarbpLexer.states.IN_QUOTED_VALUE
+        && ((this.currentToken.trim())[0] === this.currentToken.at(-1) && this.currentToken.at(-1) !== '('
+            || (this.currentToken.trim()[0] === '(' && this.currentToken.at(-1) === ')'))
+        &&  YarbpLexer.spaceSymbols.includes(char))
+      return YarbpLexer.states.IN_VALUE;
 
     if (this.state === YarbpLexer.states.IN_VALUE && char === '\n')
       return YarbpLexer.states.VALUE_ENDED;

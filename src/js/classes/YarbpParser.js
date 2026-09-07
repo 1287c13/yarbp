@@ -137,8 +137,7 @@ export class YarbpParser {
           valueInConstructing.value = this.resolveValue(token.value);
           enrichedEntities = [valueInConstructing];
 
-        } else if (root.valueType === valueTypes.ARRAY
-                  && !YarbpParser.QUOTES.includes(token.value[0])) {
+        } else if (root.valueType === valueTypes.ARRAY) {
 
           const match = this.lexer.text.slice(0, token.start).match(/\s+$/);
           const leadingWhitespace = match ? match[0] : '';

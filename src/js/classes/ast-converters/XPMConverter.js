@@ -22,7 +22,10 @@ export class YarbpXPMConverter {
     const rootChildren = this.ast.children || [];
 
     // create empty grid with coords
-    const sizeX = Math.max(...rootChildren.map(actor => actor.children.length));
+    const sizeX = rootChildren.reduce(
+      (max, actor) => Math.max(max, (actor.children || []).length),
+      0
+    );
     const sizeY = rootChildren.length;
     this._createGrid(sizeX, sizeY);
 
@@ -32,7 +35,7 @@ export class YarbpXPMConverter {
       console.log(actor);
 
       let x = 0;
-      actor.children.forEach(tile => {
+      (actor.children || []).forEach(tile => {
         console.log(tile);
 
         let tileRepr = this._getTileByCoords(x, y);
@@ -45,14 +48,14 @@ export class YarbpXPMConverter {
     });
 
     // set implicit arrows
-    this.result.forEach(tile => {
-      if (tile.config.tileType === 'point') {
+    (this.result || []).forEach(tile => {
+      if (tile.config && tile.config.tileType === 'point') {
         // check incoming arrows at neighbour nodes and decide if
         // implicit arrow needed
         [[-1, 0, 'left', 'right'], [0, -1, 'top', 'down']].forEach(shift => {
           let neighbour = this._getTileByCoords(
             tile.grid.x + shift[0], tile.grid.y + shift[1]);
-          if (neighbour && neighbour.config.tileType === 'point') {
+          if (neighbour && neighbour.config && neighbour.config.tileType === 'point') {
             tile.config.arrows[shift[2]] = neighbour.config.arrows[shift[3]];
           }
         })
@@ -82,7 +85,7 @@ export class YarbpXPMConverter {
 
     let annotations;
     let annotationParent = findChildrenByKeyValue(tile, 'key', 'аннотации')[0];
-    if (annotationParent) {
+    if (annotationParent && annotationParent.children) {
       annotations = annotationParent.children.reduce(
         (acc, current) => { return acc + current.value.trim() + '\n'; }, '');
     }
@@ -99,7 +102,7 @@ export class YarbpXPMConverter {
 
     let arrows, rightArrow, downArrow, leftArrow, topArrow;
     let arrowsParent = findChildrenByKeyValue(tile, 'key', 'связи')[0];
-    if (arrowsParent) {
+    if (arrowsParent && arrowsParent.children) {
       const getArrowConfig = (val) => val ? {
         show: true,
         style: /--/.test(val) ? 'dashed' : /\.\./.test(val) ? 'dotted' : 'solid',
@@ -124,6 +127,7 @@ export class YarbpXPMConverter {
       case YarbpXPMConverter.VOCABULARY.image: return this._getActorImageTileConfig
       case YarbpXPMConverter.VOCABULARY.point: return this._getPointTileConfig
       case YarbpXPMConverter.VOCABULARY.lines: return this._getEmptyTileConfig
+      default: return () => {};
     }
   };
 

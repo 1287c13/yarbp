@@ -67,7 +67,7 @@ export function dedentMultilineString(str) {
   const firstLine = lines[start];
   const restLines = lines.slice(start + 1);
 
-  if (restLines.length === 0) return firstLine;
+  if (restLines.length === 0) return firstLine || '';
 
   const indentSizes = restLines
     .filter(line => line.trim() !== '')

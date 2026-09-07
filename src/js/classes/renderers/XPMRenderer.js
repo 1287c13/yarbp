@@ -33,9 +33,13 @@ export class XPMRenderer extends YarbpBasicRenderer {
     ROLE_NAME_MAX_WIDTH: 200
   });
 
-  static getColor() {
+  static getColor(colorType='main') {
     const isDark = document.body.classList.contains('dark');
-    return isDark ? '#e0e0e0' : '#111827';
+    switch (colorType) {
+      case 'main': return isDark ? '#dbe5e7' : '#335272';
+      case 'ide-code-val': return isDark ? '#c3cdd0' : '#335272';
+    }
+
   }
 
   render() {
@@ -638,11 +642,58 @@ export class XPMRenderer extends YarbpBasicRenderer {
     }
   };
 
+    /**
+   * Создаёт SVG с сообщением об ошибке
+   * @param {string} errorMessage - Текст ошибки
+   * @param {number} width - Ширина SVG
+   * @param {number} height - Высота SVG
+   * @returns {SVGSVGElement} SVG элемент с ошибкой
+   */
+  createErrorSvg(errorMessage, width = 800, height = 400) {
+    const svg = XPMRenderer.createSvgElement('svg', {
+      width,
+      height,
+      viewBox: `0 0 ${width} ${height}`
+    });
+
+    const text = XPMRenderer.createSvgElement('text', {
+      x: 20,
+      y: 20,
+      'text-anchor': 'start',
+      'dominant-baseline': 'hanging',
+      'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+      'font-size': 14,
+      fill: XPMRenderer.getColor('ide-code-val')
+    });
+
+    const lines = errorMessage.split('\n');
+    const lineHeight = 20;
+    const emojiOffset = 24; // ширина эмодзи + пробел
+
+    lines.forEach((line, index) => {
+      const tspan = XPMRenderer.createSvgElement('tspan', {
+        x: index === 0 ? 20 : 20 + emojiOffset,
+        dy: index === 0 ? 0 : lineHeight
+      });
+      tspan.textContent = index === 0 ? `⚠️ ${line}` : line;
+      text.appendChild(tspan);
+    });
+
+    svg.appendChild(text);
+    return svg;
+  }
+
   /* endregion ========================================================== */
 
   /* region Компоновка ================================================== */
 
   composeTiles(tiles) {
+
+    if (tiles.some(tile => tile.config === undefined || tile.config === null)) {
+      return {svg: this.createErrorSvg(
+        `Синтаксическая ошибка:\nнеизвестный тэг.`, 400, 400),
+        totalWidth: 400, totalHeight: 400};
+    }
 
     // 1. Измеряем все тайлы
     this.createHiddenSVGContainer();
