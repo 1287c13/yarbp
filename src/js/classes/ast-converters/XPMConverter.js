@@ -41,26 +41,136 @@ export class YarbpXPMConverter {
 
     this._inheritArrows();
 
+    // Создаём глубокую копию конфигураций для обхода кэша
+    this.result = this.result.map(tile => ({
+      grid: {...tile.grid},
+      config: JSON.parse(JSON.stringify(tile.config))
+    }));
+
     return {tiles: this.result};
-  };
+  }
 
   _inheritArrows() {
     const tiles = this.result || [];
+    const processed = new Set();
 
-    // Проходим по всем точкам и обрабатываем их стрелки
     tiles.forEach(tile => {
       if (tile.config && tile.config.tileType === 'point') {
         const {x, y} = tile.grid;
+        const arrows = tile.config.arrows || {};
 
-        // Проверяем каждое направление
-        this._processDirection(tile, x, y, 'right', 1, 0);
-        this._processDirection(tile, x, y, 'down', 0, 1);
-        this._processDirection(tile, x, y, 'left', -1, 0);
-        this._processDirection(tile, x, y, 'top', 0, -1);
+        ['right', 'down', 'left', 'top'].forEach(direction => {
+          const arrow = arrows[direction];
+          if (!arrow || !arrow.show) return;
+
+          const key = `${x},${y},${direction}`;
+          if (processed.has(key)) return;
+          processed.add(key);
+
+          const opposite = this._getOppositeDirection(direction);
+          const {dx, dy} = this._getDirectionDelta(direction);
+
+          // Прокладываем линию через пустые тайлы
+          const result = this._propagateThroughEmptyTiles(x, y, dx, dy, arrow.style);
+
+          if (!result || !result.targetTile || result.targetTile.config.tileType !== 'point') return;
+
+          const targetTile = result.targetTile;
+          const targetX = targetTile.grid.x;
+          const targetY = targetTile.grid.y;
+
+          const isOutgoing = arrow.hasMarker && !arrow.hasInMarker;
+          const isIncoming = arrow.hasInMarker && !arrow.hasMarker;
+          const isBidirectional = arrow.hasMarker && arrow.hasInMarker;
+          const isPlain = !arrow.hasMarker && !arrow.hasInMarker;
+
+          // Вспомогательная функция для маркера у точки
+          const markerAtPoint = (dir) => {
+            // Для right/down: hasInMarker = маркер у точки
+            // Для left/top: hasMarker = маркер у точки
+            if (dir === 'right' || dir === 'down') {
+              return {hasMarker: false, hasInMarker: true};
+            } else {
+              return {hasMarker: true, hasInMarker: false};
+            }
+          };
+
+          // Вспомогательная функция для линии без маркеров
+          const noMarker = () => ({hasMarker: false, hasInMarker: false});
+
+          if (isOutgoing) {
+            // Исходящая: маркер у целевой точки
+            tile.config.arrows[direction] = {
+              show: true,
+              style: arrow.style,
+              ...noMarker()
+            };
+
+            // Маркер у целевой точки на противоположном направлении
+            const marker = markerAtPoint(opposite);
+            targetTile.config.arrows[opposite] = {
+              show: true,
+              style: arrow.style,
+              ...marker
+            };
+
+            processed.add(`${targetX},${targetY},${opposite}`);
+          }
+          else if (isIncoming) {
+            // Входящая: маркер у исходной точки
+            const marker = markerAtPoint(direction);
+            tile.config.arrows[direction] = {
+              show: true,
+              style: arrow.style,
+              ...marker
+            };
+
+            targetTile.config.arrows[opposite] = {
+              show: true,
+              style: arrow.style,
+              ...noMarker()
+            };
+
+            processed.add(`${targetX},${targetY},${opposite}`);
+          }
+          else if (isBidirectional) {
+            // Двусторонняя: маркеры у обеих точек
+            const sourceMarker = markerAtPoint(direction);
+            tile.config.arrows[direction] = {
+              show: true,
+              style: arrow.style,
+              ...sourceMarker
+            };
+
+            const targetMarker = markerAtPoint(opposite);
+            targetTile.config.arrows[opposite] = {
+              show: true,
+              style: arrow.style,
+              ...targetMarker
+            };
+
+            processed.add(`${targetX},${targetY},${opposite}`);
+          }
+          else if (isPlain) {
+            // Без маркеров: просто линия
+            tile.config.arrows[direction] = {
+              show: true,
+              style: arrow.style,
+              ...noMarker()
+            };
+
+            targetTile.config.arrows[opposite] = {
+              show: true,
+              style: arrow.style,
+              ...noMarker()
+            };
+
+            processed.add(`${targetX},${targetY},${opposite}`);
+          }
+        });
       }
     });
 
-    // Обработка обходных дуг
     tiles.forEach(tile => {
       if (tile.config && tile.config.tileType === 'point' && tile.config.bypassEnabled) {
         this._handleBypassConnections(tile);
@@ -68,65 +178,54 @@ export class YarbpXPMConverter {
     });
   }
 
-  _processDirection(tile, x, y, direction, dx, dy) {
-    const arrow = tile.config.arrows?.[direction];
-
-    if (!arrow || !arrow.show) return;
-
-    let currentX = x + dx;
-    let currentY = y + dy;
-
+  _propagateThroughEmptyTiles(startX, startY, dx, dy, style) {
     const maxX = Math.max(...this.result.map(t => t.grid.x));
     const maxY = Math.max(...this.result.map(t => t.grid.y));
 
+    let currentX = startX + dx;
+    let currentY = startY + dy;
+
     while (currentX >= 0 && currentX <= maxX && currentY >= 0 && currentY <= maxY) {
-      const nextTile = this._getTileByCoords(currentX, currentY);
+      const tile = this._getTileByCoords(currentX, currentY);
+      if (!tile) return null;
 
-      if (!nextTile) break;
-
-      if (nextTile.config && nextTile.config.tileType === 'point') {
-        // Нашли точку - добавляем ответную стрелку
-        const oppositeDirection = this._getOppositeDirection(direction);
-
-        // Проверяем, есть ли у целевой точки своя стрелка в этом направлении
-        const targetArrow = nextTile.config.arrows?.[oppositeDirection];
-
-        if (!targetArrow || !targetArrow.show) {
-          // Добавляем ответную стрелку только если у цели нет своей
-          // Если исходная стрелка имеет маркер на конце (исходящая),
-          // то у цели будет маркер в начале (входящая)
-          nextTile.config.arrows[oppositeDirection] = {
-            ...arrow,
-            show: true,
-            hasMarker: false,
-            hasInMarker: arrow.hasMarker  // Если исходная исходящая, то для цели входящая
-          };
-        }
-        break;
-      } else if (nextTile.config && nextTile.config.tileType === 'lines') {
+      if (tile.config.tileType === 'point') {
+        // Нашли целевую точку
+        return {targetTile: tile};
+      } else if (tile.config.tileType === 'lines') {
         // Пустой тайл - рисуем линию
-        if (direction === 'right' || direction === 'left') {
-          nextTile.config.horizontalLine = {
-            ...nextTile.config.horizontalLine,
+        if (dx !== 0) {
+          // Горизонтальная линия
+          tile.config.horizontalLine = {
             show: true,
-            style: arrow.style || 'solid',
+            style: style,
             y: 34
           };
         } else {
-          nextTile.config.verticalLine = {
-            ...nextTile.config.verticalLine,
+          // Вертикальная линия
+          tile.config.verticalLine = {
             show: true,
-            style: arrow.style || 'solid',
+            style: style,
             x: 34
           };
         }
+        currentX += dx;
+        currentY += dy;
       } else {
-        // Встретили непреодолимое препятствие (image)
-        break;
+        // Препятствие (image)
+        return null;
       }
+    }
 
-      currentX += dx;
-      currentY += dy;
+    return null;
+  }
+
+  _getDirectionDelta(direction) {
+    switch (direction) {
+      case 'right': return {dx: 1, dy: 0};
+      case 'left': return {dx: -1, dy: 0};
+      case 'down': return {dx: 0, dy: 1};
+      case 'top': return {dx: 0, dy: -1};
     }
   }
 
@@ -179,13 +278,10 @@ export class YarbpXPMConverter {
   }
 
   _extractActorProps(tile) {
-    // TODO: Implement actor props extraction
     return {};
   }
 
   _extractPointProps(tile) {
-    console.log(JSON.stringify(tile))
-
     let title = tile.value;
 
     let annotations;
@@ -213,20 +309,18 @@ export class YarbpXPMConverter {
 
         const arrowStr = String(val).trim();
 
-        // Определяем стиль
         let style = 'solid';
         if (/--/.test(arrowStr)) style = 'dashed';
         else if (/\.\./.test(arrowStr)) style = 'dotted';
 
-        // Определяем маркеры
         const hasStartMarker = arrowStr.startsWith('<');
         const hasEndMarker = arrowStr.endsWith('>');
 
         return {
           show: true,
           style: style,
-          hasMarker: hasEndMarker,      // маркер на конце (исходящая)
-          hasInMarker: hasStartMarker   // маркер в начале (входящая)
+          hasMarker: hasEndMarker,
+          hasInMarker: hasStartMarker
         };
       };
 
@@ -246,7 +340,7 @@ export class YarbpXPMConverter {
         top: topArrow || {show: false}
       }
     }
-  };
+  }
 
   _getTileConfig(tileType) {
     switch (tileType) {
@@ -255,7 +349,7 @@ export class YarbpXPMConverter {
       case YarbpXPMConverter.VOCABULARY.lines: return this._getEmptyTileConfig
       default: return () => {};
     }
-  };
+  }
 
   _getPointTileConfig(x, y, props = {}) {
     return {
@@ -281,7 +375,7 @@ export class YarbpXPMConverter {
       verticalLine: {show: false, style: "solid"},
       ...props
     }
-  };
+  }
 
   _getActorImageTileConfig(x, y, props = {}) {
     return {
@@ -291,7 +385,7 @@ export class YarbpXPMConverter {
       roleName: "",
       ...props
     }
-  };
+  }
 
   _createGrid(sizeX, sizeY) {
     this.result = [];
@@ -304,11 +398,11 @@ export class YarbpXPMConverter {
         });
       }
     }
-  };
+  }
 
   _getTileByCoords(x, y) {
     return this.result.find(
       tile => tile.grid.x === x && tile.grid.y === y
     ) || null;
-  };
+  }
 }

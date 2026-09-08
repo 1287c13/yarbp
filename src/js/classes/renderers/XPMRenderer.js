@@ -1,5 +1,5 @@
-import { YarbpBasicRenderer } from "../YarbpBasicRenderer.js";
-import { YarbpXPMConverter } from "../ast-converters/XPMConverter.js";
+import {YarbpBasicRenderer} from "../YarbpBasicRenderer.js";
+import {YarbpXPMConverter} from "../ast-converters/XPMConverter.js";
 
 export class XPMRenderer extends YarbpBasicRenderer {
   constructor(...args) {
@@ -30,7 +30,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     // Стрелки
     SHORT_LINE_LEN: 20,
     IN_ARROW_OFFSET: 8,
-    STROKE_WIDTH: 2,
+    STROKE_WIDTH: 1,
 
     // Маркеры
     MARKER_WIDTH: 6,
@@ -71,7 +71,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     COLOR_WHITE: '#ffffff'
   });
 
-  static getColor(colorType='main') {
+  static getColor(colorType = 'main') {
     const isDark = document.body.classList.contains('dark');
     switch (colorType) {
       case 'main':
@@ -98,7 +98,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     let markup = this.renderer.convert();
     let svg = this.composeTiles(markup.tiles).svg;
 
-    const HTML = `<div>${new XMLSerializer().serializeToString(svg)}</div>`
+    const HTML = `<div>${new XMLSerializer().serializeToString(svg)}</div>`;
 
     const renderPane = this.renderTextarea.closest('#render-pane');
     const editorContainer = this.renderHighlightDiv.closest('.editor-container');
@@ -311,70 +311,71 @@ export class XPMRenderer extends YarbpBasicRenderer {
   }
 
   static drawArrow(arrowType, arrowCfg, connectionPoints, bypassEnabled, tileWidth, tileHeight) {
-    const {
-      show = false,
-      style = 'solid',
-      hasMarker = false,
-      hasInMarker = false
-    } = arrowCfg || {};
+  const {
+    show = false,
+    style = 'solid',
+    hasMarker = false,
+    hasInMarker = false
+  } = arrowCfg || {};
 
-    const pts = connectionPoints;
-    const shortLen = XPMRenderer.DEFAULTS.SHORT_LINE_LEN;
-    const inOffset = XPMRenderer.DEFAULTS.IN_ARROW_OFFSET;
+  const pts = connectionPoints;
+  const shortLen = XPMRenderer.DEFAULTS.SHORT_LINE_LEN;
+  // Всегда используем inOffset = 0 (как у опциональных точек)
+  const inOffset = 0;
 
-    let x1, y1, x2, y2;
+  let x1, y1, x2, y2;
 
-    switch (arrowType) {
-      case 'right':
-        x1 = pts.right.x - (bypassEnabled ? 0 : inOffset);
-        y1 = pts.right.y;
-        x2 = tileWidth;
-        y2 = y1;
-        break;
-      case 'down':
-        x1 = pts.bottom.x;
-        y1 = pts.bottom.y - (bypassEnabled ? 0 : inOffset);
-        x2 = x1;
-        y2 = tileHeight;
-        break;
-      case 'left':
-        x2 = pts.left.x + (bypassEnabled ? 0 : inOffset);
-        y2 = pts.left.y;
-        x1 = x2 - shortLen - (bypassEnabled ? 0 : inOffset);
-        y1 = y2;
-        break;
-      case 'top':
-        x2 = pts.top.x;
-        y2 = pts.top.y + (bypassEnabled ? 0 : inOffset);
-        x1 = x2;
-        y1 = y2 - shortLen - (bypassEnabled ? 0 : inOffset);
-        break;
-    }
-
-    const line = XPMRenderer.createSvgElement('line', {
-      x1, y1, x2, y2,
-      stroke: XPMRenderer.getColor(),
-      'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH,
-      opacity: show ? 1 : 0
-    });
-
-    if (style === 'dashed') {
-      line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DASHED_LINE_PATTERN);
-    } else if (style === 'dotted') {
-      line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DOTTED_LINE_PATTERN);
-    }
-
-    if (hasMarker && show) {
-      const styleCap = XPMRenderer.capitalize(style);
-      line.setAttribute('marker-end', `url(#arrow${styleCap})`);
-    }
-    if (hasInMarker && show) {
-      const styleCap = XPMRenderer.capitalize(style);
-      line.setAttribute('marker-start', `url(#arrow${styleCap}In)`);
-    }
-
-    return line;
+  switch (arrowType) {
+    case 'right':
+      x1 = pts.right.x - inOffset;
+      y1 = pts.right.y;
+      x2 = tileWidth;
+      y2 = y1;
+      break;
+    case 'down':
+      x1 = pts.bottom.x;
+      y1 = pts.bottom.y - inOffset;
+      x2 = x1;
+      y2 = tileHeight;
+      break;
+    case 'left':
+      x2 = pts.left.x + inOffset;
+      y2 = pts.left.y;
+      x1 = x2 - shortLen - inOffset;
+      y1 = y2;
+      break;
+    case 'top':
+      x2 = pts.top.x;
+      y2 = pts.top.y + inOffset;
+      x1 = x2;
+      y1 = y2 - shortLen - inOffset;
+      break;
   }
+
+  const line = XPMRenderer.createSvgElement('line', {
+    x1, y1, x2, y2,
+    stroke: XPMRenderer.getColor(),
+    'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH,
+    opacity: show ? 1 : 0
+  });
+
+  if (style === 'dashed') {
+    line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DASHED_LINE_PATTERN);
+  } else if (style === 'dotted') {
+    line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DOTTED_LINE_PATTERN);
+  }
+
+  if (hasMarker && show) {
+    const styleCap = XPMRenderer.capitalize(style);
+    line.setAttribute('marker-end', `url(#arrow${styleCap})`);
+  }
+  if (hasInMarker && show) {
+    const styleCap = XPMRenderer.capitalize(style);
+    line.setAttribute('marker-start', `url(#arrow${styleCap}In)`);
+  }
+
+  return line;
+}
 
   static drawBypassArc(arrows, connectionPoints, style) {
     let start = null;
