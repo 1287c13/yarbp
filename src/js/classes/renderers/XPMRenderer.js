@@ -41,7 +41,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     DOTTED_LINE_PATTERN: '2,3',
 
     // Изображения
-    IMAGE_HEIGHT: 80,
+    IMAGE_HEIGHT: 60,
 
     // Тайлы
     DEFAULT_TILE_SIZE: 40,
@@ -637,7 +637,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
         },
         render(config, cellWidth, cellHeight) {
           const group = XPMRenderer.createSvgElement('g');
-          const src = config.src || config.dataUrl || config.externalUrl || '';
+          const src = config.src || XPMRenderer._createPinSVGDataURI(XPMRenderer.getColor());
           const aspectRatio = config.aspectRatio || 1;
           const imageHeight = XPMRenderer.DEFAULTS.IMAGE_HEIGHT;
           const imageWidth = imageHeight * aspectRatio;
@@ -732,6 +732,15 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
     svg.appendChild(text);
     return svg;
+  }
+
+  static _createPinSVGDataURI(color) {
+    const svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="51" viewBox="0 0 30 51" fill="none"><path d="M20.541 19.251L29.042 26.75L27.7178 28.25L20.5254 21.9033L14.8613 50.6924L12.9043 50.7178L7.48535 26.3398L1.76074 36.9736L0 36.0254L7 23.0254L8.27344 20.6602L8.85645 23.2832L13.8203 45.623L18.8994 19.8076L19.2354 18.0977L20.541 19.251ZM12.3799 0C16.7982 0 20.3799 3.58172 20.3799 8C20.3799 12.4183 16.7982 16 12.3799 16C7.9616 16 4.37988 12.4183 4.37988 8C4.37988 3.58172 7.9616 0 12.3799 0ZM12.3799 2C9.06617 2 6.37988 4.68629 6.37988 8C6.37988 11.3137 9.06617 14 12.3799 14C15.6936 14 18.3799 11.3137 18.3799 8C18.3799 4.68629 15.6936 2 12.3799 2Z" fill="${color}"/></svg>`;
+    const bytes = new TextEncoder().encode(svgString);
+    let binary = '';
+    bytes.forEach(byte => binary += String.fromCharCode(byte));
+    const base64 = btoa(binary);
+    return `data:image/svg+xml;base64,${base64}`;
   }
 
   /* endregion ========================================================== */
