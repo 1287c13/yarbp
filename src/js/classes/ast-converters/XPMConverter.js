@@ -42,10 +42,10 @@ export class YarbpXPMConverter {
     this._inheritArrows();
 
     // Создаём глубокую копию конфигураций для обхода кэша
-    this.result = this.result.map(tile => ({
-      grid: {...tile.grid},
-      config: JSON.parse(JSON.stringify(tile.config))
-    }));
+    // this.result = this.result.map(tile => ({
+    //   grid: {...tile.grid},
+    //   config: JSON.parse(JSON.stringify(tile.config))
+    // }));
 
     return {tiles: this.result};
   }
@@ -278,7 +278,9 @@ export class YarbpXPMConverter {
   }
 
   _extractActorProps(tile) {
-    return {};
+    return {
+      src: tile.value.trim()
+    };
   }
 
   _extractPointProps(tile) {
