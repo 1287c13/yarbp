@@ -1,13 +1,11 @@
 import {YarbpBasicRenderer} from "../YarbpBasicRenderer.js";
 import {YarbpXPMConverter} from "../ast-converters/XPMConverter.js";
 
+/**
+ * Рендерер XPM-диаграмм.
+ * Преобразует AST в SVG-разметку с сеточной компоновкой тайлов.
+ */
 export class XPMRenderer extends YarbpBasicRenderer {
-  constructor(...args) {
-    super(...args);
-    this.uiContainer = null;
-    this.tileRenderers = this._createTileRenderers();
-  }
-
   static DEFAULTS = Object.freeze({
     SVG_NS: 'http://www.w3.org/2000/svg',
 
@@ -68,20 +66,45 @@ export class XPMRenderer extends YarbpBasicRenderer {
     // Цвета
     COLOR_MAIN_LIGHT: '#335272',
     COLOR_MAIN_DARK: '#c3cdd0',
-    COLOR_WHITE: '#ffffff'
+    COLOR_WHITE: '#ffffff',
+
+    // Кэш
+    SIZE_CACHE_LIMIT: 1000
   });
 
+  constructor(...args) {
+    super(...args);
+    this.uiContainer = null;
+    this._markersVersion = -1;
+    this.tileRenderers = this._createTileRenderers();
+  }
+
+  /* region Тема ========================================================= */
+
+  static _themeVersion = 0;
+
+  /**
+   * Инвалидирует закэшированные ресурсы (маркеры и т.п.) при смене темы.
+   * Вызывать при переключении dark/light.
+   */
+  static invalidateTheme() {
+    XPMRenderer._themeVersion++;
+  }
+
+  static isDark() {
+    return document.body.classList.contains('dark');
+  }
+
+  /**
+   * Возвращает цвет для текущей темы.
+   * @param {'main'|'ide-code-val'} [colorType='main']
+   * @returns {string}
+   */
   static getColor(colorType = 'main') {
-    const isDark = document.body.classList.contains('dark');
+    const isDark = XPMRenderer.isDark();
     switch (colorType) {
       case 'main':
-        return isDark
-          ? XPMRenderer.DEFAULTS.COLOR_MAIN_DARK
-          : XPMRenderer.DEFAULTS.COLOR_MAIN_LIGHT;
       case 'ide-code-val':
-        return isDark
-          ? XPMRenderer.DEFAULTS.COLOR_MAIN_DARK
-          : XPMRenderer.DEFAULTS.COLOR_MAIN_LIGHT;
       default:
         return isDark
           ? XPMRenderer.DEFAULTS.COLOR_MAIN_DARK
@@ -89,16 +112,16 @@ export class XPMRenderer extends YarbpBasicRenderer {
     }
   }
 
+  /* endregion ========================================================== */
+
   render() {
     this.AST = this.parser.getAST();
 
-    const isDark = document.body.classList.contains('dark');
+    const isDark = XPMRenderer.isDark();
 
     this.renderer = new YarbpXPMConverter(this.AST);
-    let markup = this.renderer.convert();
-    let svg = this.composeTiles(markup.tiles).svg;
-
-    const HTML = `<div>${new XMLSerializer().serializeToString(svg)}</div>`;
+    const markup = this.renderer.convert();
+    const {svg} = this.composeTiles(markup.tiles);
 
     const renderPane = this.renderTextarea.closest('#render-pane');
     const editorContainer = this.renderHighlightDiv.closest('.editor-container');
@@ -122,10 +145,10 @@ export class XPMRenderer extends YarbpBasicRenderer {
       position: relative;
     `;
 
-    this.uiContainer.innerHTML = HTML;
+    this.uiContainer.replaceChildren(svg);
   }
 
-  /* region утилиты =======================================================*/
+  /* region утилиты ===================================================== */
 
   static createSvgElement(tag, attrs = {}) {
     const el = document.createElementNS(XPMRenderer.DEFAULTS.SVG_NS, tag);
@@ -136,35 +159,47 @@ export class XPMRenderer extends YarbpBasicRenderer {
   }
 
   static capitalize(str) {
+    if (typeof str !== 'string' || str.length === 0) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
 
-  /* endregion ============================================================*/
+  /* endregion ========================================================== */
 
-  /* region измеряем и кэшируем SVG =======================================*/
+  /* region измерение и кэш ============================================= */
 
-  static measureSvg;
+  static measureSvg = null;
 
-  createHiddenSVGContainer() {
-    if (XPMRenderer.measureSvg) return;
+  /**
+   * Ленивая инициализация скрытого SVG-контейнера для измерений.
+   * @returns {SVGSVGElement}
+   */
+  static ensureMeasureSvg() {
+    if (XPMRenderer.measureSvg) return XPMRenderer.measureSvg;
 
-    const measureSvg = document.createElementNS(XPMRenderer.DEFAULTS.SVG_NS, 'svg');
-    measureSvg.style.position = 'absolute';
-    measureSvg.style.visibility = 'hidden';
-    measureSvg.style.pointerEvents = 'none';
-    measureSvg.setAttribute('width', 0);
-    measureSvg.setAttribute('height', 0);
-    document.body.appendChild(measureSvg);
+    const svg = XPMRenderer.createSvgElement('svg');
+    svg.style.position = 'absolute';
+    svg.style.visibility = 'hidden';
+    svg.style.pointerEvents = 'none';
+    svg.setAttribute('width', 0);
+    svg.setAttribute('height', 0);
+    document.body.appendChild(svg);
 
-    XPMRenderer.measureSvg = measureSvg;
+    XPMRenderer.measureSvg = svg;
+    return svg;
   }
 
+  /**
+   * Измеряет bbox группы SVG-элементов.
+   * @param {SVGElement[]} elements
+   * @returns {{x:number,y:number,width:number,height:number}}
+   */
   static measureElements(elements) {
+    const measureSvg = XPMRenderer.ensureMeasureSvg();
     const tempGroup = XPMRenderer.createSvgElement('g');
     elements.forEach(el => tempGroup.appendChild(el));
-    XPMRenderer.measureSvg.appendChild(tempGroup);
+    measureSvg.appendChild(tempGroup);
     const bbox = tempGroup.getBBox();
-    XPMRenderer.measureSvg.removeChild(tempGroup);
+    measureSvg.removeChild(tempGroup);
     return {
       x: bbox.x,
       y: bbox.y,
@@ -178,25 +213,31 @@ export class XPMRenderer extends YarbpBasicRenderer {
   static canonicalize(obj) {
     if (Array.isArray(obj)) {
       return '[' + obj.map(XPMRenderer.canonicalize).join(',') + ']';
-    } else if (obj && typeof obj === 'object') {
-      const keys = Object.keys(obj).sort();
-      return '{' + keys.map(k => `${JSON.stringify(k)}:${XPMRenderer.canonicalize(obj[k])}`).join(',') + '}';
-    } else {
-      return JSON.stringify(obj);
     }
+    if (obj && typeof obj === 'object') {
+      const keys = Object.keys(obj).sort();
+      return '{' + keys
+        .map(k => `${JSON.stringify(k)}:${XPMRenderer.canonicalize(obj[k])}`)
+        .join(',') + '}';
+    }
+    if (obj === undefined) return 'u';
+    if (obj === null) return 'n';
+    return JSON.stringify(obj);
   }
 
   static getCachedSize(config) {
     const key = XPMRenderer.canonicalize(config);
-    if (XPMRenderer.staticSizeCache.has(key)) {
-      return XPMRenderer.staticSizeCache.get(key);
-    }
-    return null;
+    return XPMRenderer.staticSizeCache.get(key) ?? null;
   }
 
   static setCachedSize(config, size) {
     const key = XPMRenderer.canonicalize(config);
-    XPMRenderer.staticSizeCache.set(key, size);
+    const cache = XPMRenderer.staticSizeCache;
+    if (cache.size >= XPMRenderer.DEFAULTS.SIZE_CACHE_LIMIT) {
+      const oldest = cache.keys().next().value;
+      cache.delete(oldest);
+    }
+    cache.set(key, size);
   }
 
   /* endregion ========================================================== */
@@ -205,8 +246,15 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
   markersDefs = null;
 
+  /**
+   * @returns {SVGDefsElement}
+   */
   getMarkersDefs() {
-    if (this.markersDefs) return this.markersDefs;
+    const version = XPMRenderer._themeVersion;
+    if (this.markersDefs && this._markersVersion === version) {
+      return this.markersDefs;
+    }
+
     const defs = XPMRenderer.createSvgElement('defs');
     ['Solid', 'Dashed', 'Dotted'].forEach(type => {
       const markerOut = XPMRenderer.createSvgElement('marker', {
@@ -239,8 +287,48 @@ export class XPMRenderer extends YarbpBasicRenderer {
       }));
       defs.appendChild(markerIn);
     });
+
     this.markersDefs = defs;
+    this._markersVersion = version;
     return defs;
+  }
+
+  /**
+   * Нормализует конфиг стрелки: если не задан, вернёт «выключенную».
+   */
+  static normalizeArrow(cfg) {
+    return cfg || {
+      show: false,
+      style: 'solid',
+      hasMarker: false,
+      hasInMarker: false
+    };
+  }
+
+  /**
+   * Применяет dash-паттерн к элементу линии/пути.
+   */
+  static applyLineStyle(el, style) {
+    if (style === 'dashed') {
+      el.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DASHED_LINE_PATTERN);
+    } else if (style === 'dotted') {
+      el.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DOTTED_LINE_PATTERN);
+    }
+  }
+
+  /**
+   * Возвращает точки подключения вокруг точки (top/right/bottom/left + radius).
+   */
+  static buildConnectionPoints(dotX, dotY, dotRadius) {
+    const connectionRadius =
+      dotRadius * XPMRenderer.DEFAULTS.CONNECTION_RADIUS_MULTIPLIER;
+    return {
+      top: {x: dotX, y: dotY - connectionRadius},
+      right: {x: dotX + connectionRadius, y: dotY},
+      bottom: {x: dotX, y: dotY + connectionRadius},
+      left: {x: dotX - connectionRadius, y: dotY},
+      radius: connectionRadius
+    };
   }
 
   static drawPoint(style, dotX, dotY, dotRadius) {
@@ -294,7 +382,8 @@ export class XPMRenderer extends YarbpBasicRenderer {
     g.appendChild(titleEl);
 
     let currentY = titleY + XPMRenderer.DEFAULTS.TITLE_LINE_SPACING;
-    listText.split('\n').forEach(line => {
+    const list = typeof listText === 'string' ? listText : '';
+    list.split('\n').forEach(line => {
       const textEl = XPMRenderer.createSvgElement('text', {
         x: titleX,
         y: currentY,
@@ -310,103 +399,93 @@ export class XPMRenderer extends YarbpBasicRenderer {
     return g;
   }
 
-  static drawArrow(arrowType, arrowCfg, connectionPoints, bypassEnabled, tileWidth, tileHeight) {
-  const {
-    show = false,
-    style = 'solid',
-    hasMarker = false,
-    hasInMarker = false
-  } = arrowCfg || {};
+  /**
+   * Строит SVG-линию стрелки для заданного направления.
+   * @param {'left'|'right'|'top'|'down'} arrowType
+   * @param {object} arrowCfg
+   * @param {object} connectionPoints
+   * @param {number} tileWidth  — ширина тайла (для right-стрелки)
+   * @param {number} tileHeight — высота тайла (для down-стрелки)
+   */
+  static drawArrow(arrowType, arrowCfg, connectionPoints, tileWidth, tileHeight) {
+    const {
+      show = false,
+      style = 'solid',
+      hasMarker = false,
+      hasInMarker = false
+    } = arrowCfg || {};
 
-  const pts = connectionPoints;
-  const shortLen = XPMRenderer.DEFAULTS.SHORT_LINE_LEN;
-  // Всегда используем inOffset = 0 (как у опциональных точек)
-  const inOffset = 0;
+    const pts = connectionPoints;
+    const shortLen = XPMRenderer.DEFAULTS.SHORT_LINE_LEN;
+    const inOffset = 0; // как у опциональных точек
 
-  let x1, y1, x2, y2;
+    let x1, y1, x2, y2;
 
-  switch (arrowType) {
-    case 'right':
-      x1 = pts.right.x - inOffset;
-      y1 = pts.right.y;
-      x2 = tileWidth;
-      y2 = y1;
-      break;
-    case 'down':
-      x1 = pts.bottom.x;
-      y1 = pts.bottom.y - inOffset;
-      x2 = x1;
-      y2 = tileHeight;
-      break;
-    case 'left':
-      x2 = pts.left.x + inOffset;
-      y2 = pts.left.y;
-      x1 = x2 - shortLen - inOffset;
-      y1 = y2;
-      break;
-    case 'top':
-      x2 = pts.top.x;
-      y2 = pts.top.y + inOffset;
-      x1 = x2;
-      y1 = y2 - shortLen - inOffset;
-      break;
+    switch (arrowType) {
+      case 'right':
+        x1 = pts.right.x - inOffset;
+        y1 = pts.right.y;
+        x2 = tileWidth;
+        y2 = y1;
+        break;
+      case 'down':
+        x1 = pts.bottom.x;
+        y1 = pts.bottom.y - inOffset;
+        x2 = x1;
+        y2 = tileHeight;
+        break;
+      case 'left':
+        x2 = pts.left.x + inOffset;
+        y2 = pts.left.y;
+        x1 = x2 - shortLen - inOffset;
+        y1 = y2;
+        break;
+      case 'top':
+        x2 = pts.top.x;
+        y2 = pts.top.y + inOffset;
+        x1 = x2;
+        y1 = y2 - shortLen - inOffset;
+        break;
+      default:
+        return XPMRenderer.createSvgElement('g');
+    }
+
+    const line = XPMRenderer.createSvgElement('line', {
+      x1, y1, x2, y2,
+      stroke: XPMRenderer.getColor(),
+      'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH,
+      opacity: show ? 1 : 0
+    });
+
+    XPMRenderer.applyLineStyle(line, style);
+
+    if (show) {
+      const styleCap = XPMRenderer.capitalize(style);
+      if (hasMarker) {
+        line.setAttribute('marker-end', `url(#arrow${styleCap})`);
+      }
+      if (hasInMarker) {
+        line.setAttribute('marker-start', `url(#arrow${styleCap}In)`);
+      }
+    }
+
+    return line;
   }
-
-  const line = XPMRenderer.createSvgElement('line', {
-    x1, y1, x2, y2,
-    stroke: XPMRenderer.getColor(),
-    'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH,
-    opacity: show ? 1 : 0
-  });
-
-  if (style === 'dashed') {
-    line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DASHED_LINE_PATTERN);
-  } else if (style === 'dotted') {
-    line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DOTTED_LINE_PATTERN);
-  }
-
-  if (hasMarker && show) {
-    const styleCap = XPMRenderer.capitalize(style);
-    line.setAttribute('marker-end', `url(#arrow${styleCap})`);
-  }
-  if (hasInMarker && show) {
-    const styleCap = XPMRenderer.capitalize(style);
-    line.setAttribute('marker-start', `url(#arrow${styleCap}In)`);
-  }
-
-  return line;
-}
 
   static drawBypassArc(arrows, connectionPoints, style) {
     let start = null;
     let end = null;
 
     if (arrows['left']?.show && arrows['left'].style !== 'dotted') {
-      start = {
-        x: connectionPoints.left.x,
-        y: connectionPoints.left.y,
-        angle: 180
-      };
+      start = {x: connectionPoints.left.x, y: connectionPoints.left.y, angle: 180};
     } else if (arrows['top']?.show && arrows['top'].style !== 'dotted') {
-      start = {
-        x: connectionPoints.top.x,
-        y: connectionPoints.top.y,
-        angle: 270
-      };
+      start = {x: connectionPoints.top.x, y: connectionPoints.top.y, angle: 270};
     }
 
     if (arrows['down']?.show && arrows['down'].style !== 'dotted') {
-      end = {
-        x: connectionPoints.bottom.x,
-        y: connectionPoints.bottom.y,
-        angle: 90
-      };
+      end = {x: connectionPoints.bottom.x, y: connectionPoints.bottom.y, angle: 90};
     } else if (arrows['right']?.show && arrows['right'].style !== 'dotted') {
-      end = {
-        x: connectionPoints.right.x,
-        y: connectionPoints.right.y,
-        angle: 0
-      };
+      end = {x: connectionPoints.right.x, y: connectionPoints.right.y, angle: 0};
     }
 
     if (!start || !end) return null;
@@ -422,26 +501,17 @@ export class XPMRenderer extends YarbpBasicRenderer {
       'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH
     });
 
-    if (style === 'dashed') {
-      path.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DASHED_LINE_PATTERN);
-    } else if (style === 'dotted') {
-      path.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DOTTED_LINE_PATTERN);
-    }
-
+    XPMRenderer.applyLineStyle(path, style);
     return path;
   }
 
-  drawSimpleLine(x1, y1, x2, y2, style) {
+  static drawSimpleLine(x1, y1, x2, y2, style) {
     const line = XPMRenderer.createSvgElement('line', {
       x1, y1, x2, y2,
       stroke: XPMRenderer.getColor(),
       'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH
     });
-    if (style === 'dashed') {
-      line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DASHED_LINE_PATTERN);
-    } else if (style === 'dotted') {
-      line.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DOTTED_LINE_PATTERN);
-    }
+    XPMRenderer.applyLineStyle(line, style);
     return line;
   }
 
@@ -450,8 +520,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
   /* region Рендер элементов ============================================ */
 
   _createTileRenderers() {
-    const self = this;
-
     return {
       point: {
         measure(config) {
@@ -473,7 +541,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
         buildStaticElements(config) {
           const {
             pointStyle = 'filled',
-            bypassEnabled = false,
             title = '',
             listText = '',
             arrows = {}
@@ -482,25 +549,14 @@ export class XPMRenderer extends YarbpBasicRenderer {
           const dotX = XPMRenderer.DEFAULTS.DOT_BASE_X;
           const dotY = XPMRenderer.DEFAULTS.DOT_BASE_Y;
           const dotRadius = XPMRenderer.DEFAULTS.DOT_RADIUS;
-          const connectionRadius = dotRadius * XPMRenderer.DEFAULTS.CONNECTION_RADIUS_MULTIPLIER;
-
-          const connectionPoints = {
-            top: {x: dotX, y: dotY - connectionRadius},
-            right: {x: dotX + connectionRadius, y: dotY},
-            bottom: {x: dotX, y: dotY + connectionRadius},
-            left: {x: dotX - connectionRadius, y: dotY},
-            radius: connectionRadius
-          };
+          const connectionPoints = XPMRenderer.buildConnectionPoints(dotX, dotY, dotRadius);
 
           const elements = [];
+          // right/down-стрелки уходят за пределы ячейки и учитываются при рендере.
+          // При измерении берём только left/top, иначе bbox ошибочно сжимается влево.
           ['left', 'top'].forEach(type => {
-            const arrowCfg = arrows[type] || {
-              show: false,
-              style: 'solid',
-              hasMarker: false,
-              hasInMarker: false
-            };
-            elements.push(XPMRenderer.drawArrow(type, arrowCfg, connectionPoints, bypassEnabled, 0, 0));
+            const arrowCfg = XPMRenderer.normalizeArrow(arrows[type]);
+            elements.push(XPMRenderer.drawArrow(type, arrowCfg, connectionPoints, 0, 0));
           });
 
           elements.push(XPMRenderer.drawPoint(pointStyle, dotX, dotY, dotRadius));
@@ -528,34 +584,22 @@ export class XPMRenderer extends YarbpBasicRenderer {
           const dotX = XPMRenderer.DEFAULTS.DOT_BASE_X + offsetX;
           const dotY = XPMRenderer.DEFAULTS.DOT_BASE_Y + offsetY;
           const dotRadius = XPMRenderer.DEFAULTS.DOT_RADIUS;
-          const connectionRadius = dotRadius * XPMRenderer.DEFAULTS.CONNECTION_RADIUS_MULTIPLIER;
-
-          const connectionPoints = {
-            top: {x: dotX, y: dotY - connectionRadius},
-            right: {x: dotX + connectionRadius, y: dotY},
-            bottom: {x: dotX, y: dotY + connectionRadius},
-            left: {x: dotX - connectionRadius, y: dotY},
-            radius: connectionRadius
-          };
+          const connectionPoints = XPMRenderer.buildConnectionPoints(dotX, dotY, dotRadius);
 
           const group = XPMRenderer.createSvgElement('g');
 
           ['right', 'down', 'left', 'top'].forEach(type => {
-            const arrowCfg = arrows[type] || {
-              show: false,
-              style: 'solid',
-              hasMarker: false,
-              hasInMarker: false
-            };
-            group.appendChild(XPMRenderer.drawArrow(type, arrowCfg, connectionPoints, bypassEnabled, effectiveWidth, effectiveHeight));
+            const arrowCfg = XPMRenderer.normalizeArrow(arrows[type]);
+            group.appendChild(XPMRenderer.drawArrow(
+              type, arrowCfg, connectionPoints, effectiveWidth, effectiveHeight
+            ));
           });
 
           if (bypassEnabled) {
-            const styleForArc = arrows['left']?.show && arrows['left'].style !== 'dotted'
-              ? arrows['left'].style
-              : (arrows['top']?.show && arrows['top'].style !== 'dotted'
-                ? arrows['top'].style
-                : 'solid');
+            const styleForArc =
+              (arrows['left']?.show && arrows['left'].style !== 'dotted') ? arrows['left'].style :
+              (arrows['top']?.show && arrows['top'].style !== 'dotted') ? arrows['top'].style :
+              'solid';
             const arc = XPMRenderer.drawBypassArc(arrows, connectionPoints, styleForArc);
             if (arc) group.appendChild(arc);
           }
@@ -586,17 +630,15 @@ export class XPMRenderer extends YarbpBasicRenderer {
           const vLine = config.verticalLine;
 
           if (hLine?.show) {
-            // Используем DOT_BASE_Y для горизонтальных линий
             const y = hLine.y !== undefined ? hLine.y : XPMRenderer.DEFAULTS.DOT_BASE_Y;
             group.appendChild(
-              self.drawSimpleLine(0, y, cellWidth, y, hLine?.style || 'solid')
+              XPMRenderer.drawSimpleLine(0, y, cellWidth, y, hLine.style || 'solid')
             );
           }
           if (vLine?.show) {
-            // Используем DOT_BASE_X для вертикальных линий
             const x = vLine.x !== undefined ? vLine.x : XPMRenderer.DEFAULTS.DOT_BASE_X;
             group.appendChild(
-              self.drawSimpleLine(x, 0, x, cellHeight, vLine?.style || 'solid')
+              XPMRenderer.drawSimpleLine(x, 0, x, cellHeight, vLine.style || 'solid')
             );
           }
 
@@ -606,6 +648,9 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
       image: {
         measure(config) {
+          const cached = XPMRenderer.getCachedSize(config);
+          if (cached) return cached;
+
           const aspectRatio = config.aspectRatio || 1;
           const imageWidth = XPMRenderer.DEFAULTS.IMAGE_HEIGHT * aspectRatio;
           const roleName = config.roleName || '';
@@ -625,37 +670,41 @@ export class XPMRenderer extends YarbpBasicRenderer {
             roleNameWidth = Math.ceil(bbox.width);
           }
 
-          const minWidth = imageWidth + roleNameWidth + XPMRenderer.DEFAULTS.ROLE_NAME_OFFSET_X;
-          const minHeight = Math.max(XPMRenderer.DEFAULTS.IMAGE_HEIGHT, XPMRenderer.DEFAULTS.TITLE_FONT_SIZE * 2);
-
-          return {
-            minWidth,
-            minHeight,
+          const size = {
+            minWidth: imageWidth + roleNameWidth + XPMRenderer.DEFAULTS.ROLE_NAME_OFFSET_X,
+            minHeight: Math.max(
+              XPMRenderer.DEFAULTS.IMAGE_HEIGHT,
+              XPMRenderer.DEFAULTS.TITLE_FONT_SIZE * 2
+            ),
             minX: 0,
             minY: 0
           };
+          XPMRenderer.setCachedSize(config, size);
+          return size;
         },
+
         render(config, cellWidth, cellHeight) {
           const group = XPMRenderer.createSvgElement('g');
-          const src = config.src && (config.src.startsWith('http://')
-                      || config.src.startsWith('https://')
-                      || config.src.startsWith('data:'))
-            ? config.src
-            : XPMRenderer._createPinSVGDataURI(XPMRenderer.getColor(), config.src);
-          const aspectRatio = config.aspectRatio || 1;
+          const {src, aspectRatio = 1, roleName = ''} = config;
+
+          const resolvedSrc = src && (src.startsWith('http://')
+            || src.startsWith('https://')
+            || src.startsWith('data:'))
+            ? src
+            : XPMRenderer._createPinSVGDataURI(XPMRenderer.getColor(), src);
+
           const imageHeight = XPMRenderer.DEFAULTS.IMAGE_HEIGHT;
           const imageWidth = imageHeight * aspectRatio;
-          const roleName = config.roleName || '';
 
-          if (src && cellWidth > 0 && cellHeight >= imageHeight) {
+          if (resolvedSrc && cellWidth > 0 && cellHeight >= imageHeight) {
             const x = cellWidth - imageWidth;
             const y = 0;
             group.appendChild(XPMRenderer.createSvgElement('image', {
               x, y,
               width: imageWidth,
               height: imageHeight,
-              'preserveAspectRatio': 'xMaxYMid meet',
-              'href': src
+              preserveAspectRatio: 'xMaxYMid meet',
+              href: resolvedSrc
             }));
           }
 
@@ -676,10 +725,11 @@ export class XPMRenderer extends YarbpBasicRenderer {
             group.appendChild(textEl);
           }
 
+          const size = this.measure(config);
           return {
             group,
-            minWidth: this.measure(config).minWidth,
-            minHeight: this.measure(config).minHeight
+            minWidth: size.minWidth,
+            minHeight: size.minHeight
           };
         }
       },
@@ -738,9 +788,19 @@ export class XPMRenderer extends YarbpBasicRenderer {
     return svg;
   }
 
+  /**
+   * Создаёт data-URI c SVG-изображением «пина» по ключу.
+   * @param {string} color
+   * @param {string} src — ключ иконки (например, 'casual-man')
+   * @returns {string}
+   */
   static _createPinSVGDataURI(color, src) {
+    // ЗАГЛУШКА. Оригинальная реализация содержала ~30KB inline SVG-строк в switch.
+    // TODO: заменить на словарь иконок, например:
+    //   import { PIN_SVGS } from './pins/index.js';
+    //   return PIN_SVGS[src]?.(color) ?? PIN_SVGS.default(color);
 
-    function _getSVGString(color, src) {
+    const _getSVGString = (color, src) => {
       switch (src) {
         default: return `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="51" viewBox="0 0 30 51" fill="none"><path d="M20.541 19.251L29.042 26.75L27.7178 28.25L20.5254 21.9033L14.8613 50.6924L12.9043 50.7178L7.48535 26.3398L1.76074 36.9736L0 36.0254L7 23.0254L8.27344 20.6602L8.85645 23.2832L13.8203 45.623L18.8994 19.8076L19.2354 18.0977L20.541 19.251ZM12.3799 0C16.7982 0 20.3799 3.58172 20.3799 8C20.3799 12.4183 16.7982 16 12.3799 16C7.9616 16 4.37988 12.4183 4.37988 8C4.37988 3.58172 7.9616 0 12.3799 0ZM12.3799 2C9.06617 2 6.37988 4.68629 6.37988 8C6.37988 11.3137 9.06617 14 12.3799 14C15.6936 14 18.3799 11.3137 18.3799 8C18.3799 4.68629 15.6936 2 12.3799 2Z" fill="${color}"/></svg>`;
         case 'casual-man': return `<svg xmlns="http://www.w3.org/2000/svg"  width="720.000000pt" height="1280.000000pt" viewBox="0 0 720.000000 1280.000000"  preserveAspectRatio="xMidYMid meet"> <g transform="translate(0.000000,1280.000000) scale(0.100000,-0.100000)" fill="${color}" stroke="${color}" stroke-width="60"> <path d="M3705 11819 c-434 -40 -763 -187 -1047 -468 -70 -69 -158 -155 -196 -191 -221 -210 -370 -570 -412 -999 -39 -398 30 -810 211 -1266 51 -128 217 -467 315 -640 37 -66 111 -199 164 -296 l96 -176 -8 -94 c-14 -157 -48 -502 -55 -541 -6 -43 4 -39 -178 -59 -259 -27 -580 -94 -738 -154 -149 -56 -219 -105 -276 -193 -40 -63 -56 -109 -87 -260 -33 -157 -51 -198 -152 -348 -143 -215 -182 -319 -182 -493 0 -84 6 -122 35 -226 5 -16 -11 -34 -70 -85 -168 -143 -328 -346 -404 -513 -190 -414 -257 -916 -281 -2088 -13 -638 3 -1641 36 -2234 5 -103 48 -345 78 -445 l13 -45 72 -3 c39 -2 71 -1 71 2 0 3 -20 87 -45 188 l-46 183 -14 325 c-47 1038 -42 2286 10 2950 15 182 59 535 71 563 9 20 107 94 175 131 115 63 269 83 394 51 79 -20 225 -93 300 -150 304 -230 569 -652 760 -1210 60 -175 76 -212 97 -224 23 -13 29 -13 52 3 15 9 30 24 33 33 14 36 -117 407 -229 645 -118 252 -231 436 -376 606 -243 286 -516 442 -775 442 -109 0 -299 -59 -365 -112 -23 -19 -23 -2 2 84 41 142 112 300 179 398 127 187 352 395 718 663 l93 69 61 -12 c114 -21 291 -74 550 -163 591 -203 884 -291 1225 -366 141 -32 412 -81 442 -81 25 0 58 36 58 63 0 46 -37 65 -166 87 -412 72 -753 164 -1279 345 -665 229 -875 280 -983 240 -60 -23 -88 -44 -102 -75 -6 -14 -34 -41 -63 -60 -28 -19 -75 -54 -104 -77 -29 -24 -57 -43 -62 -43 -16 0 -34 128 -27 190 13 114 62 223 175 389 88 130 122 211 161 385 52 235 89 280 288 347 189 64 523 131 728 145 l97 7 -6 -44 c-8 -61 -46 -221 -55 -236 -5 -7 -59 -19 -127 -28 -139 -18 -261 -49 -290 -73 -78 -64 -72 -143 16 -208 19 -14 126 -77 239 -141 494 -280 794 -463 1185 -728 72 -49 171 -116 220 -149 117 -79 278 -199 335 -249 84 -73 120 -69 174 22 18 31 52 87 76 125 68 111 159 300 192 400 43 131 43 209 1 299 -20 42 -52 87 -84 118 l-52 51 17 114 c18 122 23 144 36 144 16 0 184 -166 232 -230 27 -36 68 -102 91 -148 35 -72 41 -93 45 -165 5 -95 -12 -177 -58 -276 -41 -88 -88 -149 -206 -271 -55 -58 -104 -115 -108 -128 -12 -37 17 -72 59 -72 30 0 47 12 129 91 149 142 244 281 285 414 7 22 14 46 17 53 4 15 110 -53 239 -153 217 -169 401 -434 494 -712 58 -170 79 -310 136 -868 29 -283 74 -661 110 -935 14 -102 32 -239 40 -305 47 -360 411 -2555 441 -2657 4 -15 17 -18 70 -18 63 0 64 1 64 26 0 32 -21 157 -100 599 -57 318 -184 1079 -235 1410 -14 88 -34 219 -45 290 -28 177 -77 512 -89 610 -6 44 -19 150 -30 235 -12 85 -41 342 -65 570 -103 953 -122 1048 -272 1341 -144 280 -342 485 -663 685 l-65 40 -13 78 c-16 97 -46 173 -107 270 -54 87 -204 247 -305 326 -44 35 -70 62 -70 75 -1 25 57 367 63 373 3 2 44 -7 93 -20 74 -19 111 -23 238 -22 133 0 159 3 227 26 94 31 202 101 266 173 58 66 122 183 156 287 69 212 165 686 205 1013 7 50 16 124 21 165 21 164 40 436 46 650 11 402 -26 751 -118 1105 l-31 120 22 87 c46 184 53 418 17 553 -44 162 -135 277 -253 315 -37 13 -151 57 -253 98 -466 188 -538 214 -734 261 -326 80 -621 106 -901 80z m435 -149 c360 -38 674 -127 1095 -312 50 -22 148 -60 220 -84 71 -25 140 -55 153 -67 34 -31 72 -110 93 -192 19 -71 25 -273 10 -339 -6 -28 -7 -27 -30 30 -35 88 -89 181 -114 199 -32 23 -71 18 -139 -16 -84 -42 -224 -76 -349 -84 -134 -8 -335 11 -784 74 -494 71 -465 68 -502 37 -17 -15 -34 -39 -38 -54 -3 -15 1 -115 10 -222 8 -107 15 -232 15 -278 l0 -82 -175 -179 c-100 -102 -182 -194 -190 -215 -20 -48 -44 -257 -53 -465 l-7 -174 -40 59 c-89 131 -184 207 -303 244 -194 60 -411 -32 -510 -217 -71 -134 -80 -351 -22 -543 17 -57 11 -50 -35 48 -94 195 -180 475 -226 729 -26 151 -36 436 -20 592 32 303 119 565 253 764 51 75 355 379 454 452 206 155 488 260 784 294 106 12 338 12 450 1z m182 -945 c469 -67 599 -79 753 -72 135 7 281 40 363 81 l51 26 16 -23 c47 -72 161 -381 209 -567 143 -558 123 -1345 -59 -2295 -61 -317 -128 -531 -201 -641 -141 -212 -421 -261 -779 -138 -201 69 -479 194 -685 308 -47 26 -97 50 -112 53 -38 8 -78 -34 -78 -81 0 -31 6 -39 39 -61 82 -51 422 -217 561 -274 128 -51 145 -61 148 -83 3 -24 -53 -406 -84 -573 -33 -178 -94 -584 -94 -622 0 -51 20 -73 65 -73 48 0 63 28 83 152 9 57 17 105 20 108 7 9 42 -46 57 -91 16 -46 15 -48 -20 -156 -19 -60 -57 -152 -83 -205 -50 -98 -150 -268 -158 -268 -2 0 -55 38 -116 84 -298 221 -912 620 -1308 851 -102 59 -189 111 -193 115 -5 5 10 61 33 126 142 405 194 757 255 1709 l7 100 106 1 c86 0 116 4 154 21 80 36 102 105 46 146 l-28 21 -53 -22 c-211 -88 -465 70 -582 362 -83 205 -86 394 -9 536 69 127 237 175 377 106 69 -33 118 -81 181 -174 27 -40 61 -81 75 -91 70 -50 166 -45 200 10 15 25 19 64 25 252 9 288 25 414 55 453 12 16 90 99 172 185 203 212 199 205 199 301 0 72 -15 335 -24 421 -3 31 -1 37 14 37 11 0 191 -25 402 -55z m-1679 -2252 c45 -61 149 -155 194 -176 22 -10 23 -15 22 -101 0 -50 -3 -99 -7 -108 -5 -12 -33 30 -97 145 -95 173 -171 315 -162 307 3 -3 25 -33 50 -67z m-13 -1957 c0 -15 -46 -146 -54 -154 -3 -2 -201 102 -215 114 -8 7 52 24 127 37 117 20 142 20 142 3z"/> <path d="M5678 4175 c-9 -19 -9 -64 1 -183 43 -564 71 -1065 96 -1717 33 -842 44 -1059 70 -1425 21 -278 64 -778 71 -818 l6 -32 66 0 65 0 -7 73 c-62 652 -105 1310 -131 2007 -32 872 -55 1290 -101 1795 -28 311 -32 325 -89 325 -28 0 -38 -5 -47 -25z"/> <path d="M2427 2690 c-24 -19 -25 -24 -31 -182 -33 -832 -61 -1308 -100 -1720 -16 -168 -21 -260 -15 -286 4 -21 33 -110 63 -198 29 -87 64 -192 77 -232 l23 -72 68 0 68 0 -6 27 c-4 16 -43 136 -86 268 -90 272 -87 238 -54 540 33 305 71 1010 83 1551 l6 291 -24 16 c-30 22 -41 21 -72 -3z"/> </g> </svg>`;
@@ -763,35 +823,35 @@ export class XPMRenderer extends YarbpBasicRenderer {
     const svgString = _getSVGString(color, src);
     const bytes = new TextEncoder().encode(svgString);
     let binary = '';
-    bytes.forEach(byte => binary += String.fromCharCode(byte));
-    const base64 = btoa(binary);
-    return `data:image/svg+xml;base64,${base64}`;
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return `data:image/svg+xml;base64,${btoa(binary)}`;
   }
 
   /* endregion ========================================================== */
 
   /* region Компоновка ================================================== */
 
+  /**
+   * Собирает SVG-полотно из тайлов.
+   * @param {Array<{grid:{x:number,y:number}, config:object}>} tiles
+   * @returns {{svg: SVGElement, totalWidth: number, totalHeight: number}}
+   */
   composeTiles(tiles) {
     if (tiles.some(tile => tile.config === undefined || tile.config === null)) {
+      const size = XPMRenderer.DEFAULTS.ERROR_COMPACT_SIZE;
       return {
-        svg: this.createErrorSvg(
-          'Синтаксическая ошибка:\nнеизвестный тэг.',
-          XPMRenderer.DEFAULTS.ERROR_COMPACT_SIZE,
-          XPMRenderer.DEFAULTS.ERROR_COMPACT_SIZE
-        ),
-        totalWidth: XPMRenderer.DEFAULTS.ERROR_COMPACT_SIZE,
-        totalHeight: XPMRenderer.DEFAULTS.ERROR_COMPACT_SIZE
+        svg: this.createErrorSvg('Синтаксическая ошибка:\nнеизвестный тэг.', size, size),
+        totalWidth: size,
+        totalHeight: size
       };
     }
 
-    this.createHiddenSVGContainer();
     const measured = tiles.map(tile => {
-      const renderer = this.tileRenderers[tile.config.tileType || 'lines'];
+      const renderer = this.tileRenderers[tile.config.tileType || 'point'];
       const m = renderer.measure(tile.config);
-      return {
-        ...m, gridX: tile.grid.x, gridY: tile.grid.y, config: tile.config
-      };
+      return {...m, gridX: tile.grid.x, gridY: tile.grid.y, config: tile.config};
     });
 
     const colMaxWidth = {};
@@ -832,9 +892,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
       const renderer = this.tileRenderers[tile.config.tileType || 'point'];
       const cellWidth = colMaxWidth[tile.grid.x];
       const cellHeight = rowMaxHeight[tile.grid.y];
-      const {
-        group, minWidth, minHeight
-      } = renderer.render(tile.config, cellWidth, cellHeight);
+      const {group, minWidth, minHeight} = renderer.render(tile.config, cellWidth, cellHeight);
 
       group.setAttribute('data-min-width', minWidth);
       group.setAttribute('data-min-height', minHeight);
@@ -847,7 +905,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     });
 
     return {svg: composedSvg, totalWidth, totalHeight};
-  };
+  }
 
   /* endregion ========================================================== */
 }
