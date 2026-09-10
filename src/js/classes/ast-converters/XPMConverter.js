@@ -14,8 +14,35 @@ export class YarbpXPMConverter {
     event: 'событие',
     image: 'картинка',
     point: 'точка',
-    lines: 'пусто'
+    lines: 'пусто',
+
+    'мужчина': 'casual-man',
+    'женщина': 'casual-woman',
+    'повар': 'chef',
+    'производство': 'clean-production',
+    'мужчина-в-очках': 'glasses-man',
+    'женщина-в-очках': 'glasses-woman',
+    'в-каске': 'hard-hat',
+    'ии': 'modern-robot',
+    'робот': 'retro-robot',
+    'мужчина-менеджер': 'suit-man',
+    'женщина-менеджер': 'suit-woman',
+    'мужчина-яркая-одежда': 'bright-man',
+    'женщина-яркая-одежда': 'bright-woman',
+    'оператор': 'operator-woman'
   });
+
+  static _normalize(value) {
+    return String(value ?? '').trim().toLowerCase().replace(/\s+/g, '-');
+  }
+
+  static _resolve(value, dict) {
+    const n = YarbpXPMConverter._normalize(value);
+    for (const [k, v] of Object.entries(dict)) {
+      if (YarbpXPMConverter._normalize(k) === n) return v;
+    }
+    return null;
+  }
 
   convert() {
     if (!this.ast || this.ast.nodeType !== nodeTypes.ROOT) {
@@ -67,7 +94,7 @@ export class YarbpXPMConverter {
     const imageTile = this._getTileByCoords(0, y);
     if (imageTile) {
       imageTile.config = this._getActorImageTileConfig(0, y, {
-        src: imageNode ? (imageNode.value || '').trim() : '',
+        src: this._resolveImageSrc(imageNode ? imageNode.value : ''),
         roleName: roleName
       });
     }
@@ -110,6 +137,11 @@ export class YarbpXPMConverter {
     return (actor.children || []).find(
       child => child.key === YarbpXPMConverter.VOCABULARY.image
     ) || null;
+  }
+
+  _resolveImageSrc(raw) {
+    const trimmed = (raw || '').trim();
+    return YarbpXPMConverter._resolve(trimmed, YarbpXPMConverter.VOCABULARY) || trimmed;
   }
 
   /**
@@ -369,7 +401,7 @@ export class YarbpXPMConverter {
 
   _extractActorProps(tile, context = {}) {
     return {
-      src: (tile.value || '').trim(),
+      src: this._resolveImageSrc(tile.value),
       roleName: context.roleName || ''
     };
   }
@@ -529,12 +561,6 @@ export class YarbpXPMConverter {
         });
       }
     }
-  }
-
-  _getTileByCoord(x, y) {
-    return this.result.find(
-      tile => tile.grid.x === x && tile.grid.y === y
-    ) || null;
   }
 
   _getTileByCoords(x, y) {
