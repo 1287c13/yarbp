@@ -8,6 +8,7 @@ export class YarbpXPMConverter {
   }
 
   static VOCABULARY = Object.freeze({
+    participant: 'участник',
     image: 'картинка',
     point: 'точка',
     lines: 'пусто'
@@ -20,35 +21,108 @@ export class YarbpXPMConverter {
 
     const rootChildren = this.ast.children || [];
 
-    const sizeX = rootChildren.reduce(
-      (max, actor) => Math.max(max, (actor.children || []).length),
-      0
-    );
+    // Каждая строка — участник.
+    // Колонка 0 всегда зарезервирована под иконку,
+    // остальные дети идут с x = 1.
+    const sizeX = rootChildren.reduce((max, actor) => {
+      const tilesWithoutImage = (actor.children || [])
+        .filter(child => child.key !== YarbpXPMConverter.VOCABULARY.image)
+        .length;
+      return Math.max(max, tilesWithoutImage + 1);
+    }, 0);
     const sizeY = rootChildren.length;
+
     this._createGrid(sizeX, sizeY);
 
     let y = 0;
     rootChildren.forEach(actor => {
-      let x = 0;
+      const roleName = this._extractRoleName(actor);
+      const imageNode = this._findImageNode(actor);
+
+      // Иконка всегда создаётся и всегда лежит в x = 0
+      const imageTile = this._getTileByCoords(0, y);
+      if (imageTile) {
+        imageTile.config = this._getActorImageTileConfig(0, y, {
+          src: imageNode ? (imageNode.value || '').trim() : '',
+          roleName: roleName
+        });
+      }
+
+      // Остальные дети — начиная с x = 1
+      let x = 1;
       (actor.children || []).forEach(tile => {
-        let tileRepr = this._getTileByCoords(x, y);
-        let props = this._extractProps(tile);
+        if (tile.key === YarbpXPMConverter.VOCABULARY.image) return; // уже обработали
+        const tileRepr = this._getTileByCoords(x, y);
+        if (!tileRepr) return;
+        const props = this._extractProps(tile, { roleName });
         tileRepr.config = this._getTileConfig(tile.key)(x, y, props);
         x++;
       });
+
       y++;
     });
 
     this._inheritArrows();
+    this._repositionImages();
 
-    // Создаём глубокую копию конфигураций для обхода кэша
-    // this.result = this.result.map(tile => ({
-    //   grid: {...tile.grid},
-    //   config: JSON.parse(JSON.stringify(tile.config))
-    // }));
-
-    return {tiles: this.result};
+    return { tiles: this.result };
   }
+
+  // ---------------------------------------------------------------------------
+  // Иконки
+  // ---------------------------------------------------------------------------
+
+  _extractRoleName(actor) {
+    if (actor && actor.key === YarbpXPMConverter.VOCABULARY.participant) {
+      return (actor.value || '').trim();
+    }
+    return '';
+  }
+
+  _findImageNode(actor) {
+    return (actor.children || []).find(
+      child => child.key === YarbpXPMConverter.VOCABULARY.image
+    ) || null;
+  }
+
+  /**
+   * Двигает иконку из x = 0 вплотную к первой точке строки.
+   * Если точек нет — иконка остаётся в x = 0.
+   */
+  _repositionImages() {
+    const rows = new Map();
+    this.result.forEach(tile => {
+      if (!rows.has(tile.grid.y)) rows.set(tile.grid.y, []);
+      rows.get(tile.grid.y).push(tile);
+    });
+
+    rows.forEach(rowTiles => {
+      rowTiles.sort((a, b) => a.grid.x - b.grid.x);
+
+      const imageTile = rowTiles.find(t => (t.config || {}).tileType === 'image');
+      if (!imageTile) return;
+
+      const firstPoint = rowTiles.find(t => (t.config || {}).tileType === 'point');
+      if (!firstPoint) return; // точек нет — иконка остаётся на месте
+
+      const targetX = firstPoint.grid.x - 1;
+      if (targetX < 0 || targetX === imageTile.grid.x) return;
+
+      const targetTile = this._getTileByCoords(targetX, imageTile.grid.y);
+      if (!targetTile) return;
+      if (targetTile.config.tileType !== 'lines') return;
+
+      const imageConfig = imageTile.config;
+      const emptyConfig = this._getEmptyTileConfig(imageTile.grid.x, imageTile.grid.y);
+
+      imageTile.config = emptyConfig;
+      targetTile.config = imageConfig;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Стрелки
+  // ---------------------------------------------------------------------------
 
   _inheritArrows() {
     const tiles = this.result || [];
@@ -56,7 +130,7 @@ export class YarbpXPMConverter {
 
     tiles.forEach(tile => {
       if (tile.config && tile.config.tileType === 'point') {
-        const {x, y} = tile.grid;
+        const { x, y } = tile.grid;
         const arrows = tile.config.arrows || {};
 
         ['right', 'down', 'left', 'top'].forEach(direction => {
@@ -68,11 +142,9 @@ export class YarbpXPMConverter {
           processed.add(key);
 
           const opposite = this._getOppositeDirection(direction);
-          const {dx, dy} = this._getDirectionDelta(direction);
+          const { dx, dy } = this._getDirectionDelta(direction);
 
-          // Прокладываем линию через пустые тайлы
           const result = this._propagateThroughEmptyTiles(x, y, dx, dy, arrow.style);
-
           if (!result || !result.targetTile || result.targetTile.config.tileType !== 'point') return;
 
           const targetTile = result.targetTile;
@@ -84,29 +156,23 @@ export class YarbpXPMConverter {
           const isBidirectional = arrow.hasMarker && arrow.hasInMarker;
           const isPlain = !arrow.hasMarker && !arrow.hasInMarker;
 
-          // Вспомогательная функция для маркера у точки
           const markerAtPoint = (dir) => {
-            // Для right/down: hasInMarker = маркер у точки
-            // Для left/top: hasMarker = маркер у точки
             if (dir === 'right' || dir === 'down') {
-              return {hasMarker: false, hasInMarker: true};
+              return { hasMarker: false, hasInMarker: true };
             } else {
-              return {hasMarker: true, hasInMarker: false};
+              return { hasMarker: true, hasInMarker: false };
             }
           };
 
-          // Вспомогательная функция для линии без маркеров
-          const noMarker = () => ({hasMarker: false, hasInMarker: false});
+          const noMarker = () => ({ hasMarker: false, hasInMarker: false });
 
           if (isOutgoing) {
-            // Исходящая: маркер у целевой точки
             tile.config.arrows[direction] = {
               show: true,
               style: arrow.style,
               ...noMarker()
             };
 
-            // Маркер у целевой точки на противоположном направлении
             const marker = markerAtPoint(opposite);
             targetTile.config.arrows[opposite] = {
               show: true,
@@ -115,9 +181,7 @@ export class YarbpXPMConverter {
             };
 
             processed.add(`${targetX},${targetY},${opposite}`);
-          }
-          else if (isIncoming) {
-            // Входящая: маркер у исходной точки
+          } else if (isIncoming) {
             const marker = markerAtPoint(direction);
             tile.config.arrows[direction] = {
               show: true,
@@ -132,9 +196,7 @@ export class YarbpXPMConverter {
             };
 
             processed.add(`${targetX},${targetY},${opposite}`);
-          }
-          else if (isBidirectional) {
-            // Двусторонняя: маркеры у обеих точек
+          } else if (isBidirectional) {
             const sourceMarker = markerAtPoint(direction);
             tile.config.arrows[direction] = {
               show: true,
@@ -150,9 +212,7 @@ export class YarbpXPMConverter {
             };
 
             processed.add(`${targetX},${targetY},${opposite}`);
-          }
-          else if (isPlain) {
-            // Без маркеров: просто линия
+          } else if (isPlain) {
             tile.config.arrows[direction] = {
               show: true,
               style: arrow.style,
@@ -190,19 +250,15 @@ export class YarbpXPMConverter {
       if (!tile) return null;
 
       if (tile.config.tileType === 'point') {
-        // Нашли целевую точку
-        return {targetTile: tile};
+        return { targetTile: tile };
       } else if (tile.config.tileType === 'lines') {
-        // Пустой тайл - рисуем линию
         if (dx !== 0) {
-          // Горизонтальная линия
           tile.config.horizontalLine = {
             show: true,
             style: style,
             y: 34
           };
         } else {
-          // Вертикальная линия
           tile.config.verticalLine = {
             show: true,
             style: style,
@@ -222,10 +278,10 @@ export class YarbpXPMConverter {
 
   _getDirectionDelta(direction) {
     switch (direction) {
-      case 'right': return {dx: 1, dy: 0};
-      case 'left': return {dx: -1, dy: 0};
-      case 'down': return {dx: 0, dy: 1};
-      case 'top': return {dx: 0, dy: -1};
+      case 'right': return { dx: 1, dy: 0 };
+      case 'left': return { dx: -1, dy: 0 };
+      case 'down': return { dx: 0, dy: 1 };
+      case 'top': return { dx: 0, dy: -1 };
     }
   }
 
@@ -240,17 +296,17 @@ export class YarbpXPMConverter {
   }
 
   _handleBypassConnections(tile) {
-    const {x, y} = tile.grid;
+    const { x, y } = tile.grid;
     const arrows = tile.config.arrows;
 
     const neighbors = [
-      {dx: -1, dy: 1, from: 'left', to: 'down'},
-      {dx: 1, dy: 1, from: 'right', to: 'down'},
-      {dx: -1, dy: -1, from: 'left', to: 'top'},
-      {dx: 1, dy: -1, from: 'right', to: 'top'}
+      { dx: -1, dy: 1, from: 'left', to: 'down' },
+      { dx: 1, dy: 1, from: 'right', to: 'down' },
+      { dx: -1, dy: -1, from: 'left', to: 'top' },
+      { dx: 1, dy: -1, from: 'right', to: 'top' }
     ];
 
-    neighbors.forEach(({dx, dy, from, to}) => {
+    neighbors.forEach(({ dx, dy, from, to }) => {
       const neighbor = this._getTileByCoords(x + dx, y + dy);
 
       if (neighbor && neighbor.config && neighbor.config.tileType === 'point') {
@@ -269,17 +325,25 @@ export class YarbpXPMConverter {
     });
   }
 
-  _extractProps(tile) {
+  // ---------------------------------------------------------------------------
+  // Извлечение свойств
+  // ---------------------------------------------------------------------------
+
+  _extractProps(tile, context = {}) {
     switch (tile.key) {
-      case YarbpXPMConverter.VOCABULARY.image: return this._extractActorProps(tile)
-      case YarbpXPMConverter.VOCABULARY.point: return this._extractPointProps(tile)
-      case YarbpXPMConverter.VOCABULARY.lines: return {}
+      case YarbpXPMConverter.VOCABULARY.image:
+        return this._extractActorProps(tile, context);
+      case YarbpXPMConverter.VOCABULARY.point:
+        return this._extractPointProps(tile);
+      case YarbpXPMConverter.VOCABULARY.lines:
+        return {};
     }
   }
 
-  _extractActorProps(tile) {
+  _extractActorProps(tile, context = {}) {
     return {
-      src: tile.value.trim()
+      src: (tile.value || '').trim(),
+      roleName: context.roleName || ''
     };
   }
 
@@ -307,7 +371,7 @@ export class YarbpXPMConverter {
     let arrowsParent = findChildrenByKeyValue(tile, 'key', 'связи')[0];
     if (arrowsParent && arrowsParent.children) {
       const getArrowConfig = (val) => {
-        if (!val) return {show: false};
+        if (!val) return { show: false };
 
         const arrowStr = String(val).trim();
 
@@ -336,19 +400,23 @@ export class YarbpXPMConverter {
       bypassEnabled: bypassEnabled,
       listText: annotations,
       arrows: {
-        right: rightArrow || {show: false},
-        down: downArrow || {show: false},
-        left: leftArrow || {show: false},
-        top: topArrow || {show: false}
+        right: rightArrow || { show: false },
+        down: downArrow || { show: false },
+        left: leftArrow || { show: false },
+        top: topArrow || { show: false }
       }
-    }
+    };
   }
+
+  // ---------------------------------------------------------------------------
+  // Фабрики конфигов
+  // ---------------------------------------------------------------------------
 
   _getTileConfig(tileType) {
     switch (tileType) {
-      case YarbpXPMConverter.VOCABULARY.image: return this._getActorImageTileConfig
-      case YarbpXPMConverter.VOCABULARY.point: return this._getPointTileConfig
-      case YarbpXPMConverter.VOCABULARY.lines: return this._getEmptyTileConfig
+      case YarbpXPMConverter.VOCABULARY.image: return this._getActorImageTileConfig;
+      case YarbpXPMConverter.VOCABULARY.point: return this._getPointTileConfig;
+      case YarbpXPMConverter.VOCABULARY.lines: return this._getEmptyTileConfig;
       default: return () => {};
     }
   }
@@ -361,10 +429,10 @@ export class YarbpXPMConverter {
       title: "",
       listText: "",
       arrows: {
-        right: {show: false},
-        down: {show: false},
-        left: {show: false},
-        top: {show: false}
+        right: { show: false },
+        down: { show: false },
+        left: { show: false },
+        top: { show: false }
       },
       ...props
     };
@@ -373,10 +441,10 @@ export class YarbpXPMConverter {
   _getEmptyTileConfig(x, y, props = {}) {
     return {
       tileType: "lines",
-      horizontalLine: {show: false, style: "solid"},
-      verticalLine: {show: false, style: "solid"},
+      horizontalLine: { show: false, style: "solid" },
+      verticalLine: { show: false, style: "solid" },
       ...props
-    }
+    };
   }
 
   _getActorImageTileConfig(x, y, props = {}) {
@@ -386,8 +454,12 @@ export class YarbpXPMConverter {
       aspectRatio: 0.7,
       roleName: "",
       ...props
-    }
+    };
   }
+
+  // ---------------------------------------------------------------------------
+  // Сетка
+  // ---------------------------------------------------------------------------
 
   _createGrid(sizeX, sizeY) {
     this.result = [];
@@ -395,7 +467,7 @@ export class YarbpXPMConverter {
     for (let y = 0; y < sizeY; y++) {
       for (let x = 0; x < sizeX; x++) {
         this.result.push({
-          grid: {x, y},
+          grid: { x, y },
           config: this._getEmptyTileConfig(x, y)
         });
       }
