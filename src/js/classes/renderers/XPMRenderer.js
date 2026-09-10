@@ -50,6 +50,12 @@ export class XPMRenderer extends YarbpBasicRenderer {
     ROLE_NAME_OFFSET_Y: 35,
     ROLE_NAME_MAX_WIDTH: 200,
 
+    // разделитель
+    DIVIDER_FONT_SIZE: 18,
+    DIVIDER_OFFSET_X: 5,
+    DIVIDER_OFFSET_Y: 0,
+    DIVIDER_LINE_HEIGHT: 18,
+
     // UI
     UI_PADDING: '10px 20px 10px 20px',
     UI_BACKGROUND_LIGHT: '#ffffff',
@@ -725,6 +731,70 @@ export class XPMRenderer extends YarbpBasicRenderer {
             textEl.textContent = roleName;
             group.appendChild(textEl);
           }
+
+          const size = this.measure(config);
+          return {
+            group,
+            minWidth: size.minWidth,
+            minHeight: size.minHeight
+          };
+        }
+      },
+
+      divider: {
+        measure(config) {
+          const cached = XPMRenderer.getCachedSize(config);
+          if (cached) return cached;
+
+          const {title = ''} = config;
+          const lines = title.split('\n');
+
+          let maxWidth = 0;
+          lines.forEach(line => {
+            const tempText = XPMRenderer.createSvgElement('text', {
+              x: 0,
+              y: 0,
+              'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+              'font-size': XPMRenderer.DEFAULTS.DIVIDER_FONT_SIZE,
+              fill: XPMRenderer.getColor()
+            });
+            tempText.textContent = line;
+            const bbox = XPMRenderer.measureElements([tempText]);
+            maxWidth = Math.max(maxWidth, Math.ceil(bbox.width));
+          });
+
+          const size = {
+            minWidth: maxWidth + XPMRenderer.DEFAULTS.DIVIDER_OFFSET_X,
+            minHeight:
+              lines.length * XPMRenderer.DEFAULTS.DIVIDER_LINE_HEIGHT
+              + XPMRenderer.DEFAULTS.DIVIDER_OFFSET_Y,
+            minX: 0,
+            minY: 0
+          };
+          XPMRenderer.setCachedSize(config, size);
+          return size;
+        },
+
+        render(config, cellWidth, cellHeight) {
+          const group = XPMRenderer.createSvgElement('g');
+          const {title = ''} = config;
+          const lines = title.split('\n');
+
+          let currentY = XPMRenderer.DEFAULTS.DIVIDER_OFFSET_Y;
+          lines.forEach(line => {
+            const textEl = XPMRenderer.createSvgElement('text', {
+              x: XPMRenderer.DEFAULTS.DIVIDER_OFFSET_X,
+              y: currentY,
+              'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+              'font-size': XPMRenderer.DEFAULTS.DIVIDER_FONT_SIZE,
+              fill: XPMRenderer.getColor(),
+              'text-anchor': 'start',
+              'dominant-baseline': 'hanging'
+            });
+            textEl.textContent = line;
+            group.appendChild(textEl);
+            currentY += XPMRenderer.DEFAULTS.DIVIDER_LINE_HEIGHT;
+          });
 
           const size = this.measure(config);
           return {

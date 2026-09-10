@@ -9,6 +9,8 @@ export class YarbpXPMConverter {
 
   static VOCABULARY = Object.freeze({
     participant: 'участник',
+    track: 'дорожка',
+    divider: 'разделитель',
     image: 'картинка',
     point: 'точка',
     lines: 'пусто'
@@ -21,14 +23,16 @@ export class YarbpXPMConverter {
 
     const rootChildren = this.ast.children || [];
 
-    // Каждая строка — участник.
-    // Колонка 0 всегда зарезервирована под иконку,
-    // остальные дети идут с x = 1.
+    // Участник резервирует колонку 0 под иконку, остальные дети идут с x = 1.
+    // Дорожка и прочие узлы — без резерва, дети с x = 0.
     const sizeX = rootChildren.reduce((max, actor) => {
-      const tilesWithoutImage = (actor.children || [])
-        .filter(child => child.key !== YarbpXPMConverter.VOCABULARY.image)
-        .length;
-      return Math.max(max, tilesWithoutImage + 1);
+      if (actor.key === YarbpXPMConverter.VOCABULARY.participant) {
+        const tilesWithoutImage = (actor.children || [])
+          .filter(child => child.key !== YarbpXPMConverter.VOCABULARY.image)
+          .length;
+        return Math.max(max, tilesWithoutImage + 1);
+      }
+      return Math.max(max, (actor.children || []).length);
     }, 0);
     const sizeY = rootChildren.length;
 
@@ -36,29 +40,11 @@ export class YarbpXPMConverter {
 
     let y = 0;
     rootChildren.forEach(actor => {
-      const roleName = this._extractRoleName(actor);
-      const imageNode = this._findImageNode(actor);
-
-      // Иконка всегда создаётся и всегда лежит в x = 0
-      const imageTile = this._getTileByCoords(0, y);
-      if (imageTile) {
-        imageTile.config = this._getActorImageTileConfig(0, y, {
-          src: imageNode ? (imageNode.value || '').trim() : '',
-          roleName: roleName
-        });
+      if (actor.key === YarbpXPMConverter.VOCABULARY.participant) {
+        this._layoutParticipant(actor, y);
+      } else {
+        this._layoutPlainActor(actor, y);
       }
-
-      // Остальные дети — начиная с x = 1
-      let x = 1;
-      (actor.children || []).forEach(tile => {
-        if (tile.key === YarbpXPMConverter.VOCABULARY.image) return; // уже обработали
-        const tileRepr = this._getTileByCoords(x, y);
-        if (!tileRepr) return;
-        const props = this._extractProps(tile, { roleName });
-        tileRepr.config = this._getTileConfig(tile.key)(x, y, props);
-        x++;
-      });
-
       y++;
     });
 
@@ -66,6 +52,46 @@ export class YarbpXPMConverter {
     this._repositionImages();
 
     return { tiles: this.result };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Раскладка строк
+  // ---------------------------------------------------------------------------
+
+  _layoutParticipant(actor, y) {
+    const roleName = this._extractRoleName(actor);
+    const imageNode = this._findImageNode(actor);
+
+    // Иконка всегда создаётся и всегда лежит в x = 0
+    const imageTile = this._getTileByCoords(0, y);
+    if (imageTile) {
+      imageTile.config = this._getActorImageTileConfig(0, y, {
+        src: imageNode ? (imageNode.value || '').trim() : '',
+        roleName: roleName
+      });
+    }
+
+    // Остальные дети — начиная с x = 1
+    let x = 1;
+    (actor.children || []).forEach(tile => {
+      if (tile.key === YarbpXPMConverter.VOCABULARY.image) return;
+      const tileRepr = this._getTileByCoords(x, y);
+      if (!tileRepr) return;
+      const props = this._extractProps(tile, { roleName });
+      tileRepr.config = this._getTileConfig(tile.key)(x, y, props);
+      x++;
+    });
+  }
+
+  _layoutPlainActor(actor, y) {
+    let x = 0;
+    (actor.children || []).forEach(tile => {
+      const tileRepr = this._getTileByCoords(x, y);
+      if (!tileRepr) return;
+      const props = this._extractProps(tile);
+      tileRepr.config = this._getTileConfig(tile.key)(x, y, props);
+      x++;
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -99,10 +125,10 @@ export class YarbpXPMConverter {
     rows.forEach(rowTiles => {
       rowTiles.sort((a, b) => a.grid.x - b.grid.x);
 
-      const imageTile = rowTiles.find(t => (t.config || {}).tileType === 'image');
+      const imageTile = rowTiles.find(t => t.config.tileType === 'image');
       if (!imageTile) return;
 
-      const firstPoint = rowTiles.find(t => (t.config || {}).tileType === 'point');
+      const firstPoint = rowTiles.find(t => t.config.tileType === 'point');
       if (!firstPoint) return; // точек нет — иконка остаётся на месте
 
       const targetX = firstPoint.grid.x - 1;
@@ -268,7 +294,7 @@ export class YarbpXPMConverter {
         currentX += dx;
         currentY += dy;
       } else {
-        // Препятствие (image)
+        // Препятствие (image, divider, ...)
         return null;
       }
     }
@@ -335,6 +361,8 @@ export class YarbpXPMConverter {
         return this._extractActorProps(tile, context);
       case YarbpXPMConverter.VOCABULARY.point:
         return this._extractPointProps(tile);
+      case YarbpXPMConverter.VOCABULARY.divider:
+        return { title: (tile.value || '').trim() };
       case YarbpXPMConverter.VOCABULARY.lines:
         return {};
     }
@@ -416,6 +444,7 @@ export class YarbpXPMConverter {
     switch (tileType) {
       case YarbpXPMConverter.VOCABULARY.image: return this._getActorImageTileConfig;
       case YarbpXPMConverter.VOCABULARY.point: return this._getPointTileConfig;
+      case YarbpXPMConverter.VOCABULARY.divider: return this._getDividerTileConfig;
       case YarbpXPMConverter.VOCABULARY.lines: return this._getEmptyTileConfig;
       default: return () => {};
     }
@@ -434,6 +463,14 @@ export class YarbpXPMConverter {
         left: { show: false },
         top: { show: false }
       },
+      ...props
+    };
+  }
+
+  _getDividerTileConfig(x, y, props = {}) {
+    return {
+      tileType: "divider",
+      title: "",
       ...props
     };
   }
