@@ -17,8 +17,8 @@ export class XPMRenderer extends YarbpBasicRenderer {
     DIAMOND_RADIUS_FACTOR: 1.2,
 
     // Текст
-    TEXT_OFFSET_X: 30,
-    TEXT_OFFSET_Y: 30,
+    TEXT_OFFSET_X: 15,
+    TEXT_OFFSET_Y: 25,
     TITLE_FONT_SIZE: 18,
     LIST_FONT_SIZE: 14,
     LIST_LINE_HEIGHT: 16,
@@ -47,7 +47,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     // Роли
     ROLE_NAME_FONT_SIZE: 20,
     ROLE_NAME_OFFSET_X: 5,
-    ROLE_NAME_OFFSET_Y: 35,
+    ROLE_NAME_OFFSET_Y: 54,
     ROLE_NAME_MAX_WIDTH: 200,
 
     // разделитель

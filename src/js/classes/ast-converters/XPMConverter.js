@@ -1,5 +1,5 @@
-import { nodeTypes, valueTypes } from '../YarbpParser.js';
-import { findChildrenByKeyValue } from "../../utils.js";
+import {nodeTypes} from '../YarbpParser.js';
+import {findChildrenByKeyValue} from "../../utils.js";
 
 export class YarbpXPMConverter {
   constructor(ast) {
@@ -11,6 +11,7 @@ export class YarbpXPMConverter {
     participant: 'участник',
     track: 'дорожка',
     divider: 'разделитель',
+    event: 'событие',
     image: 'картинка',
     point: 'точка',
     lines: 'пусто'
@@ -139,9 +140,7 @@ export class YarbpXPMConverter {
       if (targetTile.config.tileType !== 'lines') return;
 
       const imageConfig = imageTile.config;
-      const emptyConfig = this._getEmptyTileConfig(imageTile.grid.x, imageTile.grid.y);
-
-      imageTile.config = emptyConfig;
+      imageTile.config = this._getEmptyTileConfig(imageTile.grid.x, imageTile.grid.y);
       targetTile.config = imageConfig;
     });
   }
@@ -337,9 +336,7 @@ export class YarbpXPMConverter {
 
       if (neighbor && neighbor.config && neighbor.config.tileType === 'point') {
         const hasLeftArrow = arrows.left?.show;
-        const hasTopArrow = arrows.top?.show;
         const hasRightArrow = arrows.right?.show;
-        const hasDownArrow = arrows.down?.show;
 
         if ((from === 'left' && hasLeftArrow && to === 'down' && neighbor.config.arrows?.down?.show) ||
             (from === 'right' && hasRightArrow && to === 'down' && neighbor.config.arrows?.down?.show) ||
@@ -361,6 +358,8 @@ export class YarbpXPMConverter {
         return this._extractActorProps(tile, context);
       case YarbpXPMConverter.VOCABULARY.point:
         return this._extractPointProps(tile);
+      case YarbpXPMConverter.VOCABULARY.event:
+        return this._extractEventProps(tile);
       case YarbpXPMConverter.VOCABULARY.divider:
         return { title: (tile.value || '').trim() };
       case YarbpXPMConverter.VOCABULARY.lines:
@@ -436,6 +435,26 @@ export class YarbpXPMConverter {
     };
   }
 
+  _extractEventProps(tile) {
+    return {
+      title: (tile.value || '').trim(),
+      pointStyle: 'diamond',
+      bypassEnabled: false,
+      listText: '',
+      arrows: {
+        right: { show: false },
+        down: {
+          show: true,
+          style: 'dotted',
+          hasMarker: false,
+          hasInMarker: false
+        },
+        left: { show: false },
+        top: { show: false }
+      }
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Фабрики конфигов
   // ---------------------------------------------------------------------------
@@ -444,6 +463,7 @@ export class YarbpXPMConverter {
     switch (tileType) {
       case YarbpXPMConverter.VOCABULARY.image: return this._getActorImageTileConfig;
       case YarbpXPMConverter.VOCABULARY.point: return this._getPointTileConfig;
+      case YarbpXPMConverter.VOCABULARY.event: return this._getPointTileConfig;
       case YarbpXPMConverter.VOCABULARY.divider: return this._getDividerTileConfig;
       case YarbpXPMConverter.VOCABULARY.lines: return this._getEmptyTileConfig;
       default: return () => {};
@@ -509,6 +529,12 @@ export class YarbpXPMConverter {
         });
       }
     }
+  }
+
+  _getTileByCoord(x, y) {
+    return this.result.find(
+      tile => tile.grid.x === x && tile.grid.y === y
+    ) || null;
   }
 
   _getTileByCoords(x, y) {
