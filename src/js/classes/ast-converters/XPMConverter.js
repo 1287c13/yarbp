@@ -186,14 +186,14 @@ export class YarbpXPMConverter {
     // Индекс id → grid по всем точкам
     const idIndex = new Map();
     this.result.forEach(tile => {
-      if (tile.config.tileType !== 'point') return;
+      if ((tile.config || {}).tileType !== 'point') return;
       const id = tile.config.id;
       if (id) idIndex.set(id, tile.grid);
     });
 
     // Резолв строк таблиц
     this.result.forEach(tile => {
-      if (tile.config.tileType !== 'point') return;
+      if ((tile.config || {}).tileType !== 'point') return;
       const table = tile.config.decisionTable;
       if (!table) return;
 
@@ -337,9 +337,9 @@ export class YarbpXPMConverter {
       const tile = this._getTileByCoords(currentX, currentY);
       if (!tile) return null;
 
-      if (tile.config.tileType === 'point') {
+      if ((tile.config || {}).tileType === 'point') {
         return { targetTile: tile };
-      } else if (tile.config.tileType === 'lines') {
+      } else if ((tile.config || {}).tileType === 'lines') {
         if (dx !== 0) {
           tile.config.horizontalLine = {
             show: true,
