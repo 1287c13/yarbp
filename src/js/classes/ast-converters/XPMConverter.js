@@ -76,6 +76,7 @@ export class YarbpXPMConverter {
       y++;
     });
 
+    this._resolveDecisionTableTargets();
     this._inheritArrows();
     this._repositionImages();
 
@@ -174,6 +175,36 @@ export class YarbpXPMConverter {
       const imageConfig = imageTile.config;
       imageTile.config = this._getEmptyTileConfig(imageTile.grid.x, imageTile.grid.y);
       targetTile.config = imageConfig;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Резолв таблиц решений
+  // ---------------------------------------------------------------------------
+
+  _resolveDecisionTableTargets() {
+    // Индекс id → grid по всем точкам
+    const idIndex = new Map();
+    this.result.forEach(tile => {
+      if (tile.config.tileType !== 'point') return;
+      const id = tile.config.id;
+      if (id) idIndex.set(id, tile.grid);
+    });
+
+    // Резолв строк таблиц
+    this.result.forEach(tile => {
+      if (tile.config.tileType !== 'point') return;
+      const table = tile.config.decisionTable;
+      if (!table) return;
+
+      table.rows.forEach(row => {
+        if (!row.resultId) {
+          row.targetGrid = null;
+          return;
+        }
+        const grid = idIndex.get(row.resultId);
+        row.targetGrid = grid ? { x: grid.x, y: grid.y } : null;
+      });
     });
   }
 
@@ -453,7 +484,15 @@ export class YarbpXPMConverter {
       [rightArrow, downArrow, leftArrow, topArrow] = arrows.map(getArrowConfig);
     }
 
+    const idNode = findChildrenByKeyValue(tile, 'key', 'ид')[0];
+    const id = idNode ? (idNode.value || '').trim() : null;
+
+    const decisionTableNode = findChildrenByKeyValue(tile, 'key', 'таблица-решений')[0];
+    const decisionTable = decisionTableNode ? this._extractDecisionTable(decisionTableNode) : null;
+
     return {
+      id,
+      decisionTable,
       title: title,
       pointStyle: pointStyle,
       bypassEnabled: bypassEnabled,
@@ -467,8 +506,53 @@ export class YarbpXPMConverter {
     };
   }
 
+  _extractDecisionTable(node) {
+    const headerNode = findChildrenByKeyValue(node, 'key', 'шапка')[0];
+    const rawHeader = (headerNode && headerNode.children)
+      ? headerNode.children.map(child => (child.value || '').trim())
+      : [];
+
+    const rulesNode = findChildrenByKeyValue(node, 'key', 'правила')[0];
+    const rules = (rulesNode && rulesNode.children) ? rulesNode.children : [];
+
+    const rawRows = rules.map(rule => {
+      const paramsNode = findChildrenByKeyValue(rule, 'key', 'параметры')[0];
+      const params = (paramsNode && paramsNode.children)
+        ? paramsNode.children.map(child => (child.value || '').trim())
+        : [];
+
+      const resultNode = findChildrenByKeyValue(rule, 'key', 'результат')[0];
+      const resultId = resultNode ? (resultNode.value || '').trim() : null;
+
+      return { params, resultId };
+    });
+
+    const columnCount = Math.max(
+      rawHeader.length,
+      ...rawRows.map(r => r.params.length),
+      0
+    );
+
+    const padTo = (arr, len) => {
+      const copy = arr.slice(0, len);
+      while (copy.length < len) copy.push('');
+      return copy;
+    };
+
+    const header = padTo(rawHeader, columnCount);
+    const rows = rawRows.map(r => ({
+      params: padTo(r.params, columnCount),
+      resultId: r.resultId,
+      targetGrid: null
+    }));
+
+    return { columnCount, header, rows };
+  }
+
   _extractEventProps(tile) {
     return {
+      id: null,
+      decisionTable: null,
       title: (tile.value || '').trim(),
       pointStyle: 'diamond',
       bypassEnabled: false,
@@ -505,6 +589,8 @@ export class YarbpXPMConverter {
   _getPointTileConfig(x, y, props = {}) {
     return {
       tileType: "point",
+      id: null,
+      decisionTable: null,
       pointStyle: "filled",
       bypassEnabled: false,
       title: "",

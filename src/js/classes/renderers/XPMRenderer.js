@@ -56,6 +56,15 @@ export class XPMRenderer extends YarbpBasicRenderer {
     DIVIDER_OFFSET_Y: 0,
     DIVIDER_LINE_HEIGHT: 18,
 
+    DECISION_TABLE_OFFSET_X: 60,
+    DECISION_TABLE_OFFSET_Y: -30,
+    DECISION_TABLE_HEADER_HEIGHT: 24,
+    DECISION_TABLE_ROW_HEIGHT: 24,
+    DECISION_TABLE_CELL_PADDING_X: 8,
+    DECISION_TABLE_FONT_SIZE: 12,
+    DECISION_TABLE_BORDER_WIDTH: 1,
+    DECISION_TABLE_GAP: 20,
+
     // UI
     UI_PADDING: '10px 20px 10px 20px',
     UI_BACKGROUND_LIGHT: '#ffffff',
@@ -526,6 +535,151 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
   /* region Рендер элементов ============================================ */
 
+  static _measureDecisionTable(table) {
+    const pad = XPMRenderer.DEFAULTS.DECISION_TABLE_CELL_PADDING_X;
+    const fontSize = XPMRenderer.DEFAULTS.DECISION_TABLE_FONT_SIZE;
+
+    const { header, rows, columnCount } = table;
+
+    const columnWidths = new Array(columnCount).fill(0);
+
+    const measureText = (text, bold) => {
+      if (!text) return 0;
+      const tempText = XPMRenderer.createSvgElement('text', {
+        x: 0,
+        y: 0,
+        'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+        'font-size': fontSize,
+        'font-weight': bold ? 'bold' : 'normal',
+        fill: XPMRenderer.getColor()
+      });
+      tempText.textContent = text;
+      const bbox = XPMRenderer.measureElements([tempText]);
+      return Math.ceil(bbox.width);
+    };
+
+    header.forEach((cell, i) => {
+      const w = measureText(cell, true) + pad * 2;
+      columnWidths[i] = Math.max(columnWidths[i], w);
+    });
+
+    rows.forEach(row => {
+      row.params.forEach((cell, i) => {
+        const w = measureText(cell, false) + pad * 2;
+        columnWidths[i] = Math.max(columnWidths[i], w);
+      });
+    });
+
+    const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+
+    const hasHeader = header.some(cell => cell !== '');
+    const headerHeight = hasHeader ? XPMRenderer.DEFAULTS.DECISION_TABLE_HEADER_HEIGHT : 0;
+    const rowsHeight = rows.length * XPMRenderer.DEFAULTS.DECISION_TABLE_ROW_HEIGHT;
+
+    return {
+      columnWidths,
+      totalWidth,
+      headerHeight,
+      rowsHeight,
+      totalHeight: headerHeight + rowsHeight
+    };
+  }
+
+  static _renderDecisionTable(table, x, y) {
+    const size = XPMRenderer._measureDecisionTable(table);
+    const { columnWidths, totalWidth, headerHeight, rowsHeight, totalHeight } = size;
+    if (totalWidth === 0 || totalHeight === 0) return null;
+
+    const group = XPMRenderer.createSvgElement('g');
+
+    const fontSize = XPMRenderer.DEFAULTS.DECISION_TABLE_FONT_SIZE;
+    const pad = XPMRenderer.DEFAULTS.DECISION_TABLE_CELL_PADDING_X;
+    const rowHeight = XPMRenderer.DEFAULTS.DECISION_TABLE_ROW_HEIGHT;
+    const stroke = XPMRenderer.getColor();
+
+    // --- Шапка ---
+    const hasHeader = table.header.some(cell => cell !== '');
+    if (hasHeader) {
+      let cellX = x;
+      table.header.forEach((cell, i) => {
+        if (cell) {
+          const textEl = XPMRenderer.createSvgElement('text', {
+            x: cellX + pad,
+            y: y + headerHeight / 2,
+            'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+            'font-size': fontSize,
+            'font-weight': 'bold',
+            fill: stroke,
+            'dominant-baseline': 'middle'
+          });
+          textEl.textContent = cell;
+          group.appendChild(textEl);
+        }
+        cellX += columnWidths[i];
+      });
+    }
+
+    // --- Рамка таблицы (только строки данных) ---
+    const frameY = y + headerHeight;
+    const frameHeight = rowsHeight;
+
+    if (frameHeight > 0) {
+      group.appendChild(XPMRenderer.createSvgElement('rect', {
+        x,
+        y: frameY,
+        width: totalWidth,
+        height: frameHeight,
+        fill: 'none',
+        stroke,
+        'stroke-width': XPMRenderer.DEFAULTS.DECISION_TABLE_BORDER_WIDTH
+      }));
+
+      // Горизонтальные разделители между строками данных
+      for (let i = 1; i < table.rows.length; i++) {
+        const lineY = frameY + i * rowHeight;
+        group.appendChild(XPMRenderer.createSvgElement('line', {
+          x1: x, y1: lineY, x2: x + totalWidth, y2: lineY,
+          stroke,
+          'stroke-width': XPMRenderer.DEFAULTS.DECISION_TABLE_BORDER_WIDTH
+        }));
+      }
+
+      // Вертикальные разделители между столбцами
+      let cellX = x;
+      for (let i = 0; i < columnWidths.length - 1; i++) {
+        cellX += columnWidths[i];
+        group.appendChild(XPMRenderer.createSvgElement('line', {
+          x1: cellX, y1: frameY, x2: cellX, y2: frameY + frameHeight,
+          stroke,
+          'stroke-width': XPMRenderer.DEFAULTS.DECISION_TABLE_BORDER_WIDTH
+        }));
+      }
+    }
+
+    // --- Строки данных ---
+    table.rows.forEach((row, rowIndex) => {
+      const rowY = frameY + rowIndex * rowHeight + rowHeight / 2;
+      let cellX = x;
+      row.params.forEach((cell, i) => {
+        if (cell) {
+          const textEl = XPMRenderer.createSvgElement('text', {
+            x: cellX + pad,
+            y: rowY,
+            'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+            'font-size': fontSize,
+            fill: stroke,
+            'dominant-baseline': 'middle'
+          });
+          textEl.textContent = cell;
+          group.appendChild(textEl);
+        }
+        cellX += columnWidths[i];
+      });
+    });
+
+    return group;
+  }
+
   _createTileRenderers() {
     return {
       point: {
@@ -535,12 +689,27 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
           const elements = this.buildStaticElements(config);
           const bbox = XPMRenderer.measureElements(elements);
-          const size = {
-            minWidth: bbox.width,
-            minHeight: bbox.height,
-            minX: bbox.x,
-            minY: bbox.y
-          };
+
+          let minWidth = bbox.width;
+          let minHeight = bbox.height;
+          const minX = bbox.x;
+          const minY = bbox.y;
+
+          if (config.decisionTable) {
+            const tableSize = XPMRenderer._measureDecisionTable(config.decisionTable);
+            const tableLeft = XPMRenderer.DEFAULTS.DOT_BASE_X
+              + XPMRenderer.DEFAULTS.DECISION_TABLE_OFFSET_X;
+            const tableRight = tableLeft + tableSize.totalWidth;
+            const tableTop = XPMRenderer.DEFAULTS.DOT_BASE_Y
+              + XPMRenderer.DEFAULTS.DECISION_TABLE_OFFSET_Y;
+            const tableBottom = tableTop + tableSize.totalHeight;
+
+            // Расширяем по правому и нижнему краю
+            minWidth = Math.max(minWidth, tableRight - minX);
+            minHeight = Math.max(minHeight, tableBottom - minY);
+          }
+
+          const size = { minWidth, minHeight, minX, minY };
           XPMRenderer.setCachedSize(config, size);
           return size;
         },
@@ -613,6 +782,15 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
           group.appendChild(XPMRenderer.drawPoint(pointStyle, dotX, dotY, dotRadius));
           group.appendChild(XPMRenderer.drawText(title, listText, dotX, dotY));
+
+          if (config.decisionTable) {
+            const tableGroup = XPMRenderer._renderDecisionTable(
+              config.decisionTable,
+              dotX + XPMRenderer.DEFAULTS.DECISION_TABLE_OFFSET_X,
+              dotY + XPMRenderer.DEFAULTS.DECISION_TABLE_OFFSET_Y
+            );
+            if (tableGroup) group.appendChild(tableGroup);
+          }
 
           return {
             group,
