@@ -40,8 +40,8 @@ export class XPMRenderer extends YarbpBasicRenderer {
     DOTTED_LINE_PATTERN: '2,3',
 
     // Вся схема
-    GLOBAL_TILE_OFFSET_X: 0,
-    GLOBAL_TILE_OFFSET_Y: 0,
+    GLOBAL_TILE_OFFSET_X: 10,
+    GLOBAL_TILE_OFFSET_Y: 10,
     TILE_BOTTOM_PADDING: 15,
 
     // Изображения
@@ -950,8 +950,9 @@ export class XPMRenderer extends YarbpBasicRenderer {
     const img = document.createElement('img');
     img.src = svgDataUri;
     img.alt = 'diagram';
-    img.style.maxWidth = '100%';
-    img.style.height = 'auto';
+    img.style.display = 'block';
+    img.style.width = svg.getAttribute('width') + 'px';
+    img.style.height = svg.getAttribute('height') + 'px';
 
     this.uiContainer.replaceChildren(img);
   }
