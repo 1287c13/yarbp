@@ -76,6 +76,14 @@ export class XPMRenderer extends YarbpBasicRenderer {
     DECISION_ARROW_BACK_RADIUS: 10,
     DECISION_ARROW_END_CLEARANCE: 7,
 
+    // Introduction (появление)
+    INTRODUCTION_IMAGE_SCALE: 0.43,
+    INTRODUCTION_IMAGE_RATIO: 0.7,
+    INTRODUCTION_FONT_SIZE: 12,
+    INTRODUCTION_GAP: 0,
+    INTRODUCTION_OFFSET_X: 10,
+    INTRODUCTION_OFFSET_Y: 3,
+
     // UI
     UI_PADDING: '10px 20px 10px 20px',
     UI_BACKGROUND_LIGHT: '#ffffff',
@@ -683,6 +691,111 @@ export class XPMRenderer extends YarbpBasicRenderer {
     return group;
   }
 
+  static _renderIntroduction(introduction, dotX, dotY) {
+    const annotation = introduction.annotation || '';
+    const participants = introduction.participants || [];
+
+    if (!annotation && participants.length === 0) return null;
+
+    const scale = XPMRenderer.DEFAULTS.INTRODUCTION_IMAGE_SCALE;
+    const ratio = XPMRenderer.DEFAULTS.INTRODUCTION_IMAGE_RATIO;
+    const gap = XPMRenderer.DEFAULTS.INTRODUCTION_GAP;
+    const offsetX = XPMRenderer.DEFAULTS.INTRODUCTION_OFFSET_X;
+    const offsetY = XPMRenderer.DEFAULTS.INTRODUCTION_OFFSET_Y;
+    const fontSize = XPMRenderer.DEFAULTS.INTRODUCTION_FONT_SIZE;
+
+    const iconH = XPMRenderer.DEFAULTS.IMAGE_HEIGHT * scale;
+    const iconW = iconH * ratio;
+
+    const group = XPMRenderer.createSvgElement('g');
+    const color = XPMRenderer.getColor();
+
+    // Верхний левый угол блока
+    const baseX = dotX + offsetX;
+    const baseY = dotY - offsetY - iconH;
+
+    let cursorX = baseX;
+
+    participants.forEach(src => {
+      const resolvedSrc = src && (src.startsWith('http://')
+        || src.startsWith('https://')
+        || src.startsWith('data:'))
+        ? src
+        : XPMRenderer._createPinSVGDataURI(color, src);
+
+      group.appendChild(XPMRenderer.createSvgElement('image', {
+        x: cursorX,
+        y: baseY,
+        width: iconW,
+        height: iconH,
+        preserveAspectRatio: 'xMidYMid meet',
+        href: resolvedSrc
+      }));
+
+      cursorX += iconW + gap;
+    });
+
+    if (annotation) {
+      const textX = cursorX + (participants.length ? gap : 0);
+      const textY = baseY + iconH / 2;
+      const textEl = XPMRenderer.createSvgElement('text', {
+        x: textX,
+        y: textY,
+        'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+        'font-size': fontSize,
+        fill: color,
+        'text-anchor': 'start',
+        'dominant-baseline': 'middle'
+      });
+      textEl.textContent = annotation;
+      group.appendChild(textEl);
+    }
+
+    return group;
+  }
+
+  static _measureIntroduction(introduction) {
+    const annotation = introduction.annotation || '';
+    const participants = introduction.participants || [];
+
+    if (!annotation && participants.length === 0) return null;
+
+    const scale = XPMRenderer.DEFAULTS.INTRODUCTION_IMAGE_SCALE;
+    const ratio = XPMRenderer.DEFAULTS.INTRODUCTION_IMAGE_RATIO;
+    const gap = XPMRenderer.DEFAULTS.INTRODUCTION_GAP;
+    const fontSize = XPMRenderer.DEFAULTS.INTRODUCTION_FONT_SIZE;
+
+    const iconH = XPMRenderer.DEFAULTS.IMAGE_HEIGHT * scale;
+    const iconW = iconH * ratio;
+
+    let width = 0;
+
+    if (participants.length > 0) {
+      width += participants.length * iconW + (participants.length - 1) * gap;
+    }
+
+    if (annotation) {
+      const tempText = XPMRenderer.createSvgElement('text', {
+        x: 0,
+        y: 0,
+        'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+        'font-size': fontSize,
+        fill: XPMRenderer.getColor()
+      });
+      tempText.textContent = annotation;
+      const bbox = XPMRenderer.measureElements([tempText]);
+      const textWidth = Math.ceil(bbox.width);
+
+      if (participants.length > 0) width += gap;
+      width += textWidth;
+    }
+
+    return {
+      width,
+      height: iconH
+    };
+  }
+
   /* endregion ========================================================== */
 
   /* region Таблица решений ============================================= */
@@ -831,7 +944,16 @@ export class XPMRenderer extends YarbpBasicRenderer {
       position: relative;
     `;
 
-    this.uiContainer.replaceChildren(svg);
+    const svgString = new XMLSerializer().serializeToString(svg);
+    const svgDataUri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+
+    const img = document.createElement('img');
+    img.src = svgDataUri;
+    img.alt = 'diagram';
+    img.style.maxWidth = '100%';
+    img.style.height = 'auto';
+
+    this.uiContainer.replaceChildren(img);
   }
 
   /* endregion ========================================================== */
@@ -892,8 +1014,8 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
           let minWidth = bbox.width;
           let minHeight = bbox.height;
-          const minX = bbox.x;
-          const minY = bbox.y;
+          let minX = bbox.x;
+          let minY = bbox.y;
 
           if (config.decisionTable) {
             const tableSize = XPMRenderer._measureDecisionTable(config.decisionTable);
@@ -908,6 +1030,31 @@ export class XPMRenderer extends YarbpBasicRenderer {
             // Запас справа под исходящие стрелки: GAP * кол-во строк таблицы
             const arrowReserve = XPMRenderer.DEFAULTS.DECISION_TABLE_GAP * Math.max(1, config.decisionTable.rows.length);
             minWidth += arrowReserve;
+          }
+
+          if (config.introduction) {
+            const introSize = XPMRenderer._measureIntroduction(config.introduction);
+            if (introSize) {
+              const dotX = XPMRenderer.DEFAULTS.DOT_BASE_X;
+              const dotY = XPMRenderer.DEFAULTS.DOT_BASE_Y;
+              const offsetX = XPMRenderer.DEFAULTS.INTRODUCTION_OFFSET_X;
+              const offsetY = XPMRenderer.DEFAULTS.INTRODUCTION_OFFSET_Y;
+
+              // блок рисуется вправо-вверх от точки
+              const introLeft = dotX + offsetX;
+              const introRight = introLeft + introSize.width;
+              const introTop = dotY - offsetY - introSize.height;
+
+              // расширяем по правому краю и по верху
+              minWidth = Math.max(minWidth, introRight - minX);
+
+              // если верх блока выше minY, сдвигаем minY и растём по высоте
+              if (introTop < minY) {
+                const delta = minY - introTop;
+                minHeight += delta;
+                minY = introTop;
+              }
+            }
           }
 
           minHeight += XPMRenderer.DEFAULTS.TILE_BOTTOM_PADDING;
@@ -987,6 +1134,11 @@ export class XPMRenderer extends YarbpBasicRenderer {
           if (config.decisionTable) {
             const tableGroup = XPMRenderer._renderDecisionTable(config.decisionTable, dotX + XPMRenderer.DEFAULTS.DECISION_TABLE_OFFSET_X, dotY + XPMRenderer.DEFAULTS.DECISION_TABLE_OFFSET_Y);
             if (tableGroup) group.appendChild(tableGroup);
+          }
+
+          if (config.introduction) {
+            const introGroup = XPMRenderer._renderIntroduction(config.introduction, dotX, dotY);
+            if (introGroup) group.appendChild(introGroup);
           }
 
           return {

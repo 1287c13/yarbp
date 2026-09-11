@@ -534,9 +534,13 @@ export class YarbpXPMConverter {
     const decisionTableNode = findChildrenByKeyValue(tile, 'key', 'таблица-решений')[0];
     const decisionTable = decisionTableNode ? this._extractDecisionTable(decisionTableNode) : null;
 
+    const introductionNode = findChildrenByKeyValue(tile, 'key', 'появление')[0];
+    const introduction = introductionNode ? this._extractIntroduction(introductionNode) : null;
+
     return {
       id,
       decisionTable,
+      introduction,
       title: title,
       pointStyle: pointStyle,
       bypassEnabled: bypassEnabled,
@@ -593,10 +597,29 @@ export class YarbpXPMConverter {
     return { columnCount, header, rows };
   }
 
+  _extractIntroduction(node) {
+    const annotationNode = findChildrenByKeyValue(node, 'key', 'аннотация')[0];
+    const annotation = annotationNode ? (annotationNode.value || '').trim() : '';
+
+    const participantsNode = findChildrenByKeyValue(node, 'key', 'участники')[0];
+    const participants = [];
+
+    if (participantsNode && participantsNode.children) {
+      participantsNode.children.forEach(child => {
+        const imageNode = (child.children || []).find(c => c.key === 'картинка');
+        if (!imageNode) return;
+        participants.push(this._resolveImageSrc(imageNode.value));
+      });
+    }
+
+    return { annotation, participants };
+  }
+
   _extractEventProps(tile) {
     return {
       id: null,
       decisionTable: null,
+      introduction: null,
       title: (tile.value || '').trim(),
       pointStyle: 'diamond',
       bypassEnabled: false,
@@ -635,6 +658,7 @@ export class YarbpXPMConverter {
       tileType: "point",
       id: null,
       decisionTable: null,
+      introduction: null,
       pointStyle: "filled",
       bypassEnabled: false,
       title: "",
