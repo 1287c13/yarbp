@@ -32,6 +32,10 @@ export class YarbpXPMConverter {
     'оператор': 'operator-woman'
   });
 
+  static COMMENT_NODE_TYPES = Object.freeze(new Set([
+    'COMMENT', 'TODO', 'IMPORTANT', 'DELETED'
+  ]));
+
   static _normalize(value) {
     return String(value ?? '').trim().toLowerCase().replace(/\s+/g, '-');
   }
@@ -49,7 +53,8 @@ export class YarbpXPMConverter {
       throw new Error('Invalid AST: root node must be of type ROOT');
     }
 
-    const rootChildren = this.ast.children || [];
+    const rootChildren = (this.ast.children || [])
+      .filter(child => child.key);
 
     // Участник резервирует колонку 0 под иконку, остальные дети идут с x = 1.
     // Дорожка и прочие узлы — без резерва, дети с x = 0.

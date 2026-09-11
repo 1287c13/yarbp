@@ -160,9 +160,9 @@ function createResizer(config) {
     } else {
       setTimeout(() => {
         if (element.id === 'sidebar') {
-          applySize(20);
+          applySize(12);
         } else if (element.id === 'code-pane') {
-          applySize(40);
+          applySize(25);
         }
       }, 10);
     }
@@ -295,6 +295,7 @@ function toggleTheme() {
   document.getElementById('night-icon').src = document.body.classList.contains('dark') ? 'static/night-white.svg' : 'static/night-black.svg';
   document.getElementById('day-icon').src = document.body.classList.contains('dark') ? 'static/day-white.svg' : 'static/day-black.svg';
   localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+  YarbpAppGlobals.lexer.callRendererObserver();
 }
 
 themeBtn.addEventListener('click', toggleTheme);
