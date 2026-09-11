@@ -244,11 +244,24 @@ function updateViews() {
   }
 
   if (!YarbpAppGlobals.flavor || YarbpAppGlobals.flavor.flavorName !== flavor.flavorName) {
+    const renderPane = renderTextarea.closest('#render-pane');
+
+    // Убираем то, что создал XPM
+    if (renderPane) {
+      const uiContainer = renderPane.querySelector('.ui-render-container');
+      if (uiContainer) uiContainer.remove();
+    }
+
+    // Возвращаем видимость текстовому контейнеру (XPM его прячет)
+    const editorContainer = renderTextarea.closest('.editor-container');
+    if (editorContainer) editorContainer.style.display = '';
+
     YarbpAppGlobals.flavor = flavor;
     const renderer = new flavor.flavorData.renderer(
       YarbpAppGlobals.lexer, YarbpAppGlobals.parser,
-      renderTextarea, renderHighlightDiv, syncRenderScroll); // todo убрать syncRenderScroll
-    YarbpAppGlobals.lexer.setObserver(renderer); // todo потестить будет ли утечка при смене флэйворов
+      renderTextarea, renderHighlightDiv, syncRenderScroll
+    );
+    YarbpAppGlobals.lexer.setObserver(renderer);
     YarbpAppGlobals.lexer.callRendererObserver();
   }
 }

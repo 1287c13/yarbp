@@ -159,7 +159,7 @@ export class YarbpXPMConverter {
     rows.forEach(rowTiles => {
       rowTiles.sort((a, b) => a.grid.x - b.grid.x);
 
-      const imageTile = rowTiles.find(t => t.config.tileType === 'image');
+      const imageTile = rowTiles.find(t => (t.config || {}).tileType === 'image');
       if (!imageTile) return;
 
       const firstPoint = rowTiles.find(t => t.config.tileType === 'point');
@@ -186,14 +186,14 @@ export class YarbpXPMConverter {
     // Индекс id → grid по всем точкам
     const idIndex = new Map();
     this.result.forEach(tile => {
-      if (tile.config.tileType !== 'point') return;
+      if ((tile.config || {}).tileType !== 'point') return;
       const id = tile.config.id;
       if (id) idIndex.set(id, tile.grid);
     });
 
     // Резолв строк таблиц
     this.result.forEach(tile => {
-      if (tile.config.tileType !== 'point') return;
+      if ((tile.config || {}).tileType !== 'point') return;
 
       const table = tile.config.decisionTable;
       if (table) {

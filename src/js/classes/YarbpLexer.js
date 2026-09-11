@@ -187,7 +187,6 @@ export class YarbpLexer {
     this.currentIndent = -1;
     this.generateScopeTokens(lastPosition, TokenTypes.END);
     this.addControlToken(TokenTypes.END, lastPosition);
-
     this.postprocessTokens();
     this.callRendererObserver()
   };
@@ -313,16 +312,30 @@ export class YarbpLexer {
 
   retypeEmptyObjectsArray() {
     const frameSize = 4;
-
     const emptyObjectIndices = [];
-    let isInArrayScope = false;
-    let scopeBalance = 0;
+
+    const scopeStack = [];
 
     for (let i = 0; i <= this.tokens.length - frameSize; i++) {
       const scopeIn = this.tokens[i];
-      const object = this.tokens[i+1];
-      const third = this.tokens[i+2];
-      const fourth = this.tokens[i+3];
+      const object = this.tokens[i + 1];
+      const third = this.tokens[i + 2];
+      const fourth = this.tokens[i + 3];
+
+      // Обновляем стек скоупов
+      if (scopeIn.type === TokenTypes.SCOPE_IN) {
+        // Ищем первый значащий токен после SCOPE_IN, пропуская PREFIX
+        let j = i + 1;
+        while (j < this.tokens.length && this.tokens[j].type === TokenTypes.PREFIX) j++;
+
+        const owner = this.tokens[j];
+        if (!owner) scopeStack.push('unknown');
+        else if (owner.type === TokenTypes.OBJECT) scopeStack.push('object');
+        else if (owner.type === TokenTypes.ARRAY) scopeStack.push('array');
+        else if (owner.type === TokenTypes.SCOPE_OUT) scopeStack.push('empty');
+        else scopeStack.push('unknown');
+      }
+      if (scopeIn.type === TokenTypes.SCOPE_OUT) scopeStack.pop();
 
       const isEmptyObject = scopeIn.type === TokenTypes.SCOPE_IN
         && object.type === TokenTypes.OBJECT && !object.prefix
@@ -333,7 +346,9 @@ export class YarbpLexer {
         && third.type === TokenTypes.COMMENT
         && fourth.type === TokenTypes.SCOPE_OUT;
 
-      if (isEmptyObject && isInArrayScope) {
+      const inArrayScope = scopeStack.includes('array');
+
+      if (isEmptyObject && inArrayScope) {
         emptyObjectIndices.push(i);
         emptyObjectIndices.push(i + 2);
         object.type = TokenTypes.ANY_VALUE;
@@ -346,21 +361,11 @@ export class YarbpLexer {
         }
       }
 
-      if (isEmptyObjectWithComment && isInArrayScope) {
+      if (isEmptyObjectWithComment && inArrayScope) {
         emptyObjectIndices.push(i);
         emptyObjectIndices.push(i + 3);
         object.type = TokenTypes.ANY_VALUE;
       }
-
-      if (object.type === TokenTypes.SCOPE_IN) scopeBalance++;
-      if (object.type === TokenTypes.SCOPE_OUT) scopeBalance--;
-
-      isInArrayScope =
-        scopeBalance > 0 &&
-        (
-          object.type === TokenTypes.ARRAY
-          || isInArrayScope && object.type !== TokenTypes.OBJECT
-        );
     }
 
     [...new Set(emptyObjectIndices)]
