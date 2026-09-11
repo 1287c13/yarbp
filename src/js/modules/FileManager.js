@@ -30,16 +30,39 @@ export class FileManager {
   // Работа с localStorage
   // ---------------------------------------------
   _loadData() {
+    const defaults = this._getDefaultData();
+    const builtinFiles = defaults.files.filter(f => f.isBuiltin);
+
     const raw = localStorage.getItem(this.storageKey);
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-        if (parsed.version === 1) return parsed;
+        if (parsed.version === 1) {
+          const userFiles = (parsed.files || []).filter(f => !f.isBuiltin);
+          const activeId = parsed.activeFileId;
+
+          // Если активный файл был встроенным — сбрасываем на первый встроенный
+          const isActiveUserFile = userFiles.some(f => f.id === activeId);
+          const activeFileId = isActiveUserFile
+            ? activeId
+            : (builtinFiles[0]?.id || userFiles[0]?.id);
+
+          return {
+            version: 1,
+            activeFileId,
+            files: [...builtinFiles, ...userFiles]
+          };
+        }
       } catch (e) {
         console.warn('Failed to parse files data, resetting to default.');
       }
     }
-    return this._getDefaultData();
+
+    return {
+      version: 1,
+      activeFileId: defaults.activeFileId,
+      files: builtinFiles
+    };
   }
 
   // todo почистить примеры из флэйворов
@@ -220,7 +243,16 @@ Order
   }
 
   _saveData() {
-    localStorage.setItem(this.storageKey, JSON.stringify(this.data));
+    const userFiles = this.data.files.filter(f => !f.isBuiltin);
+    const isActiveUserFile = userFiles.some(f => f.id === this.data.activeFileId);
+
+    const payload = {
+      version: 1,
+      activeFileId: isActiveUserFile ? this.data.activeFileId : null,
+      files: userFiles
+    };
+
+    localStorage.setItem(this.storageKey, JSON.stringify(payload));
   }
 
   // ---------------------------------------------
