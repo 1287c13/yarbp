@@ -14,7 +14,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     CONNECTION_RADIUS_MULTIPLIER: 2,
     DOT_BASE_X: 130,
     DOT_BASE_Y: 150,
-    DIAMOND_RADIUS_FACTOR: 1.2,
+    DIAMOND_RADIUS_FACTOR: 1.4,
 
     // Текст
     TEXT_OFFSET_X: 15,
@@ -37,6 +37,11 @@ export class XPMRenderer extends YarbpBasicRenderer {
     // Стили линий
     DASHED_LINE_PATTERN: '8,4',
     DOTTED_LINE_PATTERN: '2,3',
+
+    // Вся схема
+    GLOBAL_TILE_OFFSET_X: 0,
+    GLOBAL_TILE_OFFSET_Y: 0,
+    TILE_BOTTOM_PADDING: 15,
 
     // Изображения
     IMAGE_HEIGHT: 70,
@@ -64,11 +69,11 @@ export class XPMRenderer extends YarbpBasicRenderer {
     DECISION_TABLE_CELL_PADDING_X: 8,
     DECISION_TABLE_FONT_SIZE: 12,
     DECISION_TABLE_BORDER_WIDTH: 1,
-    DECISION_TABLE_GAP: 20,
+    DECISION_TABLE_GAP: 0,
     DECISION_ARROW_BACK_OFFSET_X: 30,
     DECISION_ARROW_BACK_MARGIN_TOP: 40,
     DECISION_ARROW_BACK_RADIUS: 10,
-    DECISION_ARROW_END_CLEARANCE: 2,
+    DECISION_ARROW_END_CLEARANCE: 7,
 
     // UI
     UI_PADDING: '10px 20px 10px 20px',
@@ -828,6 +833,8 @@ export class XPMRenderer extends YarbpBasicRenderer {
             minWidth += arrowReserve;
           }
 
+          minHeight += XPMRenderer.DEFAULTS.TILE_BOTTOM_PADDING;
+
           const size = {minWidth, minHeight, minX, minY};
           XPMRenderer.setCachedSize(config, size);
           return size;
@@ -1161,14 +1168,14 @@ export class XPMRenderer extends YarbpBasicRenderer {
     const sortedRows = Object.keys(rowMaxHeight).map(Number).sort((a, b) => a - b);
 
     const offsetX = {};
-    let cumX = 0;
+    let cumX = XPMRenderer.DEFAULTS.GLOBAL_TILE_OFFSET_X;
     sortedCols.forEach(col => {
       offsetX[col] = cumX;
       cumX += colMaxWidth[col];
     });
 
     const offsetY = {};
-    let cumY = 0;
+    let cumY = XPMRenderer.DEFAULTS.GLOBAL_TILE_OFFSET_Y;
     sortedRows.forEach(row => {
       offsetY[row] = cumY;
       cumY += rowMaxHeight[row];
@@ -1274,8 +1281,8 @@ export class XPMRenderer extends YarbpBasicRenderer {
           const dx = Math.max(40, Math.abs(endX - startX) * 0.3);
           const c1x = startX + dx;
           const c1y = startY;
-          const c2x = endX - dx;
-          const c2y = endY;
+          const c2x = endX - dx * 0.3;
+          const c2y = endY + Math.sign(startY - endY) * Math.abs(endY - startY) * 0.6;
 
           const trimmed = XPMRenderer._trimArrowEnd(c2x, c2y, endX, endY, trim);
 
