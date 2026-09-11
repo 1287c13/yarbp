@@ -29,6 +29,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     SHORT_LINE_LEN: 20,
     IN_ARROW_OFFSET: 8,
     STROKE_WIDTH: 1,
+    ARROW_LABEL_POSITION: 0.2,
 
     // Маркеры
     MARKER_WIDTH: 6,
@@ -387,6 +388,82 @@ export class XPMRenderer extends YarbpBasicRenderer {
     }
 
     return line;
+  }
+
+    /**
+   * Рисует подпись на стрелке тайла.
+   * Позиция — посередине линии, с подложкой цветом фона.
+   */
+  static _drawArrowLabel(arrowType, arrowCfg, connectionPoints, tileWidth, tileHeight) {
+    const label = arrowCfg.label;
+    if (!label) return null;
+
+    // Те же координаты, что и у линии в drawArrow
+    const pts = connectionPoints;
+    let x1, y1, x2, y2;
+
+    switch (arrowType) {
+      case 'right':
+        x1 = pts.right.x;
+        y1 = pts.right.y;
+        x2 = tileWidth;
+        y2 = y1;
+        break;
+      case 'down':
+        x1 = pts.bottom.x;
+        y1 = pts.bottom.y;
+        x2 = x1;
+        y2 = tileHeight;
+        break;
+      case 'left':
+        x2 = pts.left.x;
+        y2 = pts.left.y;
+        x1 = x2 - XPMRenderer.DEFAULTS.SHORT_LINE_LEN;
+        y1 = y2;
+        break;
+      case 'top':
+        x2 = pts.top.x;
+        y2 = pts.top.y;
+        x1 = x2;
+        y1 = y2 - XPMRenderer.DEFAULTS.SHORT_LINE_LEN;
+        break;
+      default:
+        return null;
+    }
+
+    const t = XPMRenderer.DEFAULTS.ARROW_LABEL_POSITION;
+    const midX = x1 + (x2 - x1) * t;
+    const midY = y1 + (y2 - y1) * t;
+
+    const group = XPMRenderer.createSvgElement('g');
+
+    const fontSize = XPMRenderer.DEFAULTS.DECISION_TABLE_FONT_SIZE;
+    const approxWidth = label.length * fontSize * 0.6;
+
+    const bg = XPMRenderer.createSvgElement('rect', {
+      x: midX - approxWidth / 2 - 2,
+      y: midY - fontSize / 2 - 1,
+      width: approxWidth + 4,
+      height: fontSize + 2,
+      fill: XPMRenderer.isDark()
+        ? XPMRenderer.DEFAULTS.UI_BACKGROUND_DARK
+        : XPMRenderer.DEFAULTS.UI_BACKGROUND_LIGHT
+    });
+    group.appendChild(bg);
+
+    const textEl = XPMRenderer.createSvgElement('text', {
+      x: midX,
+      y: midY,
+      'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+      'font-size': fontSize,
+      fill: XPMRenderer.getColor(),
+      'text-anchor': 'middle',
+      'dominant-baseline': 'middle'
+    });
+    textEl.textContent = label;
+    group.appendChild(textEl);
+
+    return group;
   }
 
   static drawBypassArc(arrows, connectionPoints, style) {
@@ -887,7 +964,15 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
           ['right', 'down', 'left', 'top'].forEach(type => {
             const arrowCfg = XPMRenderer.normalizeArrow(arrows[type]);
-            group.appendChild(XPMRenderer.drawArrow(type, arrowCfg, connectionPoints, effectiveWidth, effectiveHeight));
+            if (arrowCfg.targetGrid) return; // рисуется в _renderPointArrows
+
+            const line = XPMRenderer.drawArrow(type, arrowCfg, connectionPoints, effectiveWidth, effectiveHeight);
+            group.appendChild(line);
+
+            if (arrowCfg.show && arrowCfg.label) {
+              const labelEl = XPMRenderer._drawArrowLabel(type, arrowCfg, connectionPoints, effectiveWidth, effectiveHeight);
+              if (labelEl) group.appendChild(labelEl);
+            }
           });
 
           if (bypassEnabled) {
@@ -1212,6 +1297,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     });
 
     this._renderDecisionArrows(composedSvg, tiles, offsetX, offsetY, colMaxWidth, rowMaxHeight);
+    this._renderPointArrows(composedSvg, tiles, offsetX, offsetY);
 
     return {svg: composedSvg, totalWidth, totalHeight};
   }
@@ -1300,6 +1386,164 @@ export class XPMRenderer extends YarbpBasicRenderer {
         svg.appendChild(path);
       });
     });
+  }
+
+  _renderPointArrows(svg, tiles, offsetX, offsetY) {
+    const trim = XPMRenderer.DEFAULTS.DOT_RADIUS
+      + XPMRenderer.DEFAULTS.DECISION_ARROW_END_CLEARANCE;
+
+    tiles.forEach(tile => {
+      if (tile.config.tileType !== 'point') return;
+      const arrows = tile.config.arrows;
+      if (!arrows) return;
+
+      const tileOffsetX = offsetX[tile.grid.x];
+      const tileOffsetY = offsetY[tile.grid.y];
+
+      const staticSize = this.tileRenderers.point.measure(tile.config);
+      const innerOffsetX = -staticSize.minX;
+      const innerOffsetY = -staticSize.minY;
+      const dotX = XPMRenderer.DEFAULTS.DOT_BASE_X + innerOffsetX;
+      const dotY = XPMRenderer.DEFAULTS.DOT_BASE_Y + innerOffsetY;
+
+      ['right', 'down', 'left', 'top'].forEach(dir => {
+        const arrow = arrows[dir];
+        if (!arrow || !arrow.targetGrid) return;
+
+        const targetTile = tiles.find(
+          t => t.grid.x === arrow.targetGrid.x && t.grid.y === arrow.targetGrid.y
+        );
+        if (!targetTile) return;
+
+        const targetRenderer = this.tileRenderers[targetTile.config.tileType || 'point'];
+        const targetStatic = targetRenderer.measure(targetTile.config);
+        const targetInnerX = -targetStatic.minX;
+        const targetInnerY = -targetStatic.minY;
+
+        const centerX = tileOffsetX + dotX;
+        const centerY = tileOffsetY + dotY;
+
+        const endX = offsetX[arrow.targetGrid.x]
+          + XPMRenderer.DEFAULTS.DOT_BASE_X + targetInnerX;
+        const endY = offsetY[arrow.targetGrid.y]
+          + XPMRenderer.DEFAULTS.DOT_BASE_Y + targetInnerY;
+
+        const connectionRadius = XPMRenderer.DEFAULTS.DOT_RADIUS
+          * XPMRenderer.DEFAULTS.CONNECTION_RADIUS_MULTIPLIER;
+
+        let startX;
+        let startY;
+
+        if (endX < centerX) {
+          // Обратный случай — обходная дуга начинается сверху от точки
+          startX = centerX;
+          startY = centerY - connectionRadius;
+        } else {
+          // Прямой случай — сдвиг по направлению к цели
+          const dx = endX - centerX;
+          const dy = endY - centerY;
+          const dist = Math.hypot(dx, dy) || 1;
+          startX = centerX + (dx / dist) * connectionRadius;
+          startY = centerY + (dy / dist) * connectionRadius;
+        }
+
+        this._drawPointArrow(
+          svg, startX, startY, endX, endY,
+          arrow.style || 'solid',
+          arrow.label || '',
+          trim
+        );
+      });
+    });
+  }
+
+  _drawPointArrow(svg, startX, startY, endX, endY, style, label, trim) {
+    const isBackward = endX < startX;
+
+    let d;
+    let midX;
+    let midY;
+
+    if (isBackward) {
+      // Обходная дуга: вверх, назад, вниз
+      const backMarginTop = XPMRenderer.DEFAULTS.DECISION_ARROW_BACK_MARGIN_TOP;
+      const backRadius = XPMRenderer.DEFAULTS.DECISION_ARROW_BACK_RADIUS;
+
+      const loopX = startX;
+      const loopY = endY - backMarginTop;
+      const trimmedEndY = endY - trim;
+
+      d = XPMRenderer._buildBackLoopPath(
+        startX, startY,
+        loopX, loopY,
+        endX, trimmedEndY,
+        backRadius
+      );
+
+      midX = (loopX + endX) / 2;
+      midY = loopY;
+    } else {
+      // Прямая кубическая безье
+      const dx = Math.max(40, Math.abs(endX - startX) * 0.3);
+      const c1x = startX + dx;
+      const c1y = startY;
+
+      const tightX = XPMRenderer.DEFAULTS.DECISION_ARROW_END_TIGHTNESS_X;
+      const tightY = XPMRenderer.DEFAULTS.DECISION_ARROW_END_TIGHTNESS_Y;
+      const c2x = endX - dx * tightX;
+      const c2y = endY + Math.sign(startY - endY) * Math.abs(endY - startY) * tightY;
+
+      const trimmed = XPMRenderer._trimArrowEnd(c2x, c2y, endX, endY, trim);
+
+      d = `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${trimmed.x} ${trimmed.y}`;
+
+      // Середина кубической безье при t = 0.5
+      const t = 0.5;
+      const mt = 1 - t;
+      midX = mt*mt*mt*startX + 3*mt*mt*t*c1x + 3*mt*t*t*c2x + t*t*t*trimmed.x;
+      midY = mt*mt*mt*startY + 3*mt*mt*t*c1y + 3*mt*t*t*c2y + t*t*t*trimmed.y;
+    }
+
+    const styleCap = XPMRenderer.capitalize(style);
+
+    const path = XPMRenderer.createSvgElement('path', {
+      d,
+      fill: 'none',
+      stroke: XPMRenderer.getColor(),
+      'stroke-width': XPMRenderer.DEFAULTS.STROKE_WIDTH,
+      'marker-end': `url(#arrow${styleCap})`
+    });
+    XPMRenderer.applyLineStyle(path, style);
+    svg.appendChild(path);
+
+    if (!label) return;
+
+    // Подложка под текст цветом фона
+    const fontSize = XPMRenderer.DEFAULTS.DECISION_TABLE_FONT_SIZE;
+    const approxWidth = label.length * fontSize * 0.6;
+
+    const bg = XPMRenderer.createSvgElement('rect', {
+      x: midX - approxWidth / 2 - 2,
+      y: midY - fontSize / 2 - 1,
+      width: approxWidth + 4,
+      height: fontSize + 2,
+      fill: XPMRenderer.isDark()
+        ? XPMRenderer.DEFAULTS.UI_BACKGROUND_DARK
+        : XPMRenderer.DEFAULTS.UI_BACKGROUND_LIGHT
+    });
+    svg.appendChild(bg);
+
+    const textEl = XPMRenderer.createSvgElement('text', {
+      x: midX,
+      y: midY,
+      'font-family': XPMRenderer.DEFAULTS.FONT_FAMILY,
+      'font-size': fontSize,
+      fill: XPMRenderer.getColor(),
+      'text-anchor': 'middle',
+      'dominant-baseline': 'middle'
+    });
+    textEl.textContent = label;
+    svg.appendChild(textEl);
   }
 
   /* endregion ========================================================== */

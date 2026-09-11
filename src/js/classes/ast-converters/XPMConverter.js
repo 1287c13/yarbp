@@ -76,7 +76,7 @@ export class YarbpXPMConverter {
       y++;
     });
 
-    this._resolveDecisionTableTargets();
+    this._resolveTargets();
     this._inheritArrows();
     this._repositionImages();
 
@@ -182,29 +182,47 @@ export class YarbpXPMConverter {
   // Резолв таблиц решений
   // ---------------------------------------------------------------------------
 
-  _resolveDecisionTableTargets() {
+  _resolveTargets() {
     // Индекс id → grid по всем точкам
     const idIndex = new Map();
     this.result.forEach(tile => {
-      if ((tile.config || {}).tileType !== 'point') return;
+      if (tile.config.tileType !== 'point') return;
       const id = tile.config.id;
       if (id) idIndex.set(id, tile.grid);
     });
 
     // Резолв строк таблиц
     this.result.forEach(tile => {
-      if ((tile.config || {}).tileType !== 'point') return;
-      const table = tile.config.decisionTable;
-      if (!table) return;
+      if (tile.config.tileType !== 'point') return;
 
-      table.rows.forEach(row => {
-        if (!row.resultId) {
-          row.targetGrid = null;
-          return;
-        }
-        const grid = idIndex.get(row.resultId);
-        row.targetGrid = grid ? { x: grid.x, y: grid.y } : null;
-      });
+      const table = tile.config.decisionTable;
+      if (table) {
+        table.rows.forEach(row => {
+          if (!row.resultId) {
+            row.targetGrid = null;
+            return;
+          }
+          const grid = idIndex.get(row.resultId);
+          row.targetGrid = grid ? { x: grid.x, y: grid.y } : null;
+        });
+      }
+
+      // Резолв id-стрелок
+            // Резолв id-стрелок
+      const arrows = tile.config.arrows;
+      if (arrows) {
+        ['right', 'down', 'left', 'top'].forEach(dir => {
+          const arrow = arrows[dir];
+          if (!arrow || !arrow.targetId) return;
+          const grid = idIndex.get(arrow.targetId);
+          arrow.targetGrid = grid ? { x: grid.x, y: grid.y } : null;
+          // Если цель найдена — рисуем безье в рендерере,
+          // а исходную стрелку гасим, чтобы не дублировалась
+          if (arrow.targetGrid) {
+            arrow.show = false;
+          }
+        });
+      }
     });
   }
 
@@ -224,6 +242,7 @@ export class YarbpXPMConverter {
         ['right', 'down', 'left', 'top'].forEach(direction => {
           const arrow = arrows[direction];
           if (!arrow || !arrow.show) return;
+          if (arrow.targetGrid) return;
 
           const key = `${x},${y},${direction}`;
           if (processed.has(key)) return;
@@ -244,6 +263,8 @@ export class YarbpXPMConverter {
           const isBidirectional = arrow.hasMarker && arrow.hasInMarker;
           const isPlain = !arrow.hasMarker && !arrow.hasInMarker;
 
+          const label = arrow.label || '';
+
           const markerAtPoint = (dir) => {
             if (dir === 'right' || dir === 'down') {
               return { hasMarker: false, hasInMarker: true };
@@ -258,6 +279,7 @@ export class YarbpXPMConverter {
             tile.config.arrows[direction] = {
               show: true,
               style: arrow.style,
+              label,
               ...noMarker()
             };
 
@@ -274,6 +296,7 @@ export class YarbpXPMConverter {
             tile.config.arrows[direction] = {
               show: true,
               style: arrow.style,
+              label,
               ...marker
             };
 
@@ -289,6 +312,7 @@ export class YarbpXPMConverter {
             tile.config.arrows[direction] = {
               show: true,
               style: arrow.style,
+              label,
               ...sourceMarker
             };
 
@@ -304,6 +328,7 @@ export class YarbpXPMConverter {
             tile.config.arrows[direction] = {
               show: true,
               style: arrow.style,
+              label,
               ...noMarker()
             };
 
@@ -463,7 +488,24 @@ export class YarbpXPMConverter {
       const getArrowConfig = (val) => {
         if (!val) return { show: false };
 
-        const arrowStr = String(val).trim();
+        let str = String(val).trim();
+
+        // Подпись в квадратных скобках в начале
+        let label = '';
+        const labelMatch = str.match(/^\[([^\]]*)\]/);
+        if (labelMatch) {
+          label = labelMatch[1];
+          str = str.slice(labelMatch[0].length);
+        }
+
+        // Символ стрелки: только из -.<>
+        const arrowMatch = str.match(/^([\-.<>]+)(.*)$/);
+        if (!arrowMatch) return { show: false };
+
+        const arrowStr = arrowMatch[1];
+        const rest = arrowMatch[2];
+        // id начинается с буквы
+        const targetId = /^[A-Za-zА-Яа-яЁё]/.test(rest) ? rest : null;
 
         let style = 'solid';
         if (/--/.test(arrowStr)) style = 'dashed';
@@ -474,9 +516,11 @@ export class YarbpXPMConverter {
 
         return {
           show: true,
-          style: style,
+          style,
           hasMarker: hasEndMarker,
-          hasInMarker: hasStartMarker
+          hasInMarker: hasStartMarker,
+          label,
+          targetId
         };
       };
 
