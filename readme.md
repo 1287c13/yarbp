@@ -343,7 +343,7 @@ items
 
 Рендер:
 
-![Карта процесса-опыта](render_examples/kpo.svg)
+![Карта процесса-опыта](render_examples/XPO.PNG)
 
 Идентификаторы иконок для использвоания в конвертере КПО:
 - `мужчина`
@@ -664,3 +664,7 @@ deactivate App
 @enduml
 ```
 </details>
+
+## Сообщество
+
+- [Telegram-канал](t.me/analyst_writes_things) — новости проекта
