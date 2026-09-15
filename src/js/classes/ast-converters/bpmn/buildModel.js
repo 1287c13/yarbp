@@ -278,8 +278,7 @@ function buildComment(node, task, ctx, process) {
   const text = node.value || '';
   const id = ctx.idGen.next('TextAnnotation');
   const ta = new BpmnTextAnnotation({ id, text });
-
-  ta.bounds = placeAbove(task, 100, 30, ARTIFACT_OFFSETS.commentAbove);
+  // bounds посчитает BpmnDiGenerator после layout
 
   const assocId = ctx.idGen.next('Association');
   const assoc = new BpmnAssociation({
@@ -303,8 +302,6 @@ function buildDataObject(node, task, ctx, process) {
     dataObjectRef: dataObjectId,
   });
 
-  ref.bounds = placeAbove(task, 36, 50, ARTIFACT_OFFSETS.dataObjectAbove);
-
   const assocId = ctx.idGen.next('DataOutputAssociation');
   const assoc = new BpmnDataOutputAssociation({
     id: assocId,
@@ -320,8 +317,6 @@ function buildDataStore(node, task, ctx, process) {
   const name = node.value || null;
   const id = ctx.idGen.next('DataStoreReference');
   const ref = new BpmnDataStoreReference({ id, name });
-
-  ref.bounds = placeBelowPool(task, process, 50, 50, ARTIFACT_OFFSETS.dataStoreBelow);
 
   const assocId = ctx.idGen.next('DataOutputAssociation');
   const assoc = new BpmnDataOutputAssociation({
@@ -353,38 +348,6 @@ function buildMessageFlow(node, task, ctx, process) {
   const id = ctx.idGen.next('Flow');
   const mf = new BpmnMessageFlow({ id, sourceRef, targetRef });
   process._pendingArtifacts.messageFlows.push(mf);
-}
-
-function placeAbove(parent, width, height, offset) {
-  const pb = parent.bounds || { x: 0, y: 0 };
-  const pw = pb.width  !== undefined ? pb.width  : 100;
-  const px = pb.x;
-  const py = pb.y !== undefined ? pb.y : 0;
-
-  return {
-    x: px + pw / 2 - width / 2,
-    y: py - offset - height,
-    width,
-    height,
-  };
-}
-
-function placeBelowPool(parent, process, width, height, offset) {
-  const pb = parent.bounds || { x: 0, y: 0 };
-  const pw = pb.width !== undefined ? pb.width : 100;
-  const px = pb.x;
-
-  const pool = process.bounds || null;
-  const baseY = pool
-    ? (pool.y + (pool.height !== undefined ? pool.height : 250))
-    : ((pb.y !== undefined ? pb.y : 0) + (pb.height !== undefined ? pb.height : 80));
-
-  return {
-    x: px + pw / 2 - width / 2,
-    y: baseY + offset,
-    width,
-    height,
-  };
 }
 
 /* ------------------------------------------------------------------ *
