@@ -304,7 +304,8 @@ function buildGateway(node, ctx, process, opts) {
     const branchChildren = (branchNode.children || []).filter(isFlowNode);
 
     if (!branchChildren.length) {
-      branchTails.push({ head: fork, tail: fork, name: branchName, empty: true });
+      // пустая ветка: fork сам становится хвостом (fork → join напрямую)
+      branchTails.push({ head: fork, tail: fork, name: branchName });
       continue;
     }
 
@@ -315,7 +316,7 @@ function buildGateway(node, ctx, process, opts) {
     });
 
     if (!inner.head) {
-      branchTails.push({ head: fork, tail: fork, name: branchName, empty: true });
+      branchTails.push({ head: fork, tail: fork, name: branchName });
       continue;
     }
 
@@ -326,12 +327,12 @@ function buildGateway(node, ctx, process, opts) {
       head: inner.head,
       tail: inner.tails.length ? inner.tails[inner.tails.length - 1] : null,
       name: branchName,
-      empty: false,
     });
   }
 
+  // отбрасываем только те ветки, которые реально закрылись end-event'ом
+  // (tail === null). Пустая ветка (tail === fork) остаётся.
   const openTails = branchTails
-    .filter(bt => !bt.empty)
     .map(bt => bt.tail)
     .filter(t => t && t.tag !== 'endEvent');
 
@@ -376,7 +377,7 @@ function buildGateway(node, ctx, process, opts) {
 }
 
 /* ------------------------------------------------------------------ *
- *  Подпроцесс — теперь с внутренним потоком
+ *  Подпроцесс
  * ------------------------------------------------------------------ */
 
 function buildSubProcess(node, ctx, process, opts) {
@@ -389,16 +390,15 @@ function buildSubProcess(node, ctx, process, opts) {
   self.loopCharacteristics = readLoopCharacteristics(node);
   registerNode(self, name, ctx, process, opts);
 
-  // дети подпроцесса — его внутренний поток
   const children = (node.children || []).filter(isFlowNode);
   if (!children.length) {
     return { head: self, tail: self, branches: [] };
   }
 
-  const inner = buildChainOfNodes(children, ctx, process, {
-    isFirst: true,               // внутри подпроцесса первый узел — start
+  buildChainOfNodes(children, ctx, process, {
+    isFirst: true,
     laneState: opts.laneState,
-    container: self,             // ← узлы и потоки кладутся в self
+    container: self,
   });
 
   return {
@@ -444,7 +444,7 @@ function addSequenceFlow(source, target, ctx, container) {
   });
   flow.waypoints = readWaypoints(target);
 
-  if (container && container !== undefined && container.sequenceFlows) {
+  if (container && container.sequenceFlows) {
     container.sequenceFlows.push(flow);
   }
 
