@@ -2,7 +2,6 @@
 import { YarbpJSONConverter } from './ast-converters/JSONConvertor.js'
 import { YarbpXMLConverter } from './ast-converters/XMLConvertor.js'
 import { YarbpProtoConverter } from './ast-converters/ProtobufConvertor.js'
-import { YarbpXPMConverter } from './ast-converters/XPMConverter.js'
 
 /* renderers */
 import { YarbpBasicRenderer } from './YarbpBasicRenderer.js'
@@ -12,16 +11,6 @@ import { XPMRenderer } from './renderers/XPMRenderer.js'
 /* highlighters */
 import { XMLHighlighter } from './highlighters/XMLHighlighter.js'
 
-import { escapeHtml } from '../utils.js'
-
-const YarbpTextExamples = Object.freeze({
-  COMPLICATED: ``,
-  SIMPLE: ``,
-  SHOP_ORDER: ``,
-  FLEX_FORMS: ``,
-  PROTO: ``,
-  XPM: ``
-});
 
 class YarbpLexerRenderer extends YarbpBasicRenderer {
   render() {
@@ -89,37 +78,37 @@ class ProtobufRenderer extends YarbpBasicRenderer {
 const KnownFlavors = Object.freeze({
   LEXER_DEBUG: {
     names: ['lexer', 'лексер'],
-    textExample: [YarbpTextExamples.SIMPLE],
+    textExample: [],
     renderer: YarbpLexerRenderer
   },
   AST: {
     names: ['ast', 'аст'],
-    textExample: [YarbpTextExamples.SIMPLE],
+    textExample: [],
     renderer: ASTRenderer
   },
   JSON: {
     names: ['json', 'джейсон'],
-    textExample: [YarbpTextExamples.SHOP_ORDER],
+    textExample: [],
     renderer: JSONRenderer
   },
   XML: {
     names: ['xml', 'хмл'],
-    textExample: [YarbpTextExamples.SIMPLE],
+    textExample: [],
     renderer: XMLRenderer
   },
   PROTOBUF: {
     names: ['proto', 'protobuf'],
-    textExample: [YarbpTextExamples.PROTO],
+    textExample: [],
     renderer: ProtobufRenderer
   },
   UI_MOCKUP: {
     names: ['ui', 'форма'],
-    textExample: [YarbpTextExamples.UI],
+    textExample: [],
     renderer: HTMLUIRenderer
   },
   XPM: {
     names: ['кпо', 'xpm'],
-    textExample: [YarbpTextExamples.XPM],
+    textExample: [],
     renderer: XPMRenderer
   }
 });
