@@ -11,9 +11,13 @@ export class YarbpBPMNConverter {
     this.ast = ast;
   }
 
-  convert() {
-    const model = buildModel(this.ast);
-    recalculateDi(model);
-    return serializeBpmn(model);
-  }
+convert() {
+  const model = buildModel(this.ast);
+  recalculateDi(model);
+  console.log('[convert] flows:', model.processes[0].sequenceFlows.map(f => ({
+    id: f.id,
+    wps: f.waypoints,
+  })));
+  return serializeBpmn(model);
+}
 }

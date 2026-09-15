@@ -94,13 +94,18 @@ function serializeFlowNode(node, lines, depth) {
   const attrs = [`id="${escapeHtml(node.id)}"`];
   if (node.name) attrs.push(`name="${escapeHtml(node.name)}"`);
   if (node.tag === 'subProcess') attrs.push(`isExpanded="${node.isExpanded !== false}"`);
+  if (node.tag === 'boundaryEvent' && node.attachedToRef) {
+    attrs.push(`attachedToRef="${escapeHtml(node.attachedToRef)}"`);
+  }
+
+  const loopXml = loopCharacteristicsXml(node.loopCharacteristics);
+  const hasInner = node.children && node.children.length;
 
   const hasBody =
     node.incoming.length ||
     node.outgoing.length ||
-    node.loopCharacteristics ||
-    node.dataOutputAssocs.length ||
-    node.children.length;
+    loopXml ||
+    hasInner;
 
   if (!hasBody) {
     lines.push(`${ind}<${tag} ${attrs.join(' ')} />`);
@@ -112,7 +117,27 @@ function serializeFlowNode(node, lines, depth) {
   for (const id of node.incoming) lines.push(`${ind}${INDENT}<bpmn:incoming>${escapeHtml(id)}</bpmn:incoming>`);
   for (const id of node.outgoing) lines.push(`${ind}${INDENT}<bpmn:outgoing>${escapeHtml(id)}</bpmn:outgoing>`);
 
+  if (loopXml) {
+    lines.push(`${ind}${INDENT}${loopXml}`);
+  }
+
+  if (hasInner) {
+    for (const child of node.children) {
+      serializeFlowNode(child, lines, depth + 1);
+    }
+    for (const flow of node.sequenceFlows || []) {
+      serializeSequenceFlow(flow, lines, depth + 1);
+    }
+  }
+
   lines.push(`${ind}</${tag}>`);
+}
+
+function loopCharacteristicsXml(kind) {
+  if (kind === 'multiInstanceParallel')     return '<bpmn:multiInstanceLoopCharacteristics />';
+  if (kind === 'multiInstanceSequential')   return '<bpmn:multiInstanceLoopCharacteristics isSequential="true" />';
+  if (kind === 'standardLoop')              return '<bpmn:standardLoopCharacteristics />';
+  return null;
 }
 
 function serializeSequenceFlow(flow, lines, depth) {
@@ -144,23 +169,58 @@ function serializeDiagram(definitions, lines, depth) {
   }
 
   for (const process of definitions.processes) {
-    for (const node of process.flowNodes) {
-      serializeNodeShape(node, lines, depth + 2);
+    for (const lane of process.lanes) {
+      serializeLaneShape(lane, lines, depth + 2);
     }
-    for (const flow of process.sequenceFlows) {
-      serializeFlowEdge(flow, lines, depth + 2);
-    }
+    serializeFlowNodesShapes(process.flowNodes, lines, depth + 2);
+    serializeFlowsEdges(process.flowNodes, process.sequenceFlows, lines, depth + 2);
   }
 
   lines.push(`${ind}${INDENT}</bpmndi:BPMNPlane>`);
   lines.push(`${ind}</bpmndi:BPMNDiagram>`);
 }
 
+function serializeFlowNodesShapes(nodes, lines, depth) {
+  for (const node of nodes) {
+    serializeNodeShape(node, lines, depth);
+    if (node.children && node.children.length) {
+      serializeFlowNodesShapes(node.children, lines, depth);
+    }
+  }
+}
+
+function serializeFlowsEdges(nodes, topFlows, lines, depth) {
+  for (const flow of topFlows) {
+    serializeFlowEdge(flow, lines, depth);
+  }
+  for (const node of nodes) {
+    if (node.children && node.children.length) {
+      serializeFlowsEdges(node.children, node.sequenceFlows || [], lines, depth);
+    }
+  }
+}
+
 function serializeParticipantShape(p, lines, depth) {
   const ind = INDENT.repeat(depth);
   const b = p.bounds || { x: 0, y: 0, width: 600, height: 250 };
+  const width  = b.width  !== undefined ? b.width  : 600;
+  const height = b.height !== undefined ? b.height : 250;
+
   lines.push(`${ind}<bpmndi:BPMNShape id="${escapeHtml(p.id)}_di" bpmnElement="${escapeHtml(p.id)}" isHorizontal="true">`);
-  lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" />`);
+  lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${width}" height="${height}" />`);
+  lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
+  lines.push(`${ind}</bpmndi:BPMNShape>`);
+}
+
+function serializeLaneShape(lane, lines, depth) {
+  if (!lane.bounds) return;
+  const ind = INDENT.repeat(depth);
+  const b = lane.bounds;
+  const width  = b.width  !== undefined ? b.width  : 600;
+  const height = b.height !== undefined ? b.height : 250;
+
+  lines.push(`${ind}<bpmndi:BPMNShape id="${escapeHtml(lane.id)}_di" bpmnElement="${escapeHtml(lane.id)}" isHorizontal="true">`);
+  lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${width}" height="${height}" />`);
   lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
   lines.push(`${ind}</bpmndi:BPMNShape>`);
 }
@@ -168,8 +228,9 @@ function serializeParticipantShape(p, lines, depth) {
 function serializeNodeShape(node, lines, depth) {
   const ind = INDENT.repeat(depth);
   const size = sizeFor(node.tag);
-  const x = node.bounds ? node.bounds.x : 0;
-  const y = node.bounds ? node.bounds.y : 0;
+  const b = node.bounds || { x: 0, y: 0 };
+  const width  = b.width  !== undefined ? b.width  : size.width;
+  const height = b.height !== undefined ? b.height : size.height;
   const isMarkerVisible = node.tag === 'exclusiveGateway';
 
   const attrs = [
@@ -180,7 +241,7 @@ function serializeNodeShape(node, lines, depth) {
   if (node.tag === 'subProcess') attrs.push(`isExpanded="${node.isExpanded !== false}"`);
 
   lines.push(`${ind}<bpmndi:BPMNShape ${attrs.join(' ')}>`);
-  lines.push(`${ind}${INDENT}<dc:Bounds x="${x}" y="${y}" width="${size.width}" height="${size.height}" />`);
+  lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${width}" height="${height}" />`);
   lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
   lines.push(`${ind}</bpmndi:BPMNShape>`);
 }

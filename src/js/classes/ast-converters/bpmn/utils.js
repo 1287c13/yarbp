@@ -2,6 +2,7 @@ import { nodeTypes } from '../../YarbpParser.js';
 import { escapeHtml, findChildrenByKeyValue, IdGenerator } from '../../../utils.js';
 
 /* ---------------- XML ---------------- */
+
 export { escapeHtml };
 
 /* ---------------- AST ---------------- */
@@ -24,16 +25,19 @@ export function extractExplicitId(node) {
 export function readBounds(node) {
   const x = childValue(node, 'х');
   const y = childValue(node, 'у');
-  if (x === null && y === null) return null;
+  const w = childValue(node, 'ш');
+  const h = childValue(node, 'в');
+  if (x === null && y === null && w === null && h === null) return null;
   return {
     x: x === null ? 0 : Number(x),
     y: y === null ? 0 : Number(y),
+    width:  w === null ? undefined : Number(w),
+    height: h === null ? undefined : Number(h),
   };
 }
 
 /**
  * Читает .х-закр / .у-закр.
- * null, если оба отсутствуют; иначе недостающее = 0.
  */
 export function readJoinBounds(node) {
   const x = childValue(node, 'х-закр');
@@ -43,6 +47,28 @@ export function readJoinBounds(node) {
     x: x === null ? 0 : Number(x),
     y: y === null ? 0 : Number(y),
   };
+}
+
+/**
+ * Читает .вход → [[x, y], [x, y], ...].
+ * null, если не задан.
+ */
+export function readWaypoints(node) {
+  const value = childValue(node, 'вход');
+  if (value === null || value === undefined) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  const parts = str.split(/\s+/);
+  const points = [];
+  for (const part of parts) {
+    const [xs, ys] = part.split(',');
+    const x = Number(xs);
+    const y = Number(ys);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      points.push([x, y]);
+    }
+  }
+  return points.length ? points : null;
 }
 
 /* ---------------- ID ---------------- */

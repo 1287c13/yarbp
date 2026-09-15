@@ -21,7 +21,7 @@ export class BpmnParticipant {
     this.id         = id;
     this.name       = name || null;
     this.processRef = processRef;
-    this.bounds     = null;
+    this.bounds     = null; // { x, y, width, height } | null
   }
 }
 
@@ -46,7 +46,7 @@ export class BpmnLane {
     this.id           = id;
     this.name         = name || null;
     this.flowNodeRefs = [];
-    this.bounds       = null;
+    this.bounds       = null; // { x, y, width, height } | null
   }
 }
 
@@ -67,8 +67,8 @@ export class BpmnFlowNode {
     this.isExpanded          = null;
     this.laneId              = null;
 
-    this.bounds              = null;
-    this.joinBounds          = null;
+    this.bounds              = null; // { x, y, width?, height? } | null
+    this.joinBounds          = null; // { x, y } | null — только у fork-шлюзов
   }
 }
 
@@ -78,7 +78,7 @@ export class BpmnSequenceFlow {
     this.sourceRef = sourceRef;
     this.targetRef = targetRef;
     this.name      = name || null;
-    this.waypoints = null;
+    this.waypoints = null; // [[x, y], [x, y], ...] | null
     this.labelPos  = null;
   }
 }

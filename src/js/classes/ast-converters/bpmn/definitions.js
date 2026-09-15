@@ -20,6 +20,8 @@ export const SIZES = Object.freeze({
   dataStoreRef:   { width: 50,  height: 50  },
   textAnnotation: { width: 100, height: 30  },
   subProcess:     { width: 350, height: 200 },
+  participant:    { width: 600, height: 250 },
+  lane:           { width: 600, height: 250 },
 });
 
 export function sizeFor(tag) {
@@ -29,6 +31,9 @@ export function sizeFor(tag) {
   if (tag === 'exclusiveGateway' || tag === 'parallelGateway' ||
       tag === 'inclusiveGateway' || tag === 'eventBasedGateway') return SIZES.gateway;
   if (tag === 'subProcess') return SIZES.subProcess;
+  if (tag === 'dataObjectReference') return SIZES.dataObjectRef;
+  if (tag === 'dataStoreReference') return SIZES.dataStoreRef;
+  if (tag === 'textAnnotation') return SIZES.textAnnotation;
   return SIZES.task;
 }
 
@@ -58,3 +63,38 @@ export const LOOP = Object.freeze({
   SEQUENTIAL: 'последовательно',
   STANDARD:   'цикл',
 });
+
+/** Ключи, которые являются атрибутами узла, а не потоковыми детьми. */
+export const ATTRIBUTE_KEYS = Object.freeze(new Set([
+  'ид',
+  'тип',
+  'роль',
+  'х',
+  'у',
+  'ш',
+  'в',
+  'х-закр',
+  'у-закр',
+  'ш-закр',
+  'в-закр',
+  'вход',
+  'расположение',
+  'повторение',
+]));
+
+/** Ключи — дочерние сущности (пока не реализованы; тоже не поток). */
+export const ENTITY_KEYS = Object.freeze(new Set([
+  'комментарий',
+  'данные',
+  'база-данных',
+  'связь',
+]));
+
+/** Является ли узел потоковым ребёнком (порождает цепочку). */
+export function isFlowNode(node) {
+  if (!node || node.nodeType !== 'MEANING') return false;
+  if (!node.key) return false;
+  if (ATTRIBUTE_KEYS.has(node.key)) return false;
+  if (ENTITY_KEYS.has(node.key)) return false;
+  return true;
+}
