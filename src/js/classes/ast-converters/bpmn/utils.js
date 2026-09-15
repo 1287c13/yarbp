@@ -1,30 +1,15 @@
 import { nodeTypes } from '../../YarbpParser.js';
+import { escapeHtml, findChildrenByKeyValue, IdGenerator } from '../../../utils.js';
 
 /* ---------------- XML ---------------- */
-
-export function escapeXml(str) {
-  if (str === undefined || str === null) return '';
-  return String(str).replace(/[<>&"']/g, (m) => {
-    switch (m) {
-      case '<': return '&lt;';
-      case '>': return '&gt;';
-      case '&': return '&amp;';
-      case '"': return '&quot;';
-      case "'": return '&apos;';
-      default: return m;
-    }
-  });
-}
+export { escapeHtml };
 
 /* ---------------- AST ---------------- */
 
 export function childValue(node, key) {
-  for (const child of node.children || []) {
-    if (child.nodeType === nodeTypes.MEANING && child.key === key) {
-      return child.value;
-    }
-  }
-  return null;
+  const found = findChildrenByKeyValue(node, 'key', key)
+    .filter(c => c.nodeType === nodeTypes.MEANING);
+  return found.length ? found[0].value : null;
 }
 
 export function extractExplicitId(node) {
@@ -32,6 +17,10 @@ export function extractExplicitId(node) {
   return value === null ? null : String(value);
 }
 
+/**
+ * Читает .х / .у.
+ * null, если оба отсутствуют; иначе недостающее = 0.
+ */
 export function readBounds(node) {
   const x = childValue(node, 'х');
   const y = childValue(node, 'у');
@@ -42,6 +31,10 @@ export function readBounds(node) {
   };
 }
 
+/**
+ * Читает .х-закр / .у-закр.
+ * null, если оба отсутствуют; иначе недостающее = 0.
+ */
 export function readJoinBounds(node) {
   const x = childValue(node, 'х-закр');
   const y = childValue(node, 'у-закр');
@@ -54,12 +47,4 @@ export function readJoinBounds(node) {
 
 /* ---------------- ID ---------------- */
 
-export class IdGenerator {
-  constructor() {
-    this.counters = Object.create(null);
-  }
-  next(prefix) {
-    this.counters[prefix] = (this.counters[prefix] || 0) + 1;
-    return `${prefix}_${this.counters[prefix]}`;
-  }
-}
+export { IdGenerator };

@@ -2,7 +2,7 @@ import {
   NAMESPACES, TARGET_NAMESPACE, EXPORTER, EXPORTER_VERSION,
   INDENT, sizeFor,
 } from './definitions.js';
-import { escapeXml } from './utils.js';
+import { escapeHtml } from './utils.js';
 
 export function serializeBpmn(definitions) {
   const lines = [];
@@ -19,7 +19,7 @@ export function serializeBpmn(definitions) {
 
   lines.push(
     `<bpmn:definitions ${nsAttrs} ` +
-    `id="${escapeXml(definitions.id)}" ` +
+    `id="${escapeHtml(definitions.id)}" ` +
     `targetNamespace="${TARGET_NAMESPACE}" ` +
     `exporter="${EXPORTER}" exporterVersion="${EXPORTER_VERSION}">`
   );
@@ -42,11 +42,11 @@ export function serializeBpmn(definitions) {
 
 function serializeCollaboration(collab, lines, depth) {
   const ind = INDENT.repeat(depth);
-  lines.push(`${ind}<bpmn:collaboration id="${escapeXml(collab.id)}">`);
+  lines.push(`${ind}<bpmn:collaboration id="${escapeHtml(collab.id)}">`);
   for (const p of collab.participants) {
     lines.push(
-      `${ind}${INDENT}<bpmn:participant id="${escapeXml(p.id)}" ` +
-      `name="${escapeXml(p.name || '')}" processRef="${escapeXml(p.processRef)}" />`
+      `${ind}${INDENT}<bpmn:participant id="${escapeHtml(p.id)}" ` +
+      `name="${escapeHtml(p.name || '')}" processRef="${escapeHtml(p.processRef)}" />`
     );
   }
   lines.push(`${ind}</bpmn:collaboration>`);
@@ -55,7 +55,7 @@ function serializeCollaboration(collab, lines, depth) {
 function serializeProcess(process, lines, depth) {
   const ind = INDENT.repeat(depth);
   lines.push(
-    `${ind}<bpmn:process id="${escapeXml(process.id)}" ` +
+    `${ind}<bpmn:process id="${escapeHtml(process.id)}" ` +
     `isExecutable="${process.isExecutable}">`
   );
 
@@ -76,11 +76,11 @@ function serializeProcess(process, lines, depth) {
 
 function serializeLaneSet(process, lines, depth) {
   const ind = INDENT.repeat(depth);
-  lines.push(`${ind}<bpmn:laneSet id="${escapeXml(process.laneSetId)}">`);
+  lines.push(`${ind}<bpmn:laneSet id="${escapeHtml(process.laneSetId)}">`);
   for (const lane of process.lanes) {
-    lines.push(`${ind}${INDENT}<bpmn:lane id="${escapeXml(lane.id)}" name="${escapeXml(lane.name || '')}">`);
+    lines.push(`${ind}${INDENT}<bpmn:lane id="${escapeHtml(lane.id)}" name="${escapeHtml(lane.name || '')}">`);
     for (const ref of lane.flowNodeRefs) {
-      lines.push(`${ind}${INDENT}${INDENT}<bpmn:flowNodeRef>${escapeXml(ref)}</bpmn:flowNodeRef>`);
+      lines.push(`${ind}${INDENT}${INDENT}<bpmn:flowNodeRef>${escapeHtml(ref)}</bpmn:flowNodeRef>`);
     }
     lines.push(`${ind}${INDENT}</bpmn:lane>`);
   }
@@ -91,8 +91,8 @@ function serializeFlowNode(node, lines, depth) {
   const ind = INDENT.repeat(depth);
   const tag = `bpmn:${node.tag}`;
 
-  const attrs = [`id="${escapeXml(node.id)}"`];
-  if (node.name) attrs.push(`name="${escapeXml(node.name)}"`);
+  const attrs = [`id="${escapeHtml(node.id)}"`];
+  if (node.name) attrs.push(`name="${escapeHtml(node.name)}"`);
   if (node.tag === 'subProcess') attrs.push(`isExpanded="${node.isExpanded !== false}"`);
 
   const hasBody =
@@ -109,8 +109,8 @@ function serializeFlowNode(node, lines, depth) {
 
   lines.push(`${ind}<${tag} ${attrs.join(' ')}>`);
 
-  for (const id of node.incoming) lines.push(`${ind}${INDENT}<bpmn:incoming>${escapeXml(id)}</bpmn:incoming>`);
-  for (const id of node.outgoing) lines.push(`${ind}${INDENT}<bpmn:outgoing>${escapeXml(id)}</bpmn:outgoing>`);
+  for (const id of node.incoming) lines.push(`${ind}${INDENT}<bpmn:incoming>${escapeHtml(id)}</bpmn:incoming>`);
+  for (const id of node.outgoing) lines.push(`${ind}${INDENT}<bpmn:outgoing>${escapeHtml(id)}</bpmn:outgoing>`);
 
   lines.push(`${ind}</${tag}>`);
 }
@@ -118,11 +118,11 @@ function serializeFlowNode(node, lines, depth) {
 function serializeSequenceFlow(flow, lines, depth) {
   const ind = INDENT.repeat(depth);
   const attrs = [
-    `id="${escapeXml(flow.id)}"`,
-    `sourceRef="${escapeXml(flow.sourceRef)}"`,
-    `targetRef="${escapeXml(flow.targetRef)}"`,
+    `id="${escapeHtml(flow.id)}"`,
+    `sourceRef="${escapeHtml(flow.sourceRef)}"`,
+    `targetRef="${escapeHtml(flow.targetRef)}"`,
   ];
-  if (flow.name) attrs.splice(1, 0, `name="${escapeXml(flow.name)}"`);
+  if (flow.name) attrs.splice(1, 0, `name="${escapeHtml(flow.name)}"`);
   lines.push(`${ind}<bpmn:sequenceFlow ${attrs.join(' ')} />`);
 }
 
@@ -135,7 +135,7 @@ function serializeDiagram(definitions, lines, depth) {
     : (definitions.processes[0] ? definitions.processes[0].id : '');
 
   lines.push(`${ind}<bpmndi:BPMNDiagram id="BPMNDiagram_1">`);
-  lines.push(`${ind}${INDENT}<bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="${escapeXml(planeRef)}">`);
+  lines.push(`${ind}${INDENT}<bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="${escapeHtml(planeRef)}">`);
 
   if (definitions.collaboration) {
     for (const p of definitions.collaboration.participants) {
@@ -159,7 +159,7 @@ function serializeDiagram(definitions, lines, depth) {
 function serializeParticipantShape(p, lines, depth) {
   const ind = INDENT.repeat(depth);
   const b = p.bounds || { x: 0, y: 0, width: 600, height: 250 };
-  lines.push(`${ind}<bpmndi:BPMNShape id="${escapeXml(p.id)}_di" bpmnElement="${escapeXml(p.id)}" isHorizontal="true">`);
+  lines.push(`${ind}<bpmndi:BPMNShape id="${escapeHtml(p.id)}_di" bpmnElement="${escapeHtml(p.id)}" isHorizontal="true">`);
   lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" />`);
   lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
   lines.push(`${ind}</bpmndi:BPMNShape>`);
@@ -173,8 +173,8 @@ function serializeNodeShape(node, lines, depth) {
   const isMarkerVisible = node.tag === 'exclusiveGateway';
 
   const attrs = [
-    `id="${escapeXml(node.id)}_di"`,
-    `bpmnElement="${escapeXml(node.id)}"`,
+    `id="${escapeHtml(node.id)}_di"`,
+    `bpmnElement="${escapeHtml(node.id)}"`,
   ];
   if (isMarkerVisible) attrs.push(`isMarkerVisible="true"`);
   if (node.tag === 'subProcess') attrs.push(`isExpanded="${node.isExpanded !== false}"`);
@@ -189,7 +189,7 @@ function serializeFlowEdge(flow, lines, depth) {
   const ind = INDENT.repeat(depth);
   const wps = flow.waypoints || [[0, 0], [0, 0]];
 
-  lines.push(`${ind}<bpmndi:BPMNEdge id="${escapeXml(flow.id)}_di" bpmnElement="${escapeXml(flow.id)}">`);
+  lines.push(`${ind}<bpmndi:BPMNEdge id="${escapeHtml(flow.id)}_di" bpmnElement="${escapeHtml(flow.id)}">`);
   for (const [x, y] of wps) {
     lines.push(`${ind}${INDENT}<di:waypoint x="${x}" y="${y}" />`);
   }

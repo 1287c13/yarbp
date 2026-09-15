@@ -83,10 +83,20 @@ export function dedentMultilineString(str) {
 }
 
 export function escapeHtml(str) {
-  return str
+  return String(str ?? '')
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+export class IdGenerator {
+  constructor() {
+    this.counters = Object.create(null);
+  }
+  next(prefix) {
+    this.counters[prefix] = (this.counters[prefix] || 0) + 1;
+    return `${prefix}_${this.counters[prefix]}`;
+  }
 }

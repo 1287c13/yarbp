@@ -154,3 +154,24 @@ body.dark .file-folder { border-top-color: #444; }
 .folder-content .file-item.active { background: #d1dfe7; color: black; }
 body.dark .folder-content .file-item.active { color: #e3e3e3; }
 body.dark .folder-content .file-item.active { background: #1e5a7a; }
+.bpmn-download-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: #ffffff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: #111111;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.bpmn-download-btn:hover { background: #e0e0e0; }
+body.dark .bpmn-download-btn {
+  background: #3d3d3d;
+  color: #e0e0e0;
+  border-color: #555;
+}
+body.dark .bpmn-download-btn:hover { background: #555; }
