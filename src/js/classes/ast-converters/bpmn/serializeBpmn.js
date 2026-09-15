@@ -25,11 +25,11 @@ export function serializeBpmn(definitions) {
   );
 
   if (definitions.collaboration) {
-    serializeCollaboration(definitions.collaboration, lines, 1);
+    serializeCollaboration(definitions.collaboration, definitions, lines, 1);
   }
 
   for (const process of definitions.processes) {
-    serializeProcess(process, lines, 1);
+    serializeProcess(process, definitions, lines, 1);
   }
 
   serializeDiagram(definitions, lines, 1);
@@ -40,7 +40,7 @@ export function serializeBpmn(definitions) {
 
 /* ------------------------------------------------------------------ */
 
-function serializeCollaboration(collab, lines, depth) {
+function serializeCollaboration(collab, definitions, lines, depth) {
   const ind = INDENT.repeat(depth);
   lines.push(`${ind}<bpmn:collaboration id="${escapeHtml(collab.id)}">`);
   for (const p of collab.participants) {
@@ -49,10 +49,28 @@ function serializeCollaboration(collab, lines, depth) {
       `name="${escapeHtml(p.name || '')}" processRef="${escapeHtml(p.processRef)}" />`
     );
   }
+  for (const ta of collab.textAnnotations) {
+    lines.push(`${ind}${INDENT}<bpmn:textAnnotation id="${escapeHtml(ta.id)}">`);
+    lines.push(`${ind}${INDENT}${INDENT}<bpmn:text>${escapeHtml(ta.text)}</bpmn:text>`);
+    lines.push(`${ind}${INDENT}</bpmn:textAnnotation>`);
+  }
+  for (const a of collab.associations) {
+    lines.push(
+      `${ind}${INDENT}<bpmn:association id="${escapeHtml(a.id)}" ` +
+      `associationDirection="None" ` +
+      `sourceRef="${escapeHtml(a.sourceRef)}" targetRef="${escapeHtml(a.targetRef)}" />`
+    );
+  }
+  for (const mf of collab.messageFlows) {
+    lines.push(
+      `${ind}${INDENT}<bpmn:messageFlow id="${escapeHtml(mf.id)}" ` +
+      `sourceRef="${escapeHtml(mf.sourceRef)}" targetRef="${escapeHtml(mf.targetRef)}" />`
+    );
+  }
   lines.push(`${ind}</bpmn:collaboration>`);
 }
 
-function serializeProcess(process, lines, depth) {
+function serializeProcess(process, definitions, lines, depth) {
   const ind = INDENT.repeat(depth);
   lines.push(
     `${ind}<bpmn:process id="${escapeHtml(process.id)}" ` +
@@ -65,6 +83,22 @@ function serializeProcess(process, lines, depth) {
 
   for (const node of process.flowNodes) {
     serializeFlowNode(node, lines, depth + 1);
+  }
+
+  for (const ref of process.dataObjectRefs) {
+    lines.push(
+      `${ind}${INDENT}<bpmn:dataObjectReference id="${escapeHtml(ref.id)}" ` +
+      `name="${escapeHtml(ref.name || '')}" dataObjectRef="${escapeHtml(ref.dataObjectRef)}" />`
+    );
+  }
+  for (const obj of process.dataObjects) {
+    lines.push(`${ind}${INDENT}<bpmn:dataObject id="${escapeHtml(obj.id)}" />`);
+  }
+  for (const ref of process.dataStores) {
+    lines.push(
+      `${ind}${INDENT}<bpmn:dataStoreReference id="${escapeHtml(ref.id)}" ` +
+      `name="${escapeHtml(ref.name || '')}" />`
+    );
   }
 
   for (const flow of process.sequenceFlows) {
@@ -100,12 +134,14 @@ function serializeFlowNode(node, lines, depth) {
 
   const loopXml = loopCharacteristicsXml(node.loopCharacteristics);
   const hasInner = node.children && node.children.length;
+  const hasAssocs = node.dataOutputAssocs && node.dataOutputAssocs.length;
 
   const hasBody =
     node.incoming.length ||
     node.outgoing.length ||
     loopXml ||
-    hasInner;
+    hasInner ||
+    hasAssocs;
 
   if (!hasBody) {
     lines.push(`${ind}<${tag} ${attrs.join(' ')} />`);
@@ -119,6 +155,14 @@ function serializeFlowNode(node, lines, depth) {
 
   if (loopXml) {
     lines.push(`${ind}${INDENT}${loopXml}`);
+  }
+
+  if (hasAssocs) {
+    for (const a of node.dataOutputAssocs) {
+      lines.push(`${ind}${INDENT}<bpmn:dataOutputAssociation id="${escapeHtml(a.id)}">`);
+      lines.push(`${ind}${INDENT}${INDENT}<bpmn:targetRef>${escapeHtml(a.targetRef)}</bpmn:targetRef>`);
+      lines.push(`${ind}${INDENT}</bpmn:dataOutputAssociation>`);
+    }
   }
 
   if (hasInner) {
@@ -166,6 +210,15 @@ function serializeDiagram(definitions, lines, depth) {
     for (const p of definitions.collaboration.participants) {
       serializeParticipantShape(p, lines, depth + 2);
     }
+    for (const ta of definitions.collaboration.textAnnotations) {
+      serializeTextAnnotationShape(ta, lines, depth + 2);
+    }
+    for (const a of definitions.collaboration.associations) {
+      serializeEdge(a.id, a.waypoints, lines, depth + 2, false);
+    }
+    for (const mf of definitions.collaboration.messageFlows) {
+      serializeEdge(mf.id, mf.waypoints, lines, depth + 2, false);
+    }
   }
 
   for (const process of definitions.processes) {
@@ -173,7 +226,19 @@ function serializeDiagram(definitions, lines, depth) {
       serializeLaneShape(lane, lines, depth + 2);
     }
     serializeFlowNodesShapes(process.flowNodes, lines, depth + 2);
-    serializeFlowsEdges(process.flowNodes, process.sequenceFlows, lines, depth + 2);
+    serializeFlowNodesAssocs(process.flowNodes, lines, depth + 2);
+
+    for (const ref of process.dataObjectRefs) {
+      serializeArtifactShape(ref, lines, depth + 2);
+    }
+    for (const ref of process.dataStores) {
+      serializeArtifactShape(ref, lines, depth + 2);
+    }
+
+    for (const flow of process.sequenceFlows) {
+      serializeEdge(flow.id, flow.waypoints, lines, depth + 2, !!flow.name);
+    }
+    serializeSubProcessEdges(process.flowNodes, lines, depth + 2);
   }
 
   lines.push(`${ind}${INDENT}</bpmndi:BPMNPlane>`);
@@ -189,13 +254,24 @@ function serializeFlowNodesShapes(nodes, lines, depth) {
   }
 }
 
-function serializeFlowsEdges(nodes, topFlows, lines, depth) {
-  for (const flow of topFlows) {
-    serializeFlowEdge(flow, lines, depth);
+function serializeFlowNodesAssocs(nodes, lines, depth) {
+  for (const node of nodes) {
+    for (const a of node.dataOutputAssocs || []) {
+      serializeEdge(a.id, a.waypoints, lines, depth, false);
+    }
+    if (node.children && node.children.length) {
+      serializeFlowNodesAssocs(node.children, lines, depth);
+    }
   }
+}
+
+function serializeSubProcessEdges(nodes, lines, depth) {
   for (const node of nodes) {
     if (node.children && node.children.length) {
-      serializeFlowsEdges(node.children, node.sequenceFlows || [], lines, depth);
+      for (const flow of node.sequenceFlows || []) {
+        serializeEdge(flow.id, flow.waypoints, lines, depth, !!flow.name);
+      }
+      serializeSubProcessEdges(node.children, lines, depth);
     }
   }
 }
@@ -246,15 +322,43 @@ function serializeNodeShape(node, lines, depth) {
   lines.push(`${ind}</bpmndi:BPMNShape>`);
 }
 
-function serializeFlowEdge(flow, lines, depth) {
+function serializeTextAnnotationShape(ta, lines, depth) {
+  if (!ta.bounds) return;
   const ind = INDENT.repeat(depth);
-  const wps = flow.waypoints || [[0, 0], [0, 0]];
+  const b = ta.bounds;
+  const width  = b.width  !== undefined ? b.width  : 100;
+  const height = b.height !== undefined ? b.height : 30;
 
-  lines.push(`${ind}<bpmndi:BPMNEdge id="${escapeHtml(flow.id)}_di" bpmnElement="${escapeHtml(flow.id)}">`);
+  lines.push(`${ind}<bpmndi:BPMNShape id="${escapeHtml(ta.id)}_di" bpmnElement="${escapeHtml(ta.id)}">`);
+  lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${width}" height="${height}" />`);
+  lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
+  lines.push(`${ind}</bpmndi:BPMNShape>`);
+}
+
+function serializeArtifactShape(ref, lines, depth) {
+  if (!ref.bounds) return;
+  const ind = INDENT.repeat(depth);
+  const b = ref.bounds;
+  const size = sizeFor(
+    ref.dataObjectRef ? 'dataObjectReference' : 'dataStoreReference');
+  const width  = b.width  !== undefined ? b.width  : size.width;
+  const height = b.height !== undefined ? b.height : size.height;
+
+  lines.push(`${ind}<bpmndi:BPMNShape id="${escapeHtml(ref.id)}_di" bpmnElement="${escapeHtml(ref.id)}">`);
+  lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${width}" height="${height}" />`);
+  lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
+  lines.push(`${ind}</bpmndi:BPMNShape>`);
+}
+
+function serializeEdge(id, waypoints, lines, depth, withLabel) {
+  const ind = INDENT.repeat(depth);
+  const wps = waypoints || [[0, 0], [0, 0]];
+
+  lines.push(`${ind}<bpmndi:BPMNEdge id="${escapeHtml(id)}_di" bpmnElement="${escapeHtml(id)}">`);
   for (const [x, y] of wps) {
     lines.push(`${ind}${INDENT}<di:waypoint x="${x}" y="${y}" />`);
   }
-  if (flow.name) {
+  if (withLabel) {
     lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel>`);
     lines.push(`${ind}${INDENT}${INDENT}<dc:Bounds x="0" y="0" width="0" height="0" />`);
     lines.push(`${ind}${INDENT}</bpmndi:BPMNLabel>`);

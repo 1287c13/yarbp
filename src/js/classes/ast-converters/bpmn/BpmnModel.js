@@ -16,12 +16,39 @@ export class BpmnCollaboration {
   }
 }
 
+export class BpmnMessageFlow {
+  constructor({ id, sourceRef, targetRef, name }) {
+    this.id        = id;
+    this.sourceRef = sourceRef;
+    this.targetRef = targetRef;
+    this.name      = name || null;
+    this.waypoints = null;
+  }
+}
+
+export class BpmnTextAnnotation {
+  constructor({ id, text }) {
+    this.id     = id;
+    this.text   = text || null;
+    this.bounds = null;
+  }
+}
+
+export class BpmnAssociation {
+  constructor({ id, sourceRef, targetRef }) {
+    this.id         = id;
+    this.sourceRef  = sourceRef;
+    this.targetRef  = targetRef;
+    this.waypoints  = null;
+  }
+}
+
 export class BpmnParticipant {
   constructor(id, name, processRef) {
     this.id         = id;
     this.name       = name || null;
     this.processRef = processRef;
-    this.bounds     = null; // { x, y, width, height } | null
+    this.bounds     = null;
   }
 }
 
@@ -46,7 +73,7 @@ export class BpmnLane {
     this.id           = id;
     this.name         = name || null;
     this.flowNodeRefs = [];
-    this.bounds       = null; // { x, y, width, height } | null
+    this.bounds       = null;
   }
 }
 
@@ -67,8 +94,8 @@ export class BpmnFlowNode {
     this.isExpanded          = null;
     this.laneId              = null;
 
-    this.bounds              = null; // { x, y, width?, height? } | null
-    this.joinBounds          = null; // { x, y } | null — только у fork-шлюзов
+    this.bounds              = null;
+    this.joinBounds          = null;
   }
 }
 
@@ -78,7 +105,32 @@ export class BpmnSequenceFlow {
     this.sourceRef = sourceRef;
     this.targetRef = targetRef;
     this.name      = name || null;
-    this.waypoints = null; // [[x, y], [x, y], ...] | null
+    this.waypoints = null;
     this.labelPos  = null;
+  }
+}
+
+export class BpmnDataOutputAssociation {
+  constructor({ id, targetRef }) {
+    this.id         = id;
+    this.targetRef  = targetRef;
+    this.waypoints  = null;
+  }
+}
+
+export class BpmnDataObjectReference {
+  constructor({ id, name, dataObjectRef }) {
+    this.id            = id;
+    this.name          = name || null;
+    this.dataObjectRef = dataObjectRef;
+    this.bounds        = null;
+  }
+}
+
+export class BpmnDataStoreReference {
+  constructor({ id, name }) {
+    this.id     = id;
+    this.name   = name || null;
+    this.bounds = null;
   }
 }

@@ -2,15 +2,17 @@ import { nodeTypes } from '../../YarbpParser.js';
 import {
   BpmnDefinitions, BpmnCollaboration, BpmnParticipant,
   BpmnProcess, BpmnLane, BpmnFlowNode, BpmnSequenceFlow,
+  BpmnMessageFlow, BpmnTextAnnotation, BpmnAssociation,
+  BpmnDataOutputAssociation, BpmnDataObjectReference, BpmnDataStoreReference,
 } from './BpmnModel.js';
 import {
-  IdGenerator, extractExplicitId, childValue,
-  readBounds, readJoinBounds, readWaypoints,
+  IdGenerator, extractExplicitId, childValue, readBounds, readJoinBounds,
 } from './utils.js';
 import {
   TASK_TAG_MAP, DEFAULT_TASK_TAG,
   GATEWAY_TAG_MAP, DEFAULT_GATEWAY_TAG,
-  LOCATION, LOOP, isFlowNode,
+  LOCATION, LOOP, ARTIFACT_OFFSETS,
+  isFlowNode, isArtifact,
 } from './definitions.js';
 
 export function buildModel(ast) {
@@ -30,7 +32,27 @@ export function buildModel(ast) {
     definitions.processes.push(buildProcess(pNode, ctx));
   }
 
-  if (definitions.processes.length > 1) {
+  // собираем артефакты со всех процессов в collaboration
+  const allTextAnnotations = [];
+  const allAssociations    = [];
+  const allMessageFlows    = [];
+
+  for (const proc of definitions.processes) {
+    if (proc._pendingArtifacts) {
+      allTextAnnotations.push(...proc._pendingArtifacts.textAnnotations);
+      allAssociations.push(...proc._pendingArtifacts.associations);
+      allMessageFlows.push(...proc._pendingArtifacts.messageFlows);
+      delete proc._pendingArtifacts;
+    }
+  }
+
+  const needsCollab =
+    definitions.processes.length > 1 ||
+    allTextAnnotations.length > 0 ||
+    allAssociations.length > 0 ||
+    allMessageFlows.length > 0;
+
+  if (needsCollab) {
     const collab = new BpmnCollaboration();
     collab.id = ctx.idGen.next('Collaboration');
     for (const proc of definitions.processes) {
@@ -39,6 +61,9 @@ export function buildModel(ast) {
       participant.bounds = proc.bounds;
       collab.participants.push(participant);
     }
+    collab.textAnnotations = allTextAnnotations;
+    collab.associations    = allAssociations;
+    collab.messageFlows    = allMessageFlows;
     definitions.collaboration = collab;
   }
 
@@ -53,6 +78,11 @@ function buildProcess(node, ctx) {
   process.name = node.value;
   process.isExecutable = false;
   process.bounds = readBounds(node);
+  process._pendingArtifacts = {
+    textAnnotations: [],
+    associations:    [],
+    messageFlows:    [],
+  };
 
   const children = (node.children || []).filter(c => c.nodeType === nodeTypes.MEANING);
 
@@ -215,6 +245,8 @@ function buildTask(node, ctx, process, opts) {
   registerNode(self, name, ctx, process, opts);
 
   const branches = buildBoundaryBranches(node, self, ctx, process, opts);
+  buildArtifacts(node, self, ctx, process, opts);
+
   return { head: self, tail: self, branches };
 }
 
@@ -225,6 +257,139 @@ function readLoopCharacteristics(node) {
   if (value === LOOP.STANDARD)   return 'standardLoop';
   return null;
 }
+
+/* ------------------------------------------------------------------ *
+ *  Артефакты задачи
+ * ------------------------------------------------------------------ */
+
+function buildArtifacts(node, task, ctx, process, opts) {
+  const artifacts = (node.children || []).filter(isArtifact);
+  for (const art of artifacts) {
+    switch (art.key) {
+      case 'комментарий':  buildComment(art, task, ctx, process); break;
+      case 'данные':       buildDataObject(art, task, ctx, process); break;
+      case 'база-данных':  buildDataStore(art, task, ctx, process); break;
+      case 'связь':        buildMessageFlow(art, task, ctx, process); break;
+    }
+  }
+}
+
+function buildComment(node, task, ctx, process) {
+  const text = node.value || '';
+  const id = ctx.idGen.next('TextAnnotation');
+  const ta = new BpmnTextAnnotation({ id, text });
+
+  ta.bounds = placeAbove(task, 100, 30, ARTIFACT_OFFSETS.commentAbove);
+
+  const assocId = ctx.idGen.next('Association');
+  const assoc = new BpmnAssociation({
+    id: assocId,
+    sourceRef: task.id,
+    targetRef: id,
+  });
+
+  process._pendingArtifacts.textAnnotations.push(ta);
+  process._pendingArtifacts.associations.push(assoc);
+}
+
+function buildDataObject(node, task, ctx, process) {
+  const name = node.value || null;
+
+  const dataObjectId = ctx.idGen.next('DataObject');
+  const refId = ctx.idGen.next('DataObjectReference');
+  const ref = new BpmnDataObjectReference({
+    id: refId,
+    name,
+    dataObjectRef: dataObjectId,
+  });
+
+  ref.bounds = placeAbove(task, 36, 50, ARTIFACT_OFFSETS.dataObjectAbove);
+
+  const assocId = ctx.idGen.next('DataOutputAssociation');
+  const assoc = new BpmnDataOutputAssociation({
+    id: assocId,
+    targetRef: refId,
+  });
+
+  process.dataObjects.push({ id: dataObjectId });
+  process.dataObjectRefs.push(ref);
+  task.dataOutputAssocs.push(assoc);
+}
+
+function buildDataStore(node, task, ctx, process) {
+  const name = node.value || null;
+  const id = ctx.idGen.next('DataStoreReference');
+  const ref = new BpmnDataStoreReference({ id, name });
+
+  ref.bounds = placeBelowPool(task, process, 50, 50, ARTIFACT_OFFSETS.dataStoreBelow);
+
+  const assocId = ctx.idGen.next('DataOutputAssociation');
+  const assoc = new BpmnDataOutputAssociation({
+    id: assocId,
+    targetRef: id,
+  });
+
+  process.dataStores.push(ref);
+  task.dataOutputAssocs.push(assoc);
+}
+
+function buildMessageFlow(node, task, ctx, process) {
+  const value = String(node.value || '').trim();
+  const arrowMatch = value.match(/^(-->|<--)\s+(.+)$/);
+  if (!arrowMatch) return;
+
+  const [, arrow, refRaw] = arrowMatch;
+  const ref = refRaw.trim();
+
+  let sourceRef, targetRef;
+  if (arrow === '-->') {
+    sourceRef = task.id;
+    targetRef = ref;
+  } else {
+    sourceRef = ref;
+    targetRef = task.id;
+  }
+
+  const id = ctx.idGen.next('Flow');
+  const mf = new BpmnMessageFlow({ id, sourceRef, targetRef });
+  process._pendingArtifacts.messageFlows.push(mf);
+}
+
+function placeAbove(parent, width, height, offset) {
+  const pb = parent.bounds || { x: 0, y: 0 };
+  const pw = pb.width  !== undefined ? pb.width  : 100;
+  const px = pb.x;
+  const py = pb.y !== undefined ? pb.y : 0;
+
+  return {
+    x: px + pw / 2 - width / 2,
+    y: py - offset - height,
+    width,
+    height,
+  };
+}
+
+function placeBelowPool(parent, process, width, height, offset) {
+  const pb = parent.bounds || { x: 0, y: 0 };
+  const pw = pb.width !== undefined ? pb.width : 100;
+  const px = pb.x;
+
+  const pool = process.bounds || null;
+  const baseY = pool
+    ? (pool.y + (pool.height !== undefined ? pool.height : 250))
+    : ((pb.y !== undefined ? pb.y : 0) + (pb.height !== undefined ? pb.height : 80));
+
+  return {
+    x: px + pw / 2 - width / 2,
+    y: baseY + offset,
+    width,
+    height,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ *  Boundary
+ * ------------------------------------------------------------------ */
 
 function buildBoundaryBranches(node, parentTask, ctx, process, opts) {
   const children = (node.children || []).filter(isFlowNode);
@@ -254,10 +419,7 @@ function buildBoundaryBranches(node, parentTask, ctx, process, opts) {
     registerNode(boundary, null, ctx, process, opts);
 
     const rest = segment.slice(1);
-    if (!rest.length) {
-      // boundary без продолжения — не пушим как хвост
-      continue;
-    }
+    if (!rest.length) continue;
 
     const inner = buildChainOfNodes(rest, ctx, process, {
       isFirst: false,
@@ -269,7 +431,6 @@ function buildBoundaryBranches(node, parentTask, ctx, process, opts) {
       addSequenceFlow(boundary, inner.head, ctx, opts.container || process);
     }
 
-    // пушим только открытые хвосты; если пусто — ветка оборвалась end-event'ом
     if (inner.tails.length) {
       for (const t of inner.tails) branches.push(t);
     }
@@ -304,7 +465,6 @@ function buildGateway(node, ctx, process, opts) {
     const branchChildren = (branchNode.children || []).filter(isFlowNode);
 
     if (!branchChildren.length) {
-      // пустая ветка: fork сам становится хвостом (fork → join напрямую)
       branchTails.push({ head: fork, tail: fork, name: branchName });
       continue;
     }
@@ -330,15 +490,12 @@ function buildGateway(node, ctx, process, opts) {
     });
   }
 
-  // отбрасываем только те ветки, которые реально закрылись end-event'ом
-  // (tail === null). Пустая ветка (tail === fork) остаётся.
   const openTails = branchTails
     .map(bt => bt.tail)
     .filter(t => t && t.tag !== 'endEvent');
 
   let gatewayTail;
   if (openTails.length === 0) {
-    // все ветки закрыты end-events: join не генерим, поток от fork не продолжаем
     gatewayTail = null;
   } else if (openTails.length === 1) {
     gatewayTail = openTails[0];
@@ -424,7 +581,6 @@ function registerNode(node, name, ctx, process, opts) {
   ctx.nodesById.set(node.id, node);
   if (name) ctx.nodesByName.set(name, node);
 
-  // в lane попадают только верхнеуровневые узлы процесса
   if (container === process) {
     const laneState = opts && opts.laneState;
     if (laneState && laneState.current) {
@@ -442,7 +598,6 @@ function addSequenceFlow(source, target, ctx, container) {
     targetRef: target.id,
     name: null,
   });
-  flow.waypoints = readWaypoints(target);
 
   if (container && container.sequenceFlows) {
     container.sequenceFlows.push(flow);

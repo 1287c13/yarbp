@@ -64,6 +64,13 @@ export const LOOP = Object.freeze({
   STANDARD:   'цикл',
 });
 
+/** Оступы артефактов относительно родителя (временно, до автораскладки). */
+export const ARTIFACT_OFFSETS = Object.freeze({
+  commentAbove:    32,
+  dataObjectAbove: 30,
+  dataStoreBelow:  30, // от нижней границы пула
+});
+
 /** Ключи, которые являются атрибутами узла, а не потоковыми детьми. */
 export const ATTRIBUTE_KEYS = Object.freeze(new Set([
   'ид',
@@ -77,12 +84,11 @@ export const ATTRIBUTE_KEYS = Object.freeze(new Set([
   'у-закр',
   'ш-закр',
   'в-закр',
-  'вход',
   'расположение',
   'повторение',
 ]));
 
-/** Ключи — дочерние сущности (пока не реализованы; тоже не поток). */
+/** Ключи — дочерние сущности (артефакты и связи). */
 export const ENTITY_KEYS = Object.freeze(new Set([
   'комментарий',
   'данные',
@@ -97,4 +103,11 @@ export function isFlowNode(node) {
   if (ATTRIBUTE_KEYS.has(node.key)) return false;
   if (ENTITY_KEYS.has(node.key)) return false;
   return true;
+}
+
+/** Является ли узел артефактом (комментарий, данные, база-данных, связь). */
+export function isArtifact(node) {
+  if (!node || node.nodeType !== 'MEANING') return false;
+  if (!node.key) return false;
+  return ENTITY_KEYS.has(node.key);
 }
