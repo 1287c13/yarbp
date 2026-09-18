@@ -1,11 +1,11 @@
 /**
  * Порт BpmnLayoutGenerator с Python.
+ * Раскладка одного процесса: сетка (столбец × ветка × лейн) → координаты → waypoints.
  */
 
-const VISUAL_INDENT = 12.5;
-const POOL_ELEM_SHIFT = 30.0;
-const GATEWAY_GAP = 25.0;
-const BOUNDARY_RIGHT_SHIFT = 12.5;
+import { LAYOUT } from './layoutConfig.js';
+import { sizeFor } from './definitions.js';
+import { findAssocOwner } from './layoutUtils.js';
 
 export class BpmnLayoutGenerator {
   constructor(model) {
@@ -13,15 +13,8 @@ export class BpmnLayoutGenerator {
 
     this.branchCounter = 1;
     this.numOfBrunches = 0;
-    this.visualIndent = VISUAL_INDENT;
-    this.poolElemShift = POOL_ELEM_SHIFT;
-    this.gatewayGap = GATEWAY_GAP;
-
-    this.changeEventLanes = true;
-    this.changeClosingGatewaysLanes = true;
 
     this.nodesById       = new Map();
-    this.flowsById       = new Map();
     this.laneIndexById   = new Map();
     this.repr            = new Map();
     this.subprocesses    = [];
@@ -45,7 +38,6 @@ export class BpmnLayoutGenerator {
     this.branchCounter = 1;
     this.subprocesses = [];
     this.nodesById = new Map();
-    this.flowsById = new Map();
     this.laneIndexById = new Map();
     this.elemParams = new Map();
     this.edgesParams = new Map();
@@ -103,11 +95,11 @@ export class BpmnLayoutGenerator {
   }
 
   collectArtifactsAbove(process) {
-    const ARTIFACT_H = 30;
-    const GAP = 30;
+    const ARTIFACT_H = LAYOUT.textAnnotationHeight;
+    const GAP = LAYOUT.textAnnotationAbove;
 
     for (const ref of process.dataObjectRefs) {
-      const owner = this.findAssocOwner(process, ref.id);
+      const owner = findAssocOwner(process, ref.id);
       if (!owner) continue;
       const cur = this.artifactsAboveTask.get(owner.id) || 0;
       this.artifactsAboveTask.set(owner.id, cur + ARTIFACT_H + GAP);
@@ -126,22 +118,6 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  findAssocOwner(process, targetRef) {
-    const check = (nodes) => {
-      for (const n of nodes) {
-        for (const a of n.dataOutputAssocs || []) {
-          if (a.targetRef === targetRef) return n;
-        }
-        if (n.children && n.children.length) {
-          const r = check(n.children);
-          if (r) return r;
-        }
-      }
-      return null;
-    };
-    return check(process.flowNodes);
-  }
-
   collectLaneIndexes(process) {
     let idx = 1;
     for (const lane of process.lanes) this.laneIndexById.set(lane.id, idx++);
@@ -156,7 +132,6 @@ export class BpmnLayoutGenerator {
       });
     }
     for (const flow of sequenceFlows) {
-      this.flowsById.set(flow.id, flow);
       repr.set(flow.id, {
         id: flow.id, tag: 'sequenceFlow',
         sourceRef: flow.sourceRef, targetRef: flow.targetRef,
@@ -403,7 +378,7 @@ export class BpmnLayoutGenerator {
         paramsList.push(this.calcElementGridParams(elem, sp.lane, sp.id));
       }
       this.updateGrid(sp.grid, paramsList);
-      sp.grid.rows = [this.visualIndent, ...sp.grid.rows, this.visualIndent];
+      sp.grid.rows = [LAYOUT.visualIndent, ...sp.grid.rows, LAYOUT.visualIndent];
       for (const v of this.elemParams.values()) {
         if (v.p === sp.id) v.r += 1;
       }
@@ -416,8 +391,7 @@ export class BpmnLayoutGenerator {
       if (elem.tag === 'boundaryEvent') continue;
 
       let lane;
-      if ((this.changeEventLanes && elem.tag.includes('Event')) ||
-          (this.changeClosingGatewaysLanes && elem.tag.includes('Gateway'))) {
+      if (elem.tag.includes('Event') || elem.tag.includes('Gateway')) {
         const sourceIds = this.getConnectedNodesIds(id, this.repr, 'source');
         if (sourceIds.length && elem.branch === this.repr.get(sourceIds[0])?.branch) {
           lane = this.lanesCache.get(sourceIds[0]) || this.getElemLaneNumber(sourceIds[0]);
@@ -447,7 +421,7 @@ export class BpmnLayoutGenerator {
       }
     }
 
-    const size = this.getSizeFor(elem);
+    const size = sizeFor(elem.tag);
     const artifactsH = this.artifactsAboveTask.get(elem.id) || 0;
 
     const realH = subprocessHeight || size.height;
@@ -457,8 +431,8 @@ export class BpmnLayoutGenerator {
       c: ((elem.col || 1) - 1) * this.numOfBrunches + (elem.branch || 1),
       r: ((lane || 1) - 1) * this.numOfBrunches + (elem.branch || 1),
       w: subprocessWidth || size.width,
-      h: realH + artifactsH,   // для сетки
-      realH,                   // для визуала и waypoints
+      h: realH + artifactsH,
+      realH,
       artifactsH,
       p: processId || null,
       node: elem.node,
@@ -482,11 +456,11 @@ export class BpmnLayoutGenerator {
 
     for (let i = 0; i < grid.cols.length; i++) {
       const inCol = paramsList.filter(y => y.c === i + 1);
-      grid.cols[i] = inCol.length ? Math.max(...inCol.map(x => x.w)) + 2 * this.visualIndent : 0;
+      grid.cols[i] = inCol.length ? Math.max(...inCol.map(x => x.w)) + 2 * LAYOUT.visualIndent : 0;
     }
     for (let i = 0; i < grid.rows.length; i++) {
       const inRow = paramsList.filter(y => y.r === i + 1);
-      grid.rows[i] = inRow.length ? Math.max(...inRow.map(x => x.h)) + 2 * this.visualIndent : 0;
+      grid.rows[i] = inRow.length ? Math.max(...inRow.map(x => x.h)) + 2 * LAYOUT.visualIndent : 0;
     }
   }
 
@@ -494,15 +468,6 @@ export class BpmnLayoutGenerator {
     const node = this.nodesById.get(elemId);
     if (!node || !node.laneId) return 1;
     return this.laneIndexById.get(node.laneId) || 1;
-  }
-
-  getSizeFor(elem) {
-    const tag = elem.tag;
-    if (tag === 'startEvent' || tag === 'endEvent' ||
-        tag === 'intermediateThrowEvent' || tag === 'boundaryEvent') return { width: 36, height: 36 };
-    if (tag.includes('Gateway')) return { width: 50, height: 50 };
-    if (tag === 'subProcess') return { width: 350, height: 200 };
-    return { width: 100, height: 80 };
   }
 
   attachBoundaryParams(repr) {
@@ -515,9 +480,11 @@ export class BpmnLayoutGenerator {
       const ownerRealH = owner.realH || owner.h;
       this.elemParams.set(id, {
         id,
-        x: owner.x + owner.w - 36 - BOUNDARY_RIGHT_SHIFT,
-        y: owner.y + ownerRealH - 18,
-        w: 36, h: 36, realH: 36,
+        x: owner.x + owner.w - LAYOUT.boundarySize - LAYOUT.boundaryRightShift,
+        y: owner.y + ownerRealH - LAYOUT.boundaryBottomOffset,
+        w: LAYOUT.boundarySize,
+        h: LAYOUT.boundarySize,
+        realH: LAYOUT.boundarySize,
         c: owner.c, r: owner.r, node: elem.node,
       });
     }
@@ -579,7 +546,8 @@ export class BpmnLayoutGenerator {
         ];
         this.edgesParams.set(id, {
           waypoints,
-          label: [firstWaypoint[0] + this.visualIndent / 2, firstWaypoint[1] + this.visualIndent / 2],
+          label: [firstWaypoint[0] + LAYOUT.visualIndent / 2,
+                  firstWaypoint[1] + LAYOUT.visualIndent / 2],
         });
         continue;
       }
@@ -629,7 +597,7 @@ export class BpmnLayoutGenerator {
           (acc, x) => (this.elemParams.get(x.id).h > this.elemParams.get(acc.id).h ? x : acc),
           elemsOfStructure[0]);
         const lep = this.elemParams.get(largestElem.id);
-        const y = lep.y + (lep.realH || lep.h) + this.visualIndent;
+        const y = lep.y + (lep.realH || lep.h) + LAYOUT.visualIndent;
         waypoints = [firstWaypoint, [firstWaypoint[0], y], [lastWaypoint[0], y], lastWaypoint];
       } else {
         waypoints = [firstWaypoint, lastWaypoint];
@@ -637,7 +605,8 @@ export class BpmnLayoutGenerator {
 
       this.edgesParams.set(id, {
         waypoints,
-        label: [firstWaypoint[0] + this.visualIndent / 2, firstWaypoint[1] + this.visualIndent / 2],
+        label: [firstWaypoint[0] + LAYOUT.visualIndent / 2,
+                firstWaypoint[1] + LAYOUT.visualIndent / 2],
       });
     }
   }
@@ -712,15 +681,15 @@ export class BpmnLayoutGenerator {
       }
 
       let shiftingProj = borderShifting[dim];
-      if (borderShifting.add_gap) shiftingProj -= this.gatewayGap;
+      if (borderShifting.add_gap) shiftingProj -= LAYOUT.gatewayGap;
       let staticProj = borderStatic[dim];
-      if (borderStatic.add_gap) staticProj += this.gatewayGap;
+      if (borderStatic.add_gap) staticProj += LAYOUT.gatewayGap;
 
       distances.push(shiftingProj - staticProj);
     }
 
     if (!distances.length) return Math.max(idx - 1, 0);
-    const shiftValue = Math.max(Math.min(...distances) - 2 * this.visualIndent, 0);
+    const shiftValue = Math.max(Math.min(...distances) - 2 * LAYOUT.visualIndent, 0);
     if (!shiftValue) return Math.max(idx - 1, 0);
 
     let closestShiftedDot = Infinity;
@@ -855,7 +824,7 @@ export class BpmnLayoutGenerator {
       minX = 0; minY = 0; maxX = 0; maxY = 0;
     }
 
-    const padding = this.visualIndent * 2;
+    const padding = LAYOUT.visualIndent * 2;
 
     const shiftX = -minX + padding;
     const shiftY = -minY + padding;
@@ -907,9 +876,9 @@ export class BpmnLayoutGenerator {
     }
 
     process.bounds = {
-      x: -this.poolElemShift,
+      x: -LAYOUT.poolElemShift,
       y: 0,
-      width: gridW + this.poolElemShift,
+      width: gridW + LAYOUT.poolElemShift,
       height: gridH,
     };
   }
