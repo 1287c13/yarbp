@@ -84,6 +84,9 @@ export class BpmnLayoutGenerator {
     this.attachBoundaryParams(this.repr);
     for (const sp of this.subprocesses) this.attachBoundaryParams(sp.repr);
 
+    this.attachNodeLabels(this.repr);
+    for (const sp of this.subprocesses) this.attachNodeLabels(sp.repr);
+
     this.calcEdges(this.repr);
     for (const sp of this.subprocesses) this.calcEdges(sp.repr);
 
@@ -507,6 +510,19 @@ export class BpmnLayoutGenerator {
     }
   }
 
+  attachNodeLabels(repr) {
+    for (const [id, elem] of repr) {
+      if (!this.isGatewayId(id)) continue;
+      const p = this.elemParams.get(id);
+      if (!p) continue;
+      const h = p.realH || p.h;
+      elem.node.labelPos = {
+        x: p.x + p.w / 2,
+        y: p.y - LAYOUT.gatewayLabelAbove,
+      };
+    }
+  }
+
   /* ---------------- 4. calc_elems_coords ---------------- */
 
   calcElemsCoords(repr, grid, processId) {
@@ -563,8 +579,8 @@ export class BpmnLayoutGenerator {
         ];
         this.edgesParams.set(id, {
           waypoints,
-          label: [firstWaypoint[0] + LAYOUT.visualIndent / 2,
-                  firstWaypoint[1] + LAYOUT.visualIndent / 2],
+          label: [firstWaypoint[0] + LAYOUT.edgeLabelOffsetX,
+                  firstWaypoint[1] + LAYOUT.edgeLabelOffsetY],
         });
         continue;
       }
@@ -620,10 +636,12 @@ export class BpmnLayoutGenerator {
         waypoints = [firstWaypoint, lastWaypoint];
       }
 
+      const labelX = firstWaypoint[0] + LAYOUT.edgeLabelOffsetX;
+      const labelY = firstWaypoint[1] + LAYOUT.edgeLabelOffsetY;
+
       this.edgesParams.set(id, {
         waypoints,
-        label: [firstWaypoint[0] + LAYOUT.visualIndent / 2,
-                firstWaypoint[1] + LAYOUT.visualIndent / 2],
+        label: [labelX, labelY],
       });
     }
   }
@@ -826,15 +844,6 @@ export class BpmnLayoutGenerator {
 
   /* ---------------- 6.5. realign_by_logical_columns ---------------- */
 
-  /**
-   * После optimizeLayout элементы одного логического столбца (elem.col)
-   * могут оказаться на разных X, потому что shiftElements двигает
-   * физические столбцы (c = col × branch) по отдельности.
-   *
-   * Здесь мы выравниваем X всех элементов одного col по минимальному X
-   * внутри группы. Y не трогаем — элементы разных веток должны остаться
-   * на своих строках.
-   */
   realignByLogicalColumns(repr) {
     const byCol = new Map();
 
@@ -867,16 +876,6 @@ export class BpmnLayoutGenerator {
 
   /* ---------------- 6.6. resolve_column_overlaps ---------------- */
 
-  /**
-   * realignByLogicalColumns выравнивает X внутри одного col, но не разводит
-   * соседние col по горизонтали. После optimizeLayout возможна ситуация,
-   * когда элемент из col=N+1 лежит левее правого края элемента из col=N
-   * и они накладываются (например, t6 и t8 в boundary-ветке).
-   *
-   * Здесь мы проходим по col в порядке возрастания и сдвигаем каждый
-   * следующий столбец вправо, если его минимальный X меньше правого края
-   * предыдущего столбца + 2*visualIndent.
-   */
   resolveColumnOverlaps(repr) {
     const byCol = new Map();
 
@@ -942,8 +941,25 @@ export class BpmnLayoutGenerator {
       p.y += shiftY;
     }
 
+    // сдвигаем labelPos шлюзов вместе с элементами
+    for (const [, elem] of this.repr) {
+      if (elem.node && elem.node.labelPos) {
+        elem.node.labelPos.x += shiftX;
+        elem.node.labelPos.y += shiftY;
+      }
+    }
+    for (const sp of this.subprocesses) {
+      for (const [, elem] of sp.repr) {
+        if (elem.node && elem.node.labelPos) {
+          elem.node.labelPos.x += shiftX;
+          elem.node.labelPos.y += shiftY;
+        }
+      }
+    }
+
     for (const [, edge] of this.edgesParams) {
       edge.waypoints = edge.waypoints.map(([x, y]) => [x + shiftX, y + shiftY]);
+      edge.label = [edge.label[0] + shiftX, edge.label[1] + shiftY];
     }
 
     const gridW = (maxX - minX) + 2 * padding;
@@ -1013,6 +1029,11 @@ export class BpmnLayoutGenerator {
 
   applyFlowParams(flow) {
     const e = this.edgesParams.get(flow.id);
-    if (e) flow.waypoints = e.waypoints;
+    if (e) {
+      flow.waypoints = e.waypoints;
+      if (e.label) {
+        flow.labelPos = { x: e.label[0], y: e.label[1] };
+      }
+    }
   }
 }

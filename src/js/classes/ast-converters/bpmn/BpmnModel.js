@@ -23,6 +23,7 @@ export class BpmnMessageFlow {
     this.targetRef = targetRef;
     this.name      = name || null;
     this.waypoints = null;
+    this.labelPos  = null;   // ← ИЗМЕНЕНО
   }
 }
 
@@ -40,6 +41,7 @@ export class BpmnAssociation {
     this.sourceRef  = sourceRef;
     this.targetRef  = targetRef;
     this.waypoints  = null;
+    this.labelPos   = null;   // ← ИЗМЕНЕНО
   }
 }
 
@@ -96,6 +98,7 @@ export class BpmnFlowNode {
 
     this.bounds              = null;
     this.joinBounds          = null;
+    this.labelPos            = null;
   }
 }
 
@@ -124,6 +127,7 @@ export class BpmnDataObjectReference {
     this.name          = name || null;
     this.dataObjectRef = dataObjectRef;
     this.bounds        = null;
+    this.labelPos      = null;
   }
 }
 

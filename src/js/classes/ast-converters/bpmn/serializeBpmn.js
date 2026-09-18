@@ -213,10 +213,10 @@ function serializeDiagram(definitions, lines, depth) {
       serializeTextAnnotationShape(ta, lines, depth + 2);
     }
     for (const a of definitions.collaboration.associations) {
-      serializeEdge(a.id, a.waypoints, lines, depth + 2, false);
+      serializeEdge(a.id, a.waypoints, lines, depth + 2, false, null);
     }
     for (const mf of definitions.collaboration.messageFlows) {
-      serializeEdge(mf.id, mf.waypoints, lines, depth + 2, false);
+      serializeEdge(mf.id, mf.waypoints, lines, depth + 2, !!mf.name, mf.labelPos);
     }
   }
 
@@ -235,7 +235,7 @@ function serializeDiagram(definitions, lines, depth) {
     }
 
     for (const flow of process.sequenceFlows) {
-      serializeEdge(flow.id, flow.waypoints, lines, depth + 2, !!flow.name);
+      serializeEdge(flow.id, flow.waypoints, lines, depth + 2, !!flow.name, flow.labelPos);
     }
     serializeSubProcessEdges(process.flowNodes, lines, depth + 2);
   }
@@ -256,7 +256,7 @@ function serializeFlowNodesShapes(nodes, lines, depth) {
 function serializeFlowNodesAssocs(nodes, lines, depth) {
   for (const node of nodes) {
     for (const a of node.dataOutputAssocs || []) {
-      serializeEdge(a.id, a.waypoints, lines, depth, false);
+      serializeEdge(a.id, a.waypoints, lines, depth, false, null);
     }
     if (node.children && node.children.length) {
       serializeFlowNodesAssocs(node.children, lines, depth);
@@ -268,7 +268,7 @@ function serializeSubProcessEdges(nodes, lines, depth) {
   for (const node of nodes) {
     if (node.children && node.children.length) {
       for (const flow of node.sequenceFlows || []) {
-        serializeEdge(flow.id, flow.waypoints, lines, depth, !!flow.name);
+        serializeEdge(flow.id, flow.waypoints, lines, depth, !!flow.name, flow.labelPos);
       }
       serializeSubProcessEdges(node.children, lines, depth);
     }
@@ -317,7 +317,13 @@ function serializeNodeShape(node, lines, depth) {
 
   lines.push(`${ind}<bpmndi:BPMNShape ${attrs.join(' ')}>`);
   lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${width}" height="${height}" />`);
-  lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
+  if (node.labelPos) {
+    lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel>`);
+    lines.push(`${ind}${INDENT}${INDENT}<dc:Bounds x="${node.labelPos.x}" y="${node.labelPos.y}" width="0" height="0" />`);
+    lines.push(`${ind}${INDENT}</bpmndi:BPMNLabel>`);
+  } else {
+    lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
+  }
   lines.push(`${ind}</bpmndi:BPMNShape>`);
 }
 
@@ -345,11 +351,17 @@ function serializeArtifactShape(ref, lines, depth) {
 
   lines.push(`${ind}<bpmndi:BPMNShape id="${escapeHtml(ref.id)}_di" bpmnElement="${escapeHtml(ref.id)}">`);
   lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${width}" height="${height}" />`);
-  lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
+  if (ref.labelPos) {
+    lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel>`);
+    lines.push(`${ind}${INDENT}${INDENT}<dc:Bounds x="${ref.labelPos.x}" y="${ref.labelPos.y}" width="0" height="0" />`);
+    lines.push(`${ind}${INDENT}</bpmndi:BPMNLabel>`);
+  } else {
+    lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
+  }
   lines.push(`${ind}</bpmndi:BPMNShape>`);
 }
 
-function serializeEdge(id, waypoints, lines, depth, withLabel) {
+function serializeEdge(id, waypoints, lines, depth, withLabel, labelPos) {
   const ind = INDENT.repeat(depth);
   const wps = waypoints || [[0, 0], [0, 0]];
 
@@ -358,8 +370,10 @@ function serializeEdge(id, waypoints, lines, depth, withLabel) {
     lines.push(`${ind}${INDENT}<di:waypoint x="${x}" y="${y}" />`);
   }
   if (withLabel) {
+    const lx = labelPos ? labelPos.x : 0;
+    const ly = labelPos ? labelPos.y : 0;
     lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel>`);
-    lines.push(`${ind}${INDENT}${INDENT}<dc:Bounds x="0" y="0" width="0" height="0" />`);
+    lines.push(`${ind}${INDENT}${INDENT}<dc:Bounds x="${lx}" y="${ly}" width="0" height="0" />`);
     lines.push(`${ind}${INDENT}</bpmndi:BPMNLabel>`);
   }
   lines.push(`${ind}</bpmndi:BPMNEdge>`);

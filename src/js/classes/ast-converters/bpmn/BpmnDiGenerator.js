@@ -64,6 +64,11 @@ function applyArtifactBounds(process) {
       width: LAYOUT.dataObjectWidth,
       height: LAYOUT.dataObjectHeight,
     };
+    // подпись сверху по центру
+    ref.labelPos = {
+      x: ref.bounds.x + ref.bounds.width / 2,
+      y: ref.bounds.y - 4,
+    };
     nodesById.set(ref.id, { id: ref.id, tag: 'dataObjectReference', bounds: ref.bounds });
   }
 
@@ -216,6 +221,10 @@ function shiftProcessBy(process, dx, dy) {
       node.bounds.x += dx;
       node.bounds.y += dy;
     }
+    if (node.labelPos) {
+      node.labelPos.x += dx;
+      node.labelPos.y += dy;
+    }
   }
   for (const flow of process.sequenceFlows) {
     if (flow.waypoints) {
@@ -231,6 +240,7 @@ function shiftProcessBy(process, dx, dy) {
   }
   for (const ref of process.dataObjectRefs) {
     if (ref.bounds) { ref.bounds.x += dx; ref.bounds.y += dy; }
+    if (ref.labelPos) { ref.labelPos.x += dx; ref.labelPos.y += dy; }
   }
   for (const ref of process.dataStores) {
     if (ref.bounds) { ref.bounds.x += dx; ref.bounds.y += dy; }
