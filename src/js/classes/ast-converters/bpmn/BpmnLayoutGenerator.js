@@ -74,6 +74,19 @@ export class BpmnLayoutGenerator {
     for (const sp of this.subprocesses) this.calcEdges(sp.repr);
 
     this.optimizeLayout();
+
+    this.realignByLogicalColumns(this.repr);
+    for (const sp of this.subprocesses) this.realignByLogicalColumns(sp.repr);
+
+    this.resolveColumnOverlaps(this.repr);
+    for (const sp of this.subprocesses) this.resolveColumnOverlaps(sp.repr);
+
+    this.attachBoundaryParams(this.repr);
+    for (const sp of this.subprocesses) this.attachBoundaryParams(sp.repr);
+
+    this.calcEdges(this.repr);
+    for (const sp of this.subprocesses) this.calcEdges(sp.repr);
+
     this.updatePool(process);
 
     this.applyToModel(process);
@@ -805,6 +818,95 @@ export class BpmnLayoutGenerator {
       ];
     }
     return elsToFilter.filter(match);
+  }
+
+  /* ---------------- 6.5. realign_by_logical_columns ---------------- */
+
+  /**
+   * После optimizeLayout элементы одного логического столбца (elem.col)
+   * могут оказаться на разных X, потому что shiftElements двигает
+   * физические столбцы (c = col × branch) по отдельности.
+   *
+   * Здесь мы выравниваем X всех элементов одного col по минимальному X
+   * внутри группы. Y не трогаем — элементы разных веток должны остаться
+   * на своих строках.
+   */
+  realignByLogicalColumns(repr) {
+    const byCol = new Map();
+
+    for (const [id, elem] of repr) {
+      if (elem.tag === 'sequenceFlow' || elem.tag === 'laneSet') continue;
+      if (elem.tag === 'incoming' || elem.tag === 'outgoing') continue;
+      if (elem.tag === 'boundaryEvent') continue;
+      if (elem.col === undefined) continue;
+
+      const p = this.elemParams.get(id);
+      if (!p || p.x === undefined) continue;
+
+      if (!byCol.has(elem.col)) byCol.set(elem.col, []);
+      byCol.get(elem.col).push(p);
+    }
+
+    for (const [, elems] of byCol) {
+      if (elems.length < 2) continue;
+
+      const xs = elems.map(e => e.x);
+      const targetX = Math.min(...xs);
+
+      for (const e of elems) {
+        const dx = targetX - e.x;
+        if (dx === 0) continue;
+        e.x += dx;
+      }
+    }
+  }
+
+  /* ---------------- 6.6. resolve_column_overlaps ---------------- */
+
+  /**
+   * realignByLogicalColumns выравнивает X внутри одного col, но не разводит
+   * соседние col по горизонтали. После optimizeLayout возможна ситуация,
+   * когда элемент из col=N+1 лежит левее правого края элемента из col=N
+   * и они накладываются (например, t6 и t8 в boundary-ветке).
+   *
+   * Здесь мы проходим по col в порядке возрастания и сдвигаем каждый
+   * следующий столбец вправо, если его минимальный X меньше правого края
+   * предыдущего столбца + 2*visualIndent.
+   */
+  resolveColumnOverlaps(repr) {
+    const byCol = new Map();
+
+    for (const [id, elem] of repr) {
+      if (elem.tag === 'sequenceFlow' || elem.tag === 'laneSet') continue;
+      if (elem.tag === 'incoming' || elem.tag === 'outgoing') continue;
+      if (elem.tag === 'boundaryEvent') continue;
+      if (elem.col === undefined) continue;
+
+      const p = this.elemParams.get(id);
+      if (!p || p.x === undefined) continue;
+
+      if (!byCol.has(elem.col)) byCol.set(elem.col, []);
+      byCol.get(elem.col).push(p);
+    }
+
+    const sortedCols = [...byCol.keys()].sort((a, b) => a - b);
+    let prevRight = -Infinity;
+
+    for (const col of sortedCols) {
+      const elems = byCol.get(col);
+      const minX = Math.min(...elems.map(e => e.x));
+
+      if (prevRight !== -Infinity) {
+        const requiredX = prevRight + 2 * LAYOUT.visualIndent;
+        if (minX < requiredX) {
+          const dx = requiredX - minX;
+          for (const e of elems) e.x += dx;
+        }
+      }
+
+      const maxRight = Math.max(...elems.map(e => e.x + (e.w || 0)));
+      prevRight = maxRight;
+    }
   }
 
   /* ---------------- 7. update_pool ---------------- */
