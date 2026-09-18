@@ -127,7 +127,6 @@ function serializeFlowNode(node, lines, depth) {
 
   const attrs = [`id="${escapeHtml(node.id)}"`];
   if (node.name) attrs.push(`name="${escapeHtml(node.name)}"`);
-  if (node.tag === 'subProcess') attrs.push(`isExpanded="${node.isExpanded !== false}"`);
   if (node.tag === 'boundaryEvent' && node.attachedToRef) {
     attrs.push(`attachedToRef="${escapeHtml(node.attachedToRef)}"`);
   }
