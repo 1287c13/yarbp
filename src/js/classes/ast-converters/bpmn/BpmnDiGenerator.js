@@ -5,21 +5,36 @@ export function recalculateDi(model) {
   const layout = new BpmnLayoutGenerator(model);
   layout.generate();
 
-  // 1. артефакты — bounds и waypoints по новым координатам задач
+  // participant.bounds — копия process.bounds после layout
+  if (model.collaboration) {
+    for (const process of model.processes) {
+      const participant = model.collaboration.participants.find(
+        p => p.processRef === process.id);
+      if (!participant || !process.bounds) continue;
+      participant.bounds = {
+        x: process.bounds.x,
+        y: process.bounds.y,
+        width: process.bounds.width,
+        height: process.bounds.height,
+      };
+    }
+  }
+
+  // артефакты
   for (const process of model.processes) {
     applyArtifactBounds(process);
   }
   applyCollaborationArtifacts(model);
 
-  // 2. boundary — на границу владельца
+  // boundary
   for (const process of model.processes) {
     fixBoundaryBounds(process);
   }
 
-  // 3. процессы стопкой друг под другом
+  // стопка процессов
   stackProcesses(model);
 
-  // 4. после сдвига — пересчитать waypoints ассоциаций (они привязаны к артефактам и задачам)
+  // waypoints
   for (const process of model.processes) {
     refreshAssocWaypoints(process);
   }
@@ -28,9 +43,7 @@ export function recalculateDi(model) {
   return model;
 }
 
-/* ------------------------------------------------------------------ *
- *  Артефакты
- * ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
 
 function applyArtifactBounds(process) {
   const nodesById = new Map();
@@ -99,21 +112,17 @@ function applyCollaborationArtifacts(model) {
   for (const a of collab.associations) {
     const s = nodesById.get(a.sourceRef);
     const t = nodesById.get(a.targetRef);
-    if (!s || !t) continue;
+    if (!s || !t || !s.bounds || !t.bounds) continue;
     a.waypoints = simpleWaypoints(s, t);
   }
 
   for (const mf of collab.messageFlows) {
     const s = nodesById.get(mf.sourceRef);
     const t = nodesById.get(mf.targetRef);
-    if (!s || !t) continue;
+    if (!s || !t || !s.bounds || !t.bounds) continue;
     mf.waypoints = simpleWaypoints(s, t);
   }
 }
-
-/* ------------------------------------------------------------------ *
- *  Boundary — на границу владельца
- * ------------------------------------------------------------------ */
 
 function fixBoundaryBounds(process) {
   const allNodes = collectAllNodes(process.flowNodes);
@@ -130,10 +139,6 @@ function fixBoundaryBounds(process) {
   }
 }
 
-/* ------------------------------------------------------------------ *
- *  Процессы стопкой
- * ------------------------------------------------------------------ */
-
 function stackProcesses(model) {
   let y = 0;
   for (const process of model.processes) {
@@ -141,6 +146,14 @@ function stackProcesses(model) {
     const dy = y - process.bounds.y;
     if (dy !== 0) {
       shiftProcessBy(process, 0, dy);
+      // participant процесса — вместе с детьми
+      if (model.collaboration) {
+        for (const p of model.collaboration.participants) {
+          if (p.processRef === process.id && p.bounds) {
+            p.bounds.y += dy;
+          }
+        }
+      }
     }
     y = process.bounds.y + process.bounds.height + 50;
   }
@@ -191,10 +204,6 @@ function shiftProcessBy(process, dx, dy) {
   }
 }
 
-/* ------------------------------------------------------------------ *
- *  Пересчёт waypoints после сдвига
- * ------------------------------------------------------------------ */
-
 function refreshAssocWaypoints(process) {
   const nodesById = new Map();
   collectNodesById(process.flowNodes, nodesById);
@@ -209,7 +218,7 @@ function refreshAssocWaypoints(process) {
     for (const a of node.dataOutputAssocs || []) {
       const source = nodesById.get(node.id);
       const target = nodesById.get(a.targetRef);
-      if (!source || !target) continue;
+      if (!source || !target || !source.bounds || !target.bounds) continue;
       a.waypoints = simpleWaypoints(source, target);
     }
   }
@@ -223,10 +232,10 @@ function refreshCollaborationWaypoints(model) {
   for (const proc of model.processes) {
     collectNodesById(proc.flowNodes, nodesById);
     for (const ref of proc.dataObjectRefs) {
-      nodesById.set(ref.id, { ref, tag: 'dataObjectReference', bounds: ref.bounds });
+      nodesById.set(ref.id, { id: ref.id, tag: 'dataObjectReference', bounds: ref.bounds });
     }
     for (const ref of proc.dataStores) {
-      nodesById.set(ref.id, { ref, tag: 'dataStoreReference', bounds: ref.bounds });
+      nodesById.set(ref.id, { id: ref.id, tag: 'dataStoreReference', bounds: ref.bounds });
     }
   }
   for (const ta of collab.textAnnotations) {
@@ -236,21 +245,19 @@ function refreshCollaborationWaypoints(model) {
   for (const a of collab.associations) {
     const s = nodesById.get(a.sourceRef);
     const t = nodesById.get(a.targetRef);
-    if (!s || !t) continue;
+    if (!s || !t || !s.bounds || !t.bounds) continue;
     a.waypoints = simpleWaypoints(s, t);
   }
 
   for (const mf of collab.messageFlows) {
     const s = nodesById.get(mf.sourceRef);
     const t = nodesById.get(mf.targetRef);
-    if (!s || !t) continue;
+    if (!s || !t || !s.bounds || !t.bounds) continue;
     mf.waypoints = simpleWaypoints(s, t);
   }
 }
 
-/* ------------------------------------------------------------------ *
- *  Утилиты
- * ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
 
 function collectNodesById(nodes, map) {
   for (const node of nodes) {

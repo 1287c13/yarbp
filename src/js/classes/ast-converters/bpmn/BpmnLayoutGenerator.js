@@ -5,17 +5,13 @@
  *  - элементы раскладываются по сетке (cols × rows);
  *  - большая ячейка (col, lane) раздувается на num_of_brunches × num_of_brunches
  *    подъячеек; элемент с branch=b попадает в подъячейку (b, b) — «диагональ»;
- *  - это гарантирует, что стрелки не пересекают элементы;
  *  - размеры строк/колонок — по максимуму содержимого;
  *  - optimize_layout сжимает «пустоты» справа налево.
  *
- * Отличия от Python:
- *  - вход — наша модель (BpmnProcess + flowNodes + sequenceFlows), не XML;
- *  - subProcess обходится рекурсивно через node.children;
- *  - артефакты (комментарий, данные) — визуальные атрибуты родителя,
- *    увеличивают визуальную высоту ячейки вверх, сами не участвуют в раскладке;
- *  - база-данных (dataStore) рисуется под пулом, в сетке не участвует;
- *  - связь (messageFlow) — только waypoints, в сетке не участвует.
+ * Boundary:
+ *  - boundaryEvent не занимает ячейку — прилипает к владельцу;
+ *  - его ветка (g4 → t6 → ...) — часть общей сетки, получает свои col
+ *    через постобработку calcGridStructure.
  */
 
 const VISUAL_INDENT = 12.5;
@@ -35,23 +31,18 @@ export class BpmnLayoutGenerator {
     this.changeEventLanes = true;
     this.changeClosingGatewaysLanes = true;
 
-    // карты
-    this.nodesById       = new Map();  // id -> node-модель
-    this.flowsById       = new Map();  // id -> sequenceFlow
-    this.laneIndexById   = new Map();  // id -> номер дорожки (1-based)
-    this.repr            = new Map();  // плоское представление для процесса
-    this.subprocesses    = [];         // [{ id, lane, flowNodes, sequenceFlows, repr, grid }]
-    this.elemParams      = new Map();  // id -> { id, c, r, w, h, x, y, p, ... }
-    this.edgesParams     = new Map();  // flowId -> { waypoints, label }
+    this.nodesById       = new Map();
+    this.flowsById       = new Map();
+    this.laneIndexById   = new Map();
+    this.repr            = new Map();
+    this.subprocesses    = [];
+    this.elemParams      = new Map();
+    this.edgesParams     = new Map();
     this.grid            = { cols: [], rows: [] };
     this.startEventsIds  = [];
     this.nodesToVisitIds = [];
     this.lanesCache      = new Map();
   }
-
-  /* ================================================================== *
-   *  Точка входа
-   * ================================================================== */
 
   generate() {
     for (const process of this.model.processes) {
@@ -60,10 +51,6 @@ export class BpmnLayoutGenerator {
   }
 
   generateForProcess(process) {
-    const t0 = performance.now();
-    console.log('[layout] start', process.name);
-
-    // сбрасываем состояние
     this.branchCounter = 1;
     this.subprocesses = [];
     this.nodesById = new Map();
@@ -76,60 +63,51 @@ export class BpmnLayoutGenerator {
     this.nodesToVisitIds = [];
     this.lanesCache = new Map();
 
-    // собираем плоские карты
     this.collectNodes(process.flowNodes, process);
     this.collectLaneIndexes(process);
     this.repr = this.buildRepr(process.flowNodes, process.sequenceFlows);
     this.collectSubprocesses(process.flowNodes, process);
-    console.log('[layout] collected. nodes=', this.nodesById.size,
-      'flows=', this.flowsById.size,
-      'subprocesses=', this.subprocesses.length,
-      'time=', performance.now() - t0);
 
-    // ---- шаги алгоритма ----
     this.addStructureAttrs(this.repr);
     for (const sp of this.subprocesses) {
       this.addStructureAttrs(sp.repr);
     }
-    console.log('[layout] addStructureAttrs done. time=', performance.now() - t0);
 
     this.calcGridStructure(this.repr);
     for (const sp of this.subprocesses) {
       this.calcGridStructure(sp.repr);
     }
-    console.log('[layout] calcGridStructure done. time=', performance.now() - t0);
 
     this.calcGridSizes(process);
-    console.log('[layout] calcGridSizes done. time=', performance.now() - t0);
 
     this.calcElemsCoords(this.repr, this.grid);
     for (const sp of this.subprocesses) {
       this.calcElemsCoords(sp.repr, sp.grid, sp.id);
     }
-    console.log('[layout] calcElemsCoords done. time=', performance.now() - t0);
+
+    // boundary в elemParams — прилипает к владельцу (для calcEdges)
+    this.attachBoundaryParams(this.repr);
+    for (const sp of this.subprocesses) {
+      this.attachBoundaryParams(sp.repr);
+    }
 
     this.calcEdges(this.repr);
     for (const sp of this.subprocesses) {
       this.calcEdges(sp.repr);
     }
-    console.log('[layout] calcEdges done. time=', performance.now() - t0);
 
-    //this.optimizeLayout();
-    console.log('[layout] optimizeLayout done. time=', performance.now() - t0);
+    this.optimizeLayout();
 
     this.updatePool(process);
-    console.log('[layout] updatePool done. time=', performance.now() - t0);
 
-    // записываем результат в модель
     this.applyToModel(process);
     for (const sp of this.subprocesses) {
       this.applyToSubprocess(sp);
     }
-    console.log('[layout] applyToModel done. time=', performance.now() - t0);
   }
 
   /* ================================================================== *
-   *  Сбор данных из модели
+   *  Сбор данных
    * ================================================================== */
 
   collectNodes(nodes, process) {
@@ -150,30 +128,20 @@ export class BpmnLayoutGenerator {
 
   buildRepr(flowNodes, sequenceFlows) {
     const repr = new Map();
-
     for (const node of flowNodes) {
       repr.set(node.id, {
-        id:     node.id,
-        tag:    node.tag,
-        name:   node.name,
-        node:   node,          // ссылка на модель
-        incoming: [...node.incoming],
-        outgoing: [...node.outgoing],
+        id: node.id, tag: node.tag, name: node.name, node,
+        incoming: [...node.incoming], outgoing: [...node.outgoing],
       });
     }
-
     for (const flow of sequenceFlows) {
       this.flowsById.set(flow.id, flow);
       repr.set(flow.id, {
-        id:        flow.id,
-        tag:       'sequenceFlow',
-        sourceRef: flow.sourceRef,
-        targetRef: flow.targetRef,
-        name:      flow.name,
-        flow:      flow,
+        id: flow.id, tag: 'sequenceFlow',
+        sourceRef: flow.sourceRef, targetRef: flow.targetRef,
+        name: flow.name, flow,
       });
     }
-
     return repr;
   }
 
@@ -187,7 +155,7 @@ export class BpmnLayoutGenerator {
           sequenceFlows: node.sequenceFlows || [],
           repr: null,
           grid: { cols: [], rows: [] },
-          node: node,
+          node,
         };
         sp.repr = this.buildRepr(sp.flowNodes, sp.sequenceFlows);
         this.subprocesses.push(sp);
@@ -199,7 +167,7 @@ export class BpmnLayoutGenerator {
   }
 
   /* ================================================================== *
-   *  1. add_structure_attrs — нумерация веток
+   *  1. add_structure_attrs
    * ================================================================== */
 
   addStructureAttrs(repr) {
@@ -210,16 +178,14 @@ export class BpmnLayoutGenerator {
       this.traverseAndAssignBranchNumbers(startId, repr);
     }
 
-    // постобработка: boundaryEvent получает branch владельца
+    // boundary получает branch владельца
     for (const [id, elem] of repr) {
       if (elem.tag !== 'boundaryEvent') continue;
       if (elem.branch !== undefined) continue;
       const ownerId = elem.node && elem.node.attachedToRef;
       if (!ownerId) continue;
       const owner = repr.get(ownerId);
-      if (owner && owner.branch !== undefined) {
-        elem.branch = owner.branch;
-      }
+      if (owner && owner.branch !== undefined) elem.branch = owner.branch;
     }
   }
 
@@ -236,22 +202,17 @@ export class BpmnLayoutGenerator {
     if (!elem || elem.branch !== undefined) return;
 
     elem.branch = this.branchCounter;
-    if (elem.tag === 'subProcess') {
-      this.addSubprocessRef(elem.id);
-    }
+    if (elem.tag === 'subProcess') this.addSubprocessRef(elem.id);
 
     let nextElemId = this.exploreNeighboringNodes(initialElemId, repr);
     while (nextElemId) {
       const nextElem = repr.get(nextElemId);
-      if (nextElem && nextElem.tag === 'subProcess') {
-        this.addSubprocessRef(nextElemId);
-      }
+      if (nextElem && nextElem.tag === 'subProcess') this.addSubprocessRef(nextElemId);
       nextElemId = this.exploreNeighboringNodes(nextElemId, repr);
     }
 
     this.branchCounter++;
 
-    // обрабатываем отложенные ветки (LIFO как в python pop())
     const nextBranchFirstElem = this.nodesToVisitIds.pop();
     if (nextBranchFirstElem !== undefined) {
       this.traverseAndAssignBranchNumbers(nextBranchFirstElem, repr);
@@ -259,8 +220,6 @@ export class BpmnLayoutGenerator {
   }
 
   addSubprocessRef(subprocessId) {
-    // подпроцесс уже собран в this.subprocesses с lane
-    // дополнительно уточним lane, если он есть в модели
     const sp = this.subprocesses.find(s => s.id === subprocessId);
     if (sp && sp.node.laneId) {
       sp.lane = this.laneIndexById.get(sp.node.laneId) || sp.lane;
@@ -276,26 +235,19 @@ export class BpmnLayoutGenerator {
 
     const first = targetNodesIds[0];
     const elem = repr.get(first);
-    if (elem && elem.branch === undefined) {
-      elem.branch = this.branchCounter;
-    }
+    if (elem && elem.branch === undefined) elem.branch = this.branchCounter;
     return first;
   }
 
   getConnectedNodesIds(parentNodeId, repr, direction) {
-    // direction: 'source' | 'target'
-    // 'source' = входящие (кого считаем входящим в parentNodeId)
-    // 'target' = исходящие
     const elem = repr.get(parentNodeId);
     if (!elem) return [];
-
     const flowIds = direction === 'target' ? elem.outgoing : elem.incoming;
     const result = [];
     for (const flowId of flowIds) {
       const flow = repr.get(flowId);
       if (!flow) continue;
-      const nodeId = direction === 'target' ? flow.targetRef : flow.sourceRef;
-      result.push(nodeId);
+      result.push(direction === 'target' ? flow.targetRef : flow.sourceRef);
     }
     return result;
   }
@@ -356,19 +308,17 @@ export class BpmnLayoutGenerator {
       col++;
     }
 
-    // --- постобработка 1: boundaryEvent получает col владельца ---
+    // boundary получает col владельца
     for (const [id, elem] of repr) {
       if (elem.tag !== 'boundaryEvent') continue;
       if (elem.col !== undefined) continue;
       const ownerId = elem.node && elem.node.attachedToRef;
       if (!ownerId) continue;
       const owner = repr.get(ownerId);
-      if (owner && owner.col !== undefined) {
-        elem.col = owner.col;
-      }
+      if (owner && owner.col !== undefined) elem.col = owner.col;
     }
 
-    // --- постобработка 2: узлы, ставшие достижимыми через boundary ---
+    // узлы, ставшие достижимыми через boundary
     let changed = true;
     let safety = 1000;
     while (changed && safety-- > 0) {
@@ -393,17 +343,10 @@ export class BpmnLayoutGenerator {
         }
       }
     }
-
-    console.log('[calcGridStructure] result:',
-      [...repr.entries()]
-        .filter(([id, e]) => e.tag !== 'sequenceFlow')
-        .map(([id, e]) => `${id}: col=${e.col}`)
-        .join(', ')
-    );
   }
 
   /* ================================================================== *
-   *  3. calc_grid_sizes — размеры сетки
+   *  3. calc_grid_sizes
    * ================================================================== */
 
   calcGridSizes(process) {
@@ -413,13 +356,13 @@ export class BpmnLayoutGenerator {
     this.numOfBrunches = filtered.reduce(
       (acc, item) => Math.max(acc, item.branch || 0), 0);
 
-    // подпроцессы: сначала внутренние сетки
     for (let i = this.subprocesses.length - 1; i >= 0; i--) {
       const sp = this.subprocesses[i];
       const paramsList = [];
       for (const [id, elem] of sp.repr) {
         if (elem.tag === 'sequenceFlow' || elem.tag === 'laneSet') continue;
         if (elem.tag === 'incoming' || elem.tag === 'outgoing') continue;
+        if (elem.tag === 'boundaryEvent') continue;
         paramsList.push(this.calcElementGridParams(elem, sp.lane, sp.id));
       }
       this.updateGrid(sp.grid, paramsList);
@@ -429,7 +372,6 @@ export class BpmnLayoutGenerator {
       }
     }
 
-    // основная сетка
     const paramsList = [];
     for (const [id, elem] of this.repr) {
       if (elem.tag === 'sequenceFlow' || elem.tag === 'laneSet') continue;
@@ -441,8 +383,7 @@ export class BpmnLayoutGenerator {
           (this.changeClosingGatewaysLanes && elem.tag.includes('Gateway'))) {
         const sourceIds = this.getConnectedNodesIds(id, this.repr, 'source');
         if (sourceIds.length && elem.branch === this.repr.get(sourceIds[0])?.branch) {
-          lane = this.lanesCache.get(sourceIds[0])
-            || this.getElemLaneNumber(sourceIds[0]);
+          lane = this.lanesCache.get(sourceIds[0]) || this.getElemLaneNumber(sourceIds[0]);
           this.lanesCache.set(id, lane);
         } else {
           lane = this.getElemLaneNumber(id);
@@ -453,13 +394,6 @@ export class BpmnLayoutGenerator {
 
       paramsList.push(this.calcElementGridParams(elem, lane));
     }
-
-    console.log('[calcGridSizes] numOfBrunches=', this.numOfBrunches);
-    console.log('[calcGridSizes] elemParams:',
-      [...this.elemParams.entries()]
-        .map(([id, p]) => `${id}: c=${p.c} r=${p.r} x=${p.x} y=${p.y}`)
-        .join('\n')
-    );
 
     this.updateGrid(this.grid, paramsList);
   }
@@ -490,9 +424,7 @@ export class BpmnLayoutGenerator {
   }
 
   updateGrid(grid, paramsList) {
-    for (const p of paramsList) {
-      this.elemParams.set(p.id, p);
-    }
+    for (const p of paramsList) this.elemParams.set(p.id, p);
 
     if (!paramsList.length) {
       grid.cols = [];
@@ -508,16 +440,11 @@ export class BpmnLayoutGenerator {
 
     for (let i = 0; i < grid.cols.length; i++) {
       const inCol = paramsList.filter(y => y.c === i + 1);
-      grid.cols[i] = inCol.length
-        ? Math.max(...inCol.map(x => x.w)) + 2 * this.visualIndent
-        : 0;
+      grid.cols[i] = inCol.length ? Math.max(...inCol.map(x => x.w)) + 2 * this.visualIndent : 0;
     }
-
     for (let i = 0; i < grid.rows.length; i++) {
       const inRow = paramsList.filter(y => y.r === i + 1);
-      grid.rows[i] = inRow.length
-        ? Math.max(...inRow.map(x => x.h)) + 2 * this.visualIndent
-        : 0;
+      grid.rows[i] = inRow.length ? Math.max(...inRow.map(x => x.h)) + 2 * this.visualIndent : 0;
     }
   }
 
@@ -528,19 +455,34 @@ export class BpmnLayoutGenerator {
   }
 
   getSizeFor(elem) {
-    // дефолтные размеры по тегу
     const tag = elem.tag;
     if (tag === 'startEvent' || tag === 'endEvent' ||
-        tag === 'intermediateThrowEvent' || tag === 'boundaryEvent') {
-      return { width: 36, height: 36 };
-    }
+        tag === 'intermediateThrowEvent' || tag === 'boundaryEvent') return { width: 36, height: 36 };
     if (tag.includes('Gateway')) return { width: 50, height: 50 };
     if (tag === 'subProcess') return { width: 350, height: 200 };
     return { width: 100, height: 80 };
   }
 
   /* ================================================================== *
-   *  4. calc_elems_coords — реальные координаты
+   *  attachBoundaryParams
+   * ================================================================== */
+
+  attachBoundaryParams(repr) {
+    for (const [id, elem] of repr) {
+      if (elem.tag !== 'boundaryEvent') continue;
+      const ownerId = elem.node && elem.node.attachedToRef;
+      if (!ownerId) continue;
+      const owner = this.elemParams.get(ownerId);
+      if (!owner) continue;
+      this.elemParams.set(id, {
+        id, x: owner.x + owner.w / 2 - 18, y: owner.y + owner.h - 18,
+        w: 36, h: 36, c: owner.c, r: owner.r, node: elem.node,
+      });
+    }
+  }
+
+  /* ================================================================== *
+   *  4. calc_elems_coords
    * ================================================================== */
 
   calcElemsCoords(repr, grid, processId) {
@@ -568,18 +510,13 @@ export class BpmnLayoutGenerator {
       const accumulatedWidth  = grid.cols.slice(0, params.c - 1).reduce((a, b) => a + b, 0);
       const accumulatedHeight = grid.rows.slice(0, params.r - 1).reduce((a, b) => a + b, 0);
 
-      params.x = accumulatedWidth
-        + (cellWidth - params.w) / 2
-        + subprocessShiftLeft;
-
-      params.y = accumulatedHeight
-        + (cellHeight - params.h) / 2
-        + subprocessShiftTop;
+      params.x = accumulatedWidth + (cellWidth - params.w) / 2 + subprocessShiftLeft;
+      params.y = accumulatedHeight + (cellHeight - params.h) / 2 + subprocessShiftTop;
     }
   }
 
   /* ================================================================== *
-   *  5. calc_edges — waypoints стрелок
+   *  5. calc_edges
    * ================================================================== */
 
   calcEdges(repr) {
@@ -621,41 +558,26 @@ export class BpmnLayoutGenerator {
 
       let waypoints;
       if (arrowType === 'bl' || arrowType === 'tl') {
-        waypoints = [
-          firstWaypoint,
-          [firstWaypoint[0], lastWaypoint[1]],
-          lastWaypoint,
-        ];
+        waypoints = [firstWaypoint, [firstWaypoint[0], lastWaypoint[1]], lastWaypoint];
       } else if (arrowType === 'rb' || arrowType === 'rt') {
-        waypoints = [
-          firstWaypoint,
-          [lastWaypoint[0], firstWaypoint[1]],
-          lastWaypoint,
-        ];
+        waypoints = [firstWaypoint, [lastWaypoint[0], firstWaypoint[1]], lastWaypoint];
       } else if (arrowType === 'bb') {
         const lowerRow = Math.max(sourceParams.r, targetParams.r);
         const elemsOfRow = [...this.elemParams.values()].filter(x => x.r === lowerRow && x.id);
-        const elemsOfStructure = elemsOfRow.filter(
-          e => repr.has(e.id));
+        const elemsOfStructure = elemsOfRow.filter(e => repr.has(e.id));
         const largestElem = elemsOfStructure.reduce(
           (acc, x) => (this.elemParams.get(x.id).h > this.elemParams.get(acc.id).h ? x : acc),
           elemsOfStructure[0]);
         const lep = this.elemParams.get(largestElem.id);
         const y = lep.y + lep.h + this.visualIndent;
-        waypoints = [
-          firstWaypoint,
-          [firstWaypoint[0], y],
-          [lastWaypoint[0], y],
-          lastWaypoint,
-        ];
+        waypoints = [firstWaypoint, [firstWaypoint[0], y], [lastWaypoint[0], y], lastWaypoint];
       } else {
         waypoints = [firstWaypoint, lastWaypoint];
       }
 
       this.edgesParams.set(id, {
         waypoints,
-        label: [firstWaypoint[0] + this.visualIndent / 2,
-                firstWaypoint[1] + this.visualIndent / 2],
+        label: [firstWaypoint[0] + this.visualIndent / 2, firstWaypoint[1] + this.visualIndent / 2],
       });
     }
   }
@@ -670,25 +592,18 @@ export class BpmnLayoutGenerator {
     return [0, 0];
   }
 
-  isGatewayId(id) {
-    return id.includes('Gateway');
-  }
+  isGatewayId(id) { return id.includes('Gateway'); }
 
   isUpperBranchOfGateway(gatewayId, flowId) {
     const tryIn = (repr) => {
       const gateway = repr.get(gatewayId);
       if (!gateway) return null;
-
-      const outFlows = gateway.outgoing
-        .map(fid => repr.get(fid))
-        .filter(Boolean);
+      const outFlows = gateway.outgoing.map(fid => repr.get(fid)).filter(Boolean);
       if (!outFlows.length) return null;
-
       const withBranch = outFlows.map(f => {
         const t = repr.get(f.targetRef);
         return { flowId: f.id, branch: (t && t.branch !== undefined) ? t.branch : Infinity };
       });
-
       const minBranch = Math.min(...withBranch.map(x => x.branch));
       const upper = withBranch.find(x => x.branch === minBranch);
       return upper ? upper.flowId : null;
@@ -704,7 +619,7 @@ export class BpmnLayoutGenerator {
   }
 
   /* ================================================================== *
-   *  6. optimize_layout — сжатие по X
+   *  6. optimize_layout
    * ================================================================== */
 
   optimizeLayout() {
@@ -713,20 +628,14 @@ export class BpmnLayoutGenerator {
     while (col > 0 && safety-- > 0) {
       const prev = col;
       col = this.shiftElements(col, 'cols');
-      if (col === prev) {
-        console.warn('[layout] optimizeLayout: no progress at col=', col);
-        break;
-      }
+      if (col === prev) break;
     }
-    if (safety <= 0) console.warn('[layout] optimizeLayout: safety limit reached');
   }
 
   shiftElements(idx, axis) {
     const otherAxis = axis === 'cols' ? 'rows' : 'cols';
-
     const elementsToShift = [...this.filterElements(idx, axis, 'end')];
     const restEls         = [...this.filterElements(idx, axis, 'begin')];
-
     const dim = axis === 'cols' ? 'x' : 'y';
 
     const distances = [];
@@ -734,22 +643,17 @@ export class BpmnLayoutGenerator {
       let borderShifting = { x: Infinity, y: Infinity };
       const filteredShifting = [...this.filterElements(i + 1, otherAxis, 'exact', elementsToShift)];
       if (filteredShifting.length) {
-        borderShifting = filteredShifting.reduce(
-          (acc, e) => (e[dim] < acc[dim] ? e : acc)
-        );
+        borderShifting = filteredShifting.reduce((acc, e) => (e[dim] < acc[dim] ? e : acc));
       }
 
       let borderStatic = { x: 0, y: 0 };
       const filteredStatic = [...this.filterElements(i + 1, otherAxis, 'exact', restEls)];
       if (filteredStatic.length) {
-        borderStatic = filteredStatic.reduce(
-          (acc, e) => (e[dim] > acc[dim] ? e : acc)
-        );
+        borderStatic = filteredStatic.reduce((acc, e) => (e[dim] > acc[dim] ? e : acc));
       }
 
       let shiftingProj = borderShifting[dim];
       if (borderShifting.add_gap) shiftingProj -= this.gatewayGap;
-
       let staticProj = borderStatic[dim];
       if (borderStatic.add_gap) staticProj += this.gatewayGap;
 
@@ -757,7 +661,6 @@ export class BpmnLayoutGenerator {
     }
 
     if (!distances.length) return Math.max(idx - 1, 0);
-
     const shiftValue = Math.max(Math.min(...distances) - 2 * this.visualIndent, 0);
     if (!shiftValue) return Math.max(idx - 1, 0);
 
@@ -772,7 +675,6 @@ export class BpmnLayoutGenerator {
     }
 
     if (closestShiftedDot === Infinity) return Math.max(idx - 1, 0);
-
     const affectedLane = this.getLaneForCoord(closestShiftedDot, axis) + 1;
     return affectedLane >= idx ? Math.max(idx - 1, 0) : Math.max(affectedLane, 0);
   }
@@ -803,14 +705,12 @@ export class BpmnLayoutGenerator {
         const wp = waypoints[i];
         result.push({
           x: wp[0], y: wp[1], idx: i, is_label: false,
-          parent: flowId, is_virtual: false, is_intermediate: false,
-          add_gap: false,
+          parent: flowId, is_virtual: false, is_intermediate: false, add_gap: false,
         });
       }
       result.push({
         x: edge.label[0], y: edge.label[1], is_label: true, idx: -1,
-        parent: flowId, is_virtual: false, is_intermediate: true,
-        add_gap: false,
+        parent: flowId, is_virtual: false, is_intermediate: true, add_gap: false,
       });
     }
     return result;
@@ -834,22 +734,19 @@ export class BpmnLayoutGenerator {
     }
 
     const result = [];
-    let acc = 0;
     for (const [key, waypoints] of filteredData) {
       const coords = waypoints.map(p => axis === 'cols' ? p[1] : p[0]);
       const start = Math.min(...coords);
       const end   = Math.max(...coords);
       const constComp = waypoints[0][axisIdx];
 
-      acc = 0;
+      let acc = 0;
       for (const bar of this.grid[axis]) {
         acc += bar;
         if (start < acc && acc < end) {
           result.push({
             is_label: false, parent: key, idx: null, add_gap: true,
-            is_virtual: true,
-            [axisXY]: constComp,
-            [otherXY]: (2 * acc + bar) / 2,
+            is_virtual: true, [axisXY]: constComp, [otherXY]: (2 * acc + bar) / 2,
           });
         }
       }
@@ -859,7 +756,6 @@ export class BpmnLayoutGenerator {
 
   filterElements(idx, axis, direction, elsToFilter) {
     if (!this.grid[axis] || !this.grid[axis][idx - 1]) return [];
-
     const axisXY = axis === 'cols' ? 'x' : 'y';
     const lower = this.grid[axis].slice(0, idx - 1).reduce((a, b) => a + b, 0);
     const upper = lower + this.grid[axis][idx - 1];
@@ -884,79 +780,62 @@ export class BpmnLayoutGenerator {
   }
 
   /* ================================================================== *
-   *  7. update_pool — размеры пула и дорожек
+   *  7. update_pool
    * ================================================================== */
 
   updatePool(process) {
-    if (!process.lanes.length) return;
+    const gridW = this.grid.cols.reduce((a, b) => a + b, 0);
+    const gridH = this.grid.rows.reduce((a, b) => a + b, 0);
 
-    const laneSetId = process.laneSetId;
-    const lanesCount = process.lanes.length;
-    const laneSize = Math.floor(this.grid.rows.length / lanesCount);
+    if (process.lanes.length) {
+      const lanesCount = process.lanes.length;
+      const laneSize = Math.floor(this.grid.rows.length / lanesCount);
 
-    const lanes = [];
-    for (let i = 0; i < lanesCount; i++) {
-      lanes.push(this.grid.rows.slice(i * laneSize, (i + 1) * laneSize));
-    }
-    const heights = lanes.map(l => l.reduce((a, b) => a + b, 0));
-    const width = this.grid.cols.reduce((a, b) => a + b, 0);
+      const lanes = [];
+      for (let i = 0; i < lanesCount; i++) {
+        lanes.push(this.grid.rows.slice(i * laneSize, (i + 1) * laneSize));
+      }
+      const heights = lanes.map(l => l.reduce((a, b) => a + b, 0));
 
-    this.elemParams.set('laneSet', {
-      id: 'laneSet',
-      x: -this.poolElemShift, y: 0,
-      w: width + this.poolElemShift,
-      h: heights.reduce((a, b) => a + b, 0),
-      spec: 'laneSet',
-    });
-
-    let yAcc = 0;
-    for (let i = 0; i < process.lanes.length; i++) {
-      const lane = process.lanes[i];
-      this.elemParams.set(lane.id, {
-        id: lane.id,
-        x: 0, y: yAcc,
-        w: width, h: heights[i],
-        spec: 'lane',
+      this.elemParams.set('laneSet', {
+        id: 'laneSet',
+        x: -this.poolElemShift, y: 0,
+        w: gridW + this.poolElemShift,
+        h: heights.reduce((a, b) => a + b, 0),
+        spec: 'laneSet',
       });
-      yAcc += heights[i];
+
+      let yAcc = 0;
+      for (let i = 0; i < process.lanes.length; i++) {
+        const lane = process.lanes[i];
+        this.elemParams.set(lane.id, {
+          id: lane.id, x: 0, y: yAcc,
+          w: gridW, h: heights[i], spec: 'lane',
+        });
+        yAcc += heights[i];
+      }
     }
+
+    process.bounds = {
+      x: -this.poolElemShift,
+      y: 0,
+      width: gridW + this.poolElemShift,
+      height: gridH,
+    };
   }
 
-  /* ================================================================== *
-   *  Запись результата в модель
-   * ================================================================== */
-
   applyToModel(process) {
-    for (const node of process.flowNodes) {
-      this.applyNodeParams(node);
-    }
-    for (const flow of process.sequenceFlows) {
-      this.applyFlowParams(flow);
-    }
+    for (const node of process.flowNodes) this.applyNodeParams(node);
+    for (const flow of process.sequenceFlows) this.applyFlowParams(flow);
     for (const lane of process.lanes) {
       const p = this.elemParams.get(lane.id);
       if (p) lane.bounds = { x: p.x, y: p.y, width: p.w, height: p.h };
     }
-    const laneSetParams = this.elemParams.get('laneSet');
-    if (laneSetParams && process.lanes.length) {
-      // bound процесса — границы laneSet + сдвиг на poolElemShift
-      const lb = laneSetParams;
-      process.bounds = {
-        x: lb.x - this.poolElemShift,
-        y: lb.y,
-        width: lb.w + this.poolElemShift,
-        height: lb.h,
-      };
-    }
   }
 
   applyToSubprocess(sp) {
-    for (const node of sp.flowNodes) {
-      this.applyNodeParams(node);
-    }
-    for (const flow of sp.sequenceFlows) {
-      this.applyFlowParams(flow);
-    }
+    for (const node of sp.flowNodes) this.applyNodeParams(node);
+    for (const flow of sp.sequenceFlows) this.applyFlowParams(flow);
     this.applyNodeParams(sp.node);
   }
 
@@ -969,62 +848,5 @@ export class BpmnLayoutGenerator {
   applyFlowParams(flow) {
     const e = this.edgesParams.get(flow.id);
     if (e) flow.waypoints = e.waypoints;
-  }
-
-  /* ================================================================== *
-   *  Артефакты — после раскладки
-   * ================================================================== */
-
-  applyArtifacts(process) {
-    // пробегаем по всем задачам; у кого есть комментарий / данные — сдвигаем их над задачей
-    const handleNode = (node) => {
-      if (!node.bounds) return;
-
-      // комментарии и данные уже лежат в process._pendingArtifacts (после buildModel)
-      // но там уже bounds посчитаны по старым правилам. Пересчитаем:
-    };
-
-    // по факту артефакты уже созданы в buildModel с bounds по старым правилам.
-    // Пересчитаем здесь с учётом новых bounds задачи.
-    for (const ta of (process._pendingArtifacts?.textAnnotations || [])) {
-      // ... уже не тут
-    }
-  }
-
-  applyDataStoresUnderPool(process) {
-    // пересчёт базы-данных под новым пулом
-    for (const ref of process.dataStores) {
-      const owner = this.findDataStoreOwner(process, ref);
-      if (!owner || !owner.bounds) continue;
-      const p = process.bounds || { x: 0, y: 0, width: 0, height: 0 };
-      ref.bounds = {
-        x: owner.bounds.x + owner.bounds.width / 2 - 25,
-        y: p.y + p.height + 30,
-        width: 50,
-        height: 50,
-      };
-    }
-  }
-
-  findDataStoreOwner(process, ref) {
-    // ищем задачу, у которой в dataOutputAssocs есть ссылка на ref
-    const collect = (nodes) => {
-      for (const n of nodes) {
-        for (const a of n.dataOutputAssocs || []) {
-          if (a.targetRef === ref.id) return n;
-        }
-        if (n.children && n.children.length) {
-          const r = collect(n.children);
-          if (r) return r;
-        }
-      }
-      return null;
-    };
-    return collect(process.flowNodes);
-  }
-
-  applyMessageFlows(process) {
-    // waypoints для messageFlow пересчитываются в BpmnDiGenerator
-    // (там мы делаем второй проход) — оставляем как есть
   }
 }

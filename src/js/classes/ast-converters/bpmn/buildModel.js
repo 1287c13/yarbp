@@ -58,7 +58,6 @@ export function buildModel(ast) {
     for (const proc of definitions.processes) {
       const participant = new BpmnParticipant(
         ctx.idGen.next('Participant'), proc.name, proc.id);
-      participant.bounds = proc.bounds;
       collab.participants.push(participant);
     }
     collab.textAnnotations = allTextAnnotations;
