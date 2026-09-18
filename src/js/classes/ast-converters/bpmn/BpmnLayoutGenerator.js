@@ -5,6 +5,7 @@
 const VISUAL_INDENT = 12.5;
 const POOL_ELEM_SHIFT = 30.0;
 const GATEWAY_GAP = 25.0;
+const BOUNDARY_RIGHT_SHIFT = 12.5;
 
 export class BpmnLayoutGenerator {
   constructor(model) {
@@ -31,6 +32,7 @@ export class BpmnLayoutGenerator {
     this.nodesToVisitIds = [];
     this.lanesCache      = new Map();
     this.boundaryOwners  = new Set();
+    this.artifactsAboveTask = new Map();
   }
 
   generate() {
@@ -52,11 +54,13 @@ export class BpmnLayoutGenerator {
     this.nodesToVisitIds = [];
     this.lanesCache = new Map();
     this.boundaryOwners = new Set();
+    this.artifactsAboveTask = new Map();
 
     this.collectNodes(process.flowNodes, process);
     this.collectLaneIndexes(process);
     this.repr = this.buildRepr(process.flowNodes, process.sequenceFlows);
     this.collectSubprocesses(process.flowNodes, process);
+    this.collectArtifactsAbove(process);
 
     this.addStructureAttrs(this.repr);
     for (const sp of this.subprocesses) this.addStructureAttrs(sp.repr);
@@ -96,6 +100,46 @@ export class BpmnLayoutGenerator {
         this.collectNodes(node.children, process);
       }
     }
+  }
+
+  collectArtifactsAbove(process) {
+    const ARTIFACT_H = 30;
+    const GAP = 30;
+
+    for (const ref of process.dataObjectRefs) {
+      const owner = this.findAssocOwner(process, ref.id);
+      if (!owner) continue;
+      const cur = this.artifactsAboveTask.get(owner.id) || 0;
+      this.artifactsAboveTask.set(owner.id, cur + ARTIFACT_H + GAP);
+    }
+
+    const collab = this.model.collaboration;
+    if (collab) {
+      for (const assoc of collab.associations) {
+        const ta = collab.textAnnotations.find(t => t.id === assoc.targetRef);
+        if (!ta) continue;
+        const owner = this.nodesById.get(assoc.sourceRef);
+        if (!owner) continue;
+        const cur = this.artifactsAboveTask.get(owner.id) || 0;
+        this.artifactsAboveTask.set(owner.id, cur + ARTIFACT_H + GAP);
+      }
+    }
+  }
+
+  findAssocOwner(process, targetRef) {
+    const check = (nodes) => {
+      for (const n of nodes) {
+        for (const a of n.dataOutputAssocs || []) {
+          if (a.targetRef === targetRef) return n;
+        }
+        if (n.children && n.children.length) {
+          const r = check(n.children);
+          if (r) return r;
+        }
+      }
+      return null;
+    };
+    return check(process.flowNodes);
   }
 
   collectLaneIndexes(process) {
@@ -404,13 +448,18 @@ export class BpmnLayoutGenerator {
     }
 
     const size = this.getSizeFor(elem);
+    const artifactsH = this.artifactsAboveTask.get(elem.id) || 0;
+
+    const realH = subprocessHeight || size.height;
 
     return {
       id: elem.id,
       c: ((elem.col || 1) - 1) * this.numOfBrunches + (elem.branch || 1),
       r: ((lane || 1) - 1) * this.numOfBrunches + (elem.branch || 1),
       w: subprocessWidth || size.width,
-      h: subprocessHeight || size.height,
+      h: realH + artifactsH,   // для сетки
+      realH,                   // для визуала и waypoints
+      artifactsH,
       p: processId || null,
       node: elem.node,
     };
@@ -463,9 +512,13 @@ export class BpmnLayoutGenerator {
       if (!ownerId) continue;
       const owner = this.elemParams.get(ownerId);
       if (!owner) continue;
+      const ownerRealH = owner.realH || owner.h;
       this.elemParams.set(id, {
-        id, x: owner.x + owner.w / 2 - 18, y: owner.y + owner.h - 18,
-        w: 36, h: 36, c: owner.c, r: owner.r, node: elem.node,
+        id,
+        x: owner.x + owner.w - 36 - BOUNDARY_RIGHT_SHIFT,
+        y: owner.y + ownerRealH - 18,
+        w: 36, h: 36, realH: 36,
+        c: owner.c, r: owner.r, node: elem.node,
       });
     }
   }
@@ -497,8 +550,10 @@ export class BpmnLayoutGenerator {
       const accumulatedWidth  = grid.cols.slice(0, params.c - 1).reduce((a, b) => a + b, 0);
       const accumulatedHeight = grid.rows.slice(0, params.r - 1).reduce((a, b) => a + b, 0);
 
+      const taskH = params.realH || params.h;
+
       params.x = accumulatedWidth + (cellWidth - params.w) / 2 + subprocessShiftLeft;
-      params.y = accumulatedHeight + (cellHeight - params.h) / 2 + subprocessShiftTop;
+      params.y = accumulatedHeight + (cellHeight - taskH) / 2 + subprocessShiftTop;
     }
   }
 
@@ -512,6 +567,23 @@ export class BpmnLayoutGenerator {
       const targetParams = this.elemParams.get(elem.targetRef);
       if (!sourceParams || !targetParams) continue;
 
+      const sourceIsBoundary = sourceParams.node && sourceParams.node.tag === 'boundaryEvent';
+
+      if (sourceIsBoundary) {
+        const firstWaypoint = this.getNodeHandleCoords(sourceParams.id, 'b');
+        const lastWaypoint  = this.getNodeHandleCoords(targetParams.id, 'l');
+        const waypoints = [
+          firstWaypoint,
+          [firstWaypoint[0], lastWaypoint[1]],
+          lastWaypoint,
+        ];
+        this.edgesParams.set(id, {
+          waypoints,
+          label: [firstWaypoint[0] + this.visualIndent / 2, firstWaypoint[1] + this.visualIndent / 2],
+        });
+        continue;
+      }
+
       const isRightShift = sourceParams.c < targetParams.c;
       const isDownShift  = sourceParams.r < targetParams.r;
       const isUpShift    = sourceParams.r > targetParams.r;
@@ -519,11 +591,10 @@ export class BpmnLayoutGenerator {
       let arrowType = 'rl';
 
       const sourceIsGateway = this.isGatewayId(sourceParams.id);
-      const sourceIsBoundary = sourceParams.node && sourceParams.node.tag === 'boundaryEvent';
       const targetHasBoundary = this.boundaryOwners.has(targetParams.id);
 
       if (isRightShift && isDownShift
-          && (sourceIsGateway || targetHasBoundary || sourceIsBoundary)
+          && (sourceIsGateway || targetHasBoundary)
           && !this.isUpperBranchOfGateway(sourceParams.id, id)) {
         arrowType = 'bl';
       } else if (isRightShift && isDownShift) {
@@ -558,7 +629,7 @@ export class BpmnLayoutGenerator {
           (acc, x) => (this.elemParams.get(x.id).h > this.elemParams.get(acc.id).h ? x : acc),
           elemsOfStructure[0]);
         const lep = this.elemParams.get(largestElem.id);
-        const y = lep.y + lep.h + this.visualIndent;
+        const y = lep.y + (lep.realH || lep.h) + this.visualIndent;
         waypoints = [firstWaypoint, [firstWaypoint[0], y], [lastWaypoint[0], y], lastWaypoint];
       } else {
         waypoints = [firstWaypoint, lastWaypoint];
@@ -574,9 +645,10 @@ export class BpmnLayoutGenerator {
   getNodeHandleCoords(nodeId, handleType) {
     const p = this.elemParams.get(nodeId);
     if (!p) return [0, 0];
-    if (handleType === 'r') return [p.x + p.w, p.y + p.h / 2];
-    if (handleType === 'l') return [p.x, p.y + p.h / 2];
-    if (handleType === 'b') return [p.x + p.w / 2, p.y + p.h];
+    const h = p.realH || p.h;
+    if (handleType === 'r') return [p.x + p.w, p.y + h / 2];
+    if (handleType === 'l') return [p.x, p.y + h / 2];
+    if (handleType === 'b') return [p.x + p.w / 2, p.y + h];
     if (handleType === 't') return [p.x + p.w / 2, p.y];
     return [0, 0];
   }
@@ -773,10 +845,11 @@ export class BpmnLayoutGenerator {
     for (const p of this.elemParams.values()) {
       if (!p.id) continue;
       if (p.x === undefined || p.y === undefined) continue;
+      const h = p.realH || p.h;
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
       maxX = Math.max(maxX, p.x + (p.w || 0));
-      maxY = Math.max(maxY, p.y + (p.h || 0));
+      maxY = Math.max(maxY, p.y + h);
     }
     if (minX === Infinity) {
       minX = 0; minY = 0; maxX = 0; maxY = 0;
@@ -787,7 +860,6 @@ export class BpmnLayoutGenerator {
     const shiftX = -minX + padding;
     const shiftY = -minY + padding;
 
-    // сдвиг всех bounds
     for (const p of this.elemParams.values()) {
       if (!p.id) continue;
       if (p.x === undefined) continue;
@@ -795,7 +867,6 @@ export class BpmnLayoutGenerator {
       p.y += shiftY;
     }
 
-    // сдвиг всех waypoints (сохраняя форму)
     for (const [, edge] of this.edgesParams) {
       edge.waypoints = edge.waypoints.map(([x, y]) => [x + shiftX, y + shiftY]);
     }
@@ -803,7 +874,6 @@ export class BpmnLayoutGenerator {
     const gridW = (maxX - minX) + 2 * padding;
     const gridH = (maxY - minY) + 2 * padding;
 
-    // lanes и laneSet
     if (process.lanes.length) {
       const lanesCount = process.lanes.length;
       const laneSize = Math.floor(this.grid.rows.length / lanesCount);
@@ -862,7 +932,8 @@ export class BpmnLayoutGenerator {
   applyNodeParams(node) {
     const p = this.elemParams.get(node.id);
     if (!p) return;
-    node.bounds = { x: p.x, y: p.y, width: p.w, height: p.h };
+    const realH = p.realH || p.h;
+    node.bounds = { x: p.x, y: p.y, width: p.w, height: realH };
   }
 
   applyFlowParams(flow) {

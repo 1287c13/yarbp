@@ -127,7 +127,7 @@ function fixBoundaryBounds(process) {
     if (!owner || !owner.bounds) continue;
     const ob = owner.bounds;
     node.bounds = {
-      x: ob.x + ob.width / 2 - 18,
+      x: ob.x + ob.width - 36 - 12.5,  // правее
       y: ob.y + ob.height - 18,
       width: 36, height: 36,
     };
