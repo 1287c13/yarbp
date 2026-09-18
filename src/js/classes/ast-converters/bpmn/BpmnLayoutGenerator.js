@@ -1,17 +1,5 @@
 /**
  * Порт BpmnLayoutGenerator с Python.
- *
- * Идея:
- *  - элементы раскладываются по сетке (cols × rows);
- *  - большая ячейка (col, lane) раздувается на num_of_brunches × num_of_brunches
- *    подъячеек; элемент с branch=b попадает в подъячейку (b, b) — «диагональ»;
- *  - размеры строк/колонок — по максимуму содержимого;
- *  - optimize_layout сжимает «пустоты» справа налево.
- *
- * Boundary:
- *  - boundaryEvent не занимает ячейку — прилипает к владельцу;
- *  - его ветка (g4 → t6 → ...) — часть общей сетки, получает свои col
- *    через постобработку calcGridStructure.
  */
 
 const VISUAL_INDENT = 12.5;
@@ -42,6 +30,7 @@ export class BpmnLayoutGenerator {
     this.startEventsIds  = [];
     this.nodesToVisitIds = [];
     this.lanesCache      = new Map();
+    this.boundaryOwners  = new Set();
   }
 
   generate() {
@@ -62,6 +51,7 @@ export class BpmnLayoutGenerator {
     this.startEventsIds = [];
     this.nodesToVisitIds = [];
     this.lanesCache = new Map();
+    this.boundaryOwners = new Set();
 
     this.collectNodes(process.flowNodes, process);
     this.collectLaneIndexes(process);
@@ -69,14 +59,10 @@ export class BpmnLayoutGenerator {
     this.collectSubprocesses(process.flowNodes, process);
 
     this.addStructureAttrs(this.repr);
-    for (const sp of this.subprocesses) {
-      this.addStructureAttrs(sp.repr);
-    }
+    for (const sp of this.subprocesses) this.addStructureAttrs(sp.repr);
 
     this.calcGridStructure(this.repr);
-    for (const sp of this.subprocesses) {
-      this.calcGridStructure(sp.repr);
-    }
+    for (const sp of this.subprocesses) this.calcGridStructure(sp.repr);
 
     this.calcGridSizes(process);
 
@@ -85,34 +71,27 @@ export class BpmnLayoutGenerator {
       this.calcElemsCoords(sp.repr, sp.grid, sp.id);
     }
 
-    // boundary в elemParams — прилипает к владельцу (для calcEdges)
     this.attachBoundaryParams(this.repr);
-    for (const sp of this.subprocesses) {
-      this.attachBoundaryParams(sp.repr);
-    }
+    for (const sp of this.subprocesses) this.attachBoundaryParams(sp.repr);
 
     this.calcEdges(this.repr);
-    for (const sp of this.subprocesses) {
-      this.calcEdges(sp.repr);
-    }
+    for (const sp of this.subprocesses) this.calcEdges(sp.repr);
 
     this.optimizeLayout();
-
     this.updatePool(process);
 
     this.applyToModel(process);
-    for (const sp of this.subprocesses) {
-      this.applyToSubprocess(sp);
-    }
+    for (const sp of this.subprocesses) this.applyToSubprocess(sp);
   }
 
-  /* ================================================================== *
-   *  Сбор данных
-   * ================================================================== */
+  /* ---------------- Сбор данных ---------------- */
 
   collectNodes(nodes, process) {
     for (const node of nodes) {
       this.nodesById.set(node.id, node);
+      if (node.tag === 'boundaryEvent' && node.attachedToRef) {
+        this.boundaryOwners.add(node.attachedToRef);
+      }
       if (node.children && node.children.length) {
         this.collectNodes(node.children, process);
       }
@@ -121,9 +100,7 @@ export class BpmnLayoutGenerator {
 
   collectLaneIndexes(process) {
     let idx = 1;
-    for (const lane of process.lanes) {
-      this.laneIndexById.set(lane.id, idx++);
-    }
+    for (const lane of process.lanes) this.laneIndexById.set(lane.id, idx++);
   }
 
   buildRepr(flowNodes, sequenceFlows) {
@@ -166,9 +143,7 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  /* ================================================================== *
-   *  1. add_structure_attrs
-   * ================================================================== */
+  /* ---------------- 1. add_structure_attrs ---------------- */
 
   addStructureAttrs(repr) {
     this.branchCounter = 1;
@@ -178,7 +153,6 @@ export class BpmnLayoutGenerator {
       this.traverseAndAssignBranchNumbers(startId, repr);
     }
 
-    // boundary получает branch владельца
     for (const [id, elem] of repr) {
       if (elem.tag !== 'boundaryEvent') continue;
       if (elem.branch !== undefined) continue;
@@ -187,13 +161,47 @@ export class BpmnLayoutGenerator {
       const owner = repr.get(ownerId);
       if (owner && owner.branch !== undefined) elem.branch = owner.branch;
     }
+
+    const boundaryNodes = [...repr.entries()]
+      .filter(([id, e]) => e.tag === 'boundaryEvent' && e.branch !== undefined);
+
+    for (const [id, boundary] of boundaryNodes) {
+      const targetIds = this.getConnectedNodesIds(id, repr, 'target');
+      for (const tId of targetIds) {
+        const t = repr.get(tId);
+        if (!t || t.branch !== undefined) continue;
+        const branch = this.branchCounter;
+        this.branchCounter++;
+        this.assignBranchChain(tId, repr, branch);
+      }
+    }
+  }
+
+  assignBranchChain(startId, repr, branch) {
+    const start = repr.get(startId);
+    if (!start || start.branch !== undefined) return;
+    start.branch = branch;
+
+    let nextId = this.exploreNeighboringNodes(startId, repr, branch);
+    while (nextId) {
+      nextId = this.exploreNeighboringNodes(nextId, repr, branch);
+    }
+
+    let queued = this.nodesToVisitIds.pop();
+    while (queued !== undefined) {
+      const q = repr.get(queued);
+      if (q && q.branch === undefined) {
+        const newBranch = this.branchCounter;
+        this.branchCounter++;
+        this.assignBranchChain(queued, repr, newBranch);
+      }
+      queued = this.nodesToVisitIds.pop();
+    }
   }
 
   getStartEventsIds(repr) {
     const result = [];
-    for (const [id, elem] of repr) {
-      if (elem.tag === 'startEvent') result.push(id);
-    }
+    for (const [id, elem] of repr) if (elem.tag === 'startEvent') result.push(id);
     return result;
   }
 
@@ -204,11 +212,11 @@ export class BpmnLayoutGenerator {
     elem.branch = this.branchCounter;
     if (elem.tag === 'subProcess') this.addSubprocessRef(elem.id);
 
-    let nextElemId = this.exploreNeighboringNodes(initialElemId, repr);
+    let nextElemId = this.exploreNeighboringNodes(initialElemId, repr, this.branchCounter);
     while (nextElemId) {
       const nextElem = repr.get(nextElemId);
       if (nextElem && nextElem.tag === 'subProcess') this.addSubprocessRef(nextElemId);
-      nextElemId = this.exploreNeighboringNodes(nextElemId, repr);
+      nextElemId = this.exploreNeighboringNodes(nextElemId, repr, this.branchCounter);
     }
 
     this.branchCounter++;
@@ -221,21 +229,16 @@ export class BpmnLayoutGenerator {
 
   addSubprocessRef(subprocessId) {
     const sp = this.subprocesses.find(s => s.id === subprocessId);
-    if (sp && sp.node.laneId) {
-      sp.lane = this.laneIndexById.get(sp.node.laneId) || sp.lane;
-    }
+    if (sp && sp.node.laneId) sp.lane = this.laneIndexById.get(sp.node.laneId) || sp.lane;
   }
 
-  exploreNeighboringNodes(parentNodeId, repr) {
+  exploreNeighboringNodes(parentNodeId, repr, branch) {
     const targetNodesIds = this.getConnectedNodesIds(parentNodeId, repr, 'target');
-    if (targetNodesIds.length > 1) {
-      this.nodesToVisitIds.push(...targetNodesIds.slice(1));
-    }
+    if (targetNodesIds.length > 1) this.nodesToVisitIds.push(...targetNodesIds.slice(1));
     if (targetNodesIds.length === 0) return null;
-
     const first = targetNodesIds[0];
     const elem = repr.get(first);
-    if (elem && elem.branch === undefined) elem.branch = this.branchCounter;
+    if (elem && elem.branch === undefined) elem.branch = branch;
     return first;
   }
 
@@ -252,9 +255,7 @@ export class BpmnLayoutGenerator {
     return result;
   }
 
-  /* ================================================================== *
-   *  2. calc_grid_structure — нумерация колонок
-   * ================================================================== */
+  /* ---------------- 2. calc_grid_structure ---------------- */
 
   calcGridStructure(repr) {
     const currentColElemsIds = this.getStartEventsIds(repr);
@@ -276,9 +277,7 @@ export class BpmnLayoutGenerator {
         const sourceIds = sourceNodesIdsCache.get(id);
         if (sourceIds.length < 2) {
           elem.col = col;
-          for (const targId of targetNodesIdsCache.get(id)) {
-            nextColElemsIds.push(targId);
-          }
+          for (const targId of targetNodesIdsCache.get(id)) nextColElemsIds.push(targId);
         } else {
           delayedProcessingQueue.add(id);
         }
@@ -295,9 +294,7 @@ export class BpmnLayoutGenerator {
           toRemove.push(id);
           if (elem.col === undefined) {
             elem.col = col;
-            for (const targId of targetNodesIdsCache.get(id)) {
-              nextColElemsIds.push(targId);
-            }
+            for (const targId of targetNodesIdsCache.get(id)) nextColElemsIds.push(targId);
           }
         }
       }
@@ -308,7 +305,6 @@ export class BpmnLayoutGenerator {
       col++;
     }
 
-    // boundary получает col владельца
     for (const [id, elem] of repr) {
       if (elem.tag !== 'boundaryEvent') continue;
       if (elem.col !== undefined) continue;
@@ -318,7 +314,6 @@ export class BpmnLayoutGenerator {
       if (owner && owner.col !== undefined) elem.col = owner.col;
     }
 
-    // узлы, ставшие достижимыми через boundary
     let changed = true;
     let safety = 1000;
     while (changed && safety-- > 0) {
@@ -345,9 +340,7 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  /* ================================================================== *
-   *  3. calc_grid_sizes
-   * ================================================================== */
+  /* ---------------- 3. calc_grid_sizes ---------------- */
 
   calcGridSizes(process) {
     const filtered = [...this.repr.values()].filter(
@@ -463,10 +456,6 @@ export class BpmnLayoutGenerator {
     return { width: 100, height: 80 };
   }
 
-  /* ================================================================== *
-   *  attachBoundaryParams
-   * ================================================================== */
-
   attachBoundaryParams(repr) {
     for (const [id, elem] of repr) {
       if (elem.tag !== 'boundaryEvent') continue;
@@ -481,9 +470,7 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  /* ================================================================== *
-   *  4. calc_elems_coords
-   * ================================================================== */
+  /* ---------------- 4. calc_elems_coords ---------------- */
 
   calcElemsCoords(repr, grid, processId) {
     let subprocessShiftLeft = 0;
@@ -515,9 +502,7 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  /* ================================================================== *
-   *  5. calc_edges
-   * ================================================================== */
+  /* ---------------- 5. calc_edges ---------------- */
 
   calcEdges(repr) {
     for (const [id, elem] of repr) {
@@ -533,8 +518,12 @@ export class BpmnLayoutGenerator {
 
       let arrowType = 'rl';
 
+      const sourceIsGateway = this.isGatewayId(sourceParams.id);
+      const sourceIsBoundary = sourceParams.node && sourceParams.node.tag === 'boundaryEvent';
+      const targetHasBoundary = this.boundaryOwners.has(targetParams.id);
+
       if (isRightShift && isDownShift
-          && this.isGatewayId(sourceParams.id)
+          && (sourceIsGateway || targetHasBoundary || sourceIsBoundary)
           && !this.isUpperBranchOfGateway(sourceParams.id, id)) {
         arrowType = 'bl';
       } else if (isRightShift && isDownShift) {
@@ -618,9 +607,7 @@ export class BpmnLayoutGenerator {
     return false;
   }
 
-  /* ================================================================== *
-   *  6. optimize_layout
-   * ================================================================== */
+  /* ---------------- 6. optimize_layout ---------------- */
 
   optimizeLayout() {
     let col = this.grid.cols.length;
@@ -779,14 +766,44 @@ export class BpmnLayoutGenerator {
     return elsToFilter.filter(match);
   }
 
-  /* ================================================================== *
-   *  7. update_pool
-   * ================================================================== */
+  /* ---------------- 7. update_pool ---------------- */
 
   updatePool(process) {
-    const gridW = this.grid.cols.reduce((a, b) => a + b, 0);
-    const gridH = this.grid.rows.reduce((a, b) => a + b, 0);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of this.elemParams.values()) {
+      if (!p.id) continue;
+      if (p.x === undefined || p.y === undefined) continue;
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x + (p.w || 0));
+      maxY = Math.max(maxY, p.y + (p.h || 0));
+    }
+    if (minX === Infinity) {
+      minX = 0; minY = 0; maxX = 0; maxY = 0;
+    }
 
+    const padding = this.visualIndent * 2;
+
+    const shiftX = -minX + padding;
+    const shiftY = -minY + padding;
+
+    // сдвиг всех bounds
+    for (const p of this.elemParams.values()) {
+      if (!p.id) continue;
+      if (p.x === undefined) continue;
+      p.x += shiftX;
+      p.y += shiftY;
+    }
+
+    // сдвиг всех waypoints (сохраняя форму)
+    for (const [, edge] of this.edgesParams) {
+      edge.waypoints = edge.waypoints.map(([x, y]) => [x + shiftX, y + shiftY]);
+    }
+
+    const gridW = (maxX - minX) + 2 * padding;
+    const gridH = (maxY - minY) + 2 * padding;
+
+    // lanes и laneSet
     if (process.lanes.length) {
       const lanesCount = process.lanes.length;
       const laneSize = Math.floor(this.grid.rows.length / lanesCount);
@@ -796,23 +813,26 @@ export class BpmnLayoutGenerator {
         lanes.push(this.grid.rows.slice(i * laneSize, (i + 1) * laneSize));
       }
       const heights = lanes.map(l => l.reduce((a, b) => a + b, 0));
+      const totalH = heights.reduce((a, b) => a + b, 0);
 
       this.elemParams.set('laneSet', {
         id: 'laneSet',
-        x: -this.poolElemShift, y: 0,
-        w: gridW + this.poolElemShift,
-        h: heights.reduce((a, b) => a + b, 0),
+        x: 0, y: 0,
+        w: gridW, h: totalH,
         spec: 'laneSet',
       });
 
       let yAcc = 0;
       for (let i = 0; i < process.lanes.length; i++) {
         const lane = process.lanes[i];
+        const laneH = totalH > 0 ? (heights[i] / totalH) * gridH : 0;
         this.elemParams.set(lane.id, {
-          id: lane.id, x: 0, y: yAcc,
-          w: gridW, h: heights[i], spec: 'lane',
+          id: lane.id,
+          x: 0, y: yAcc,
+          w: gridW, h: laneH,
+          spec: 'lane',
         });
-        yAcc += heights[i];
+        yAcc += laneH;
       }
     }
 

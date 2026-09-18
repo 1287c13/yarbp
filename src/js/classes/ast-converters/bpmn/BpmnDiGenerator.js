@@ -5,7 +5,6 @@ export function recalculateDi(model) {
   const layout = new BpmnLayoutGenerator(model);
   layout.generate();
 
-  // participant.bounds — копия process.bounds после layout
   if (model.collaboration) {
     for (const process of model.processes) {
       const participant = model.collaboration.participants.find(
@@ -20,21 +19,17 @@ export function recalculateDi(model) {
     }
   }
 
-  // артефакты
   for (const process of model.processes) {
     applyArtifactBounds(process);
   }
   applyCollaborationArtifacts(model);
 
-  // boundary
   for (const process of model.processes) {
     fixBoundaryBounds(process);
   }
 
-  // стопка процессов
   stackProcesses(model);
 
-  // waypoints
   for (const process of model.processes) {
     refreshAssocWaypoints(process);
   }
@@ -43,7 +38,7 @@ export function recalculateDi(model) {
   return model;
 }
 
-/* ------------------------------------------------------------------ */
+/* ---------------- Артефакты ---------------- */
 
 function applyArtifactBounds(process) {
   const nodesById = new Map();
@@ -146,7 +141,6 @@ function stackProcesses(model) {
     const dy = y - process.bounds.y;
     if (dy !== 0) {
       shiftProcessBy(process, 0, dy);
-      // participant процесса — вместе с детьми
       if (model.collaboration) {
         for (const p of model.collaboration.participants) {
           if (p.processRef === process.id && p.bounds) {
@@ -257,7 +251,7 @@ function refreshCollaborationWaypoints(model) {
   }
 }
 
-/* ------------------------------------------------------------------ */
+/* ---------------- Утилиты ---------------- */
 
 function collectNodesById(nodes, map) {
   for (const node of nodes) {
