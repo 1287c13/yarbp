@@ -1,5 +1,7 @@
 export const LAYOUT = Object.freeze({
-  visualIndent:        12.5,
+  // отступы внутри ячейки сетки
+  visualIndent:        18.0,    // было 12.5 — больше воздуха
+
   poolElemShift:       30.0,
   gatewayGap:          25.0,
 
@@ -21,5 +23,10 @@ export const LAYOUT = Object.freeze({
   textAnnotationWidth: 100,
   textAnnotationHeight: 30,
 
-  endEventRightMargin: 12.5,     // ← ЭТОЙ СТРОКИ НЕТ
+  endEventRightMargin: 12.5,
+
+  subProcessPaddingTop:    10,
+  subProcessPaddingBottom: 20,
+  subProcessPaddingLeft:   10,
+  subProcessPaddingRight:  10,
 });

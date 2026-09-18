@@ -429,8 +429,12 @@ export class BpmnLayoutGenerator {
     if (elem.tag === 'subProcess') {
       const sp = this.subprocesses.find(x => x.id === elem.id);
       if (sp) {
-        subprocessWidth  = sp.grid.cols.reduce((a, b) => a + b, 0);
-        subprocessHeight = sp.grid.rows.reduce((a, b) => a + b, 0);
+        subprocessWidth  = sp.grid.cols.reduce((a, b) => a + b, 0)
+          + LAYOUT.subProcessPaddingLeft
+          + LAYOUT.subProcessPaddingRight;
+        subprocessHeight = sp.grid.rows.reduce((a, b) => a + b, 0)
+          + LAYOUT.subProcessPaddingTop
+          + LAYOUT.subProcessPaddingBottom;
       }
     }
 
@@ -512,8 +516,8 @@ export class BpmnLayoutGenerator {
     if (processId) {
       const parentParams = this.elemParams.get(processId);
       if (parentParams) {
-        subprocessShiftLeft = parentParams.x || 0;
-        subprocessShiftTop  = parentParams.y || 0;
+        subprocessShiftLeft = (parentParams.x || 0) + LAYOUT.subProcessPaddingLeft;
+        subprocessShiftTop  = (parentParams.y || 0) + LAYOUT.subProcessPaddingTop;
       }
     }
 
