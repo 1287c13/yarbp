@@ -3,6 +3,7 @@ import { YarbpJSONConverter } from './ast-converters/JSONConvertor.js'
 import { YarbpXMLConverter } from './ast-converters/XMLConvertor.js'
 import { YarbpProtoConverter } from './ast-converters/ProtobufConvertor.js'
 import { YarbpBPMNConverter } from './ast-converters/bpmn/YarbpBPMNConverter.js'
+import { xpmSuggestions } from './suggestions/xpmSuggestions.js';
 
 /* renderers */
 import { YarbpBasicRenderer } from './YarbpBasicRenderer.js'
@@ -111,7 +112,8 @@ const KnownFlavors = Object.freeze({
   XPM: {
     names: ['кпо', 'xpm'],
     textExample: [],
-    renderer: XPMRenderer
+    renderer: XPMRenderer,
+    suggestions: xpmSuggestions,
   },
   BPMN: {
     names: ['бпмн', 'bpmn'],

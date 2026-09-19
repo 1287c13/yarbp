@@ -167,7 +167,7 @@ export class YarbpXPMConverter {
       const imageTile = rowTiles.find(t => (t.config || {}).tileType === 'image');
       if (!imageTile) return;
 
-      const firstPoint = rowTiles.find(t => t.config.tileType === 'point');
+      const firstPoint = rowTiles.find(t => (t.config || {}).tileType === 'point');
       if (!firstPoint) return; // точек нет — иконка остаётся на месте
 
       const targetX = firstPoint.grid.x - 1;

@@ -4,6 +4,10 @@ import { YarbpParser } from './classes/YarbpParser.js';
 import { YarbpHighlighter } from './classes/YarbpHighlighter.js';
 import { FileManager } from './modules/FileManager.js';
 
+import { SuggestionProvider } from './SuggestionProvider.js';
+import { SuggestionUI } from './SuggestionUI.js';
+import { SuggestionTicker } from './SuggestionTicker.js';
+
 const MIN_SIZE_PERCENT = 1;
 const MAX_SIDEBAR_PERCENT = 80;
 const MAX_PANE_PERCENT = 99;
@@ -222,7 +226,7 @@ function updateViews() {
   if (!textarea || !highlightDiv) return;
 
   const code = textarea.value;
-  YarbpAppGlobals.lexer.setInitialState(code); // todo реализовать инкрементальное обновление (заменить этот метод полного рендера при вводе с клавиатуры методом точечного парсинга текущего выражения)
+  YarbpAppGlobals.lexer.setInitialState(code);
   YarbpAppGlobals.lexer.tokenize();
 
   YarbpAppGlobals.highlighter.code = code;
@@ -238,21 +242,30 @@ function updateViews() {
     flavor = new YarbpFlavor(firstDirective.value);
   }
 
+  YarbpAppGlobals.suggestionTicker.schedule(() => {
+    const result = YarbpAppGlobals.suggestionProvider.update({
+      tokens: YarbpAppGlobals.lexer.tokens,
+      cursorOffset: textarea.selectionStart,
+      text: textarea.value,
+      flavor,
+    });
+    if (result) YarbpAppGlobals.suggestionUI.show(result);
+    else YarbpAppGlobals.suggestionUI.hide();
+  });
+
   if (!flavor.flavorData) {
-    renderHighlightDiv.innerHTML = `<div>Unknown flavor!</div>`
+    renderHighlightDiv.innerHTML = `<div>Unknown flavor!</div>`;
     return;
   }
 
   if (!YarbpAppGlobals.flavor || YarbpAppGlobals.flavor.flavorName !== flavor.flavorName) {
     const renderPane = renderTextarea.closest('#render-pane');
 
-    // Убираем то, что создал XPM
     if (renderPane) {
       const uiContainer = renderPane.querySelector('.ui-render-container');
       if (uiContainer) uiContainer.remove();
     }
 
-    // Возвращаем видимость текстовому контейнеру (XPM его прячет)
     const editorContainer = renderTextarea.closest('.editor-container');
     if (editorContainer) editorContainer.style.display = '';
 
@@ -296,6 +309,7 @@ function toggleTheme() {
   document.getElementById('day-icon').src = document.body.classList.contains('dark') ? 'static/day-white.svg' : 'static/day-black.svg';
   localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
   YarbpAppGlobals.lexer.callRendererObserver();
+  YarbpAppGlobals.suggestionUI.refresh();
 }
 
 themeBtn.addEventListener('click', toggleTheme);
@@ -406,6 +420,25 @@ if (textarea) {
   };
 
   textarea.addEventListener('keydown', (e) => {
+    if (YarbpAppGlobals.suggestionUI.handleKey(e)) return;
+
+    // Alt — принудительный вызов подсказок
+    if (e.key === 'Alt' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      YarbpAppGlobals.suggestionTicker.schedule(() => {
+        const tokens = YarbpAppGlobals.lexer.tokens;
+        const cursorOffset = textarea.selectionStart;
+        const text = textarea.value;
+        const flavor = YarbpAppGlobals.flavor;
+        const result = YarbpAppGlobals.suggestionProvider.update({
+          tokens, cursorOffset, text, flavor, force: true,
+        });
+        if (result) YarbpAppGlobals.suggestionUI.show(result);
+        else YarbpAppGlobals.suggestionUI.hide();
+      });
+      return;
+    }
+
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
 
@@ -474,6 +507,10 @@ let currentOrientation = getOrientation();
 let paneResizerHandler = null;
 let YarbpAppGlobals = setAppGlobals();
 
+YarbpAppGlobals.suggestionProvider = new SuggestionProvider();
+YarbpAppGlobals.suggestionTicker   = new SuggestionTicker();
+YarbpAppGlobals.suggestionUI       = new SuggestionUI(textarea, codePane);
+
 // Инициализация файлового менеджера
 const fileManagerContainer = document.getElementById('file-manager-container');
 const fileManager = new FileManager();
@@ -488,6 +525,7 @@ window.addEventListener('resize', () => {
     setAppHeight();
     syncScroll();
     syncRenderScroll();
+    YarbpAppGlobals.suggestionUI.refresh();
 
     const newOrientation = getOrientation();
     if (newOrientation !== currentOrientation) {
@@ -498,9 +536,10 @@ window.addEventListener('resize', () => {
 });
 
 if (textarea && highlightDiv) {
-  textarea.addEventListener('input', updateViews); // todo легкие представления будут рендериться на лету, тяжелые по таймеру если флаг (флаг взводится по подписке срабатывающей из этого инпута
+  textarea.addEventListener('input', updateViews);
   textarea.addEventListener('scroll', syncScroll);
   renderTextarea.addEventListener('scroll', syncRenderScroll);
+  textarea.addEventListener('blur', () => YarbpAppGlobals.suggestionUI.hide());
 }
 
 setAppHeight();
