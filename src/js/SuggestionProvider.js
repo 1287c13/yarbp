@@ -73,7 +73,7 @@ export class SuggestionProvider {
       return { suggestions: [], hint: HINT, blockDoc: '', replaceFrom: ctx.replaceFrom };
     }
 
-    if (ctx.parentKey === null && ctx.slot === 'key') {
+    if (ctx.parentKey === null) {
       const prefix = currentWordValue(text, cursorOffset);
       const filtered = filterAndSort(config.root?.variants ?? [], prefix);
       if (!filtered.length) return null;

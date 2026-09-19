@@ -175,7 +175,7 @@ export class YarbpXPMConverter {
 
       const targetTile = this._getTileByCoords(targetX, imageTile.grid.y);
       if (!targetTile) return;
-      if (targetTile.config.tileType !== 'lines') return;
+      if ((targetTile.config || {}).tileType !== 'lines') return;
 
       const imageConfig = imageTile.config;
       imageTile.config = this._getEmptyTileConfig(imageTile.grid.x, imageTile.grid.y);
