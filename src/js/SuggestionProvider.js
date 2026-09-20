@@ -39,14 +39,14 @@ export class SuggestionProvider {
     const charBefore = text && cursorOffset > 0 ? text[cursorOffset - 1] : '';
     const endsWithSpace = charBefore === ' ' || charBefore === '\n' || charBefore === '\t';
 
-    const { from } = this.currentWord(text, cursorOffset);
+    const { from, word } = this.currentWord(text, cursorOffset);
 
     if (parts.length === 0 || (parts.length === 1 && !endsWithSpace)) {
       const prefix = parts[0] ?? '';
       const sorted = this.sortByPrefix(COMMON_DIRECTIVES.names, prefix);
       if (!sorted.length) return null;
       if (!force && sorted.some(v => v.label === prefix)) return null;
-      return { suggestions: sorted, blockDoc: 'Доступные директивы', replaceFrom: from };
+      return { suggestions: sorted, blockDoc: 'Доступные директивы', replaceFrom: from, replace: true, prefix: word };
     }
 
     const directiveName = parts[0];
@@ -58,58 +58,110 @@ export class SuggestionProvider {
 
     const sorted = this.sortByPrefix(entry.variants, prefix);
     if (!sorted.length) return null;
-    return { suggestions: sorted, blockDoc: entry.blockDoc || '', replaceFrom: from };
+    return { suggestions: sorted, blockDoc: entry.blockDoc || '', replaceFrom: from, replace: true, prefix: word };
   }
 
   resolveFlavorContext(tokens, cursorOffset, text, config, force) {
     const ctx = resolveContext(tokens, cursorOffset, text);
     if (!ctx) return null;
 
+    const { from: replaceFrom, word: prefix } = this.currentWord(text, cursorOffset);
+
     const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
     const lineBeforeCursor = text.slice(lineStart, cursorOffset);
     const isLineStart = !lineBeforeCursor.trim();
 
     if (!force && isLineStart) {
-      return { suggestions: [], hint: HINT, blockDoc: '', replaceFrom: ctx.replaceFrom };
+      return { suggestions: [], hint: HINT, blockDoc: '', replaceFrom, replace: true };
     }
 
-    if (ctx.parentKey === null) {
-      const prefix = this.currentWord(text, cursorOffset).value;
+    let nodeKey = ctx.parentKey;
+    let node = nodeKey !== null ? config.nodes?.[nodeKey] : null;
+    if (!node && ctx.outerKey) {
+      nodeKey = ctx.outerKey;
+      node = config.nodes?.[nodeKey];
+    }
+
+    if (ctx.parentKey === null && !node) {
       const filtered = this.sortByPrefix(config.root?.variants ?? [], prefix);
       if (!filtered.length) return null;
       if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
-      return { suggestions: filtered, blockDoc: config.root?.blockDoc ?? '', replaceFrom: ctx.replaceFrom };
+      return {
+        suggestions: filtered,
+        blockDoc: config.root?.blockDoc ?? '',
+        replaceFrom,
+        replace: config.root?.replace ?? true,
+        prefix,
+      };
     }
 
-    if (ctx.parentKey === '') return null;
-
-    const node = config.nodes?.[ctx.parentKey];
-    if (!node) return null;
-
     if (ctx.slot === 'key') {
+      if (!node) return null;
       const variants = node.variants ?? [];
-      const prefix = this.currentWord(text, cursorOffset).value;
       const filtered = this.sortByPrefix(variants, prefix);
       if (!filtered.length) return null;
       if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
-      return { suggestions: filtered, blockDoc: node.blockDoc || '', replaceFrom: ctx.replaceFrom };
+      return {
+        suggestions: filtered,
+        blockDoc: node.blockDoc || '',
+        replaceFrom,
+        replace: node.replace ?? true,
+        prefix,
+      };
     }
 
     if (ctx.slot === 'value' && ctx.childKey) {
-      const valueEntry = node.values?.[ctx.childKey];
-      if (!valueEntry) return null;
-
-      if (valueEntry.quantifier) {
-        const raw = ctx.rawValue || '';
-        const alreadyTyped = raw.split(valueEntry.quantifier.separator).filter(Boolean);
-        if (alreadyTyped.length >= valueEntry.quantifier.max) return null;
+      const childNode = config.nodes?.[ctx.childKey];
+      if (childNode) {
+        const filtered = this.sortByPrefix(childNode.variants ?? [], prefix);
+        if (!filtered.length) return null;
+        if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
+        return {
+          suggestions: filtered,
+          blockDoc: childNode.blockDoc || '',
+          replaceFrom,
+          replace: childNode.replace ?? true,
+          prefix,
+        };
       }
 
-      const prefix = this.currentWord(text, cursorOffset).value;
-      const filtered = this.sortByPrefix(valueEntry.variants, prefix);
-      if (!filtered.length) return null;
-      if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
-      return { suggestions: filtered, blockDoc: valueEntry.blockDoc || '', replaceFrom: ctx.replaceFrom };
+      if (node) {
+        const valueEntry = node.values?.[ctx.childKey];
+        if (valueEntry) {
+          if (valueEntry.quantifier) {
+            const raw = ctx.rawValue || '';
+            const alreadyTyped = raw.split(valueEntry.quantifier.separator).filter(Boolean);
+            if (alreadyTyped.length >= valueEntry.quantifier.max) return null;
+          }
+
+          const filtered = this.sortByPrefix(valueEntry.variants, prefix);
+          if (!filtered.length) return null;
+          if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
+          return {
+            suggestions: filtered,
+            blockDoc: valueEntry.blockDoc || '',
+            replaceFrom,
+            replace: valueEntry.replace ?? true,
+            prefix,
+          };
+        }
+
+        // Fallback: не нашли values → возможно это ключ, вернуть variants
+        const variants = node.variants ?? [];
+        const filtered = this.sortByPrefix(variants, prefix);
+        if (filtered.length) {
+          if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
+          return {
+            suggestions: filtered,
+            blockDoc: node.blockDoc || '',
+            replaceFrom,
+            replace: node.replace ?? true,
+            prefix,
+          };
+        }
+      }
+
+      return null;
     }
 
     return null;

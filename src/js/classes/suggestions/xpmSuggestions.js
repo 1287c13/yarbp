@@ -9,6 +9,7 @@ export const xpmSuggestions = {
   nodes: {
     'дорожка': {
       blockDoc: 'Добавить элемент на дорожку',
+
       variants: [
         { label: 'разделитель', insert: 'разделитель = ', doc: 'Надпись-разделитель' },
         { label: 'событие',     insert: 'событие = ',     doc: 'Событие' },
@@ -66,6 +67,7 @@ export const xpmSuggestions = {
         '..связи': {
           blockDoc: 'Можем задать до 4х стрелок (вправо вниз влево вверх)',
           quantifier: { max: 4, separator: ' ' },
+          replace: false,
           variants: [
             { label: '->',    insert: '->',     doc: 'Исходящая сплошная линия' },
             { label: '<-',    insert: '<-',     doc: 'Входящая сплошная линия' },

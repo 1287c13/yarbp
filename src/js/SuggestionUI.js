@@ -48,7 +48,7 @@ export class SuggestionUI {
     return !this.root.hidden;
   }
 
-  show({ suggestions, blockDoc, replaceFrom, hint }) {
+  show({ suggestions, blockDoc, replaceFrom, replace, hint, prefix }) {
     if ((!suggestions || !suggestions.length) && hint) {
       this.current = null;
       this.isHintMode = true;
@@ -66,14 +66,21 @@ export class SuggestionUI {
 
     this.isHintMode = false;
     this.root.classList.remove('hint-mode');
-    this.current = { suggestions, blockDoc, replaceFrom };
-    this.activeIndex = 0;
+    this.current = { suggestions, blockDoc, replaceFrom, replace: replace !== false, prefix };
+    this.activeIndex = this.findActiveIndex(suggestions, prefix);
 
     this.renderList();
     this.renderDoc();
     this.renderHint(null);
     this.position();
     this.root.hidden = false;
+  }
+
+  findActiveIndex(suggestions, prefix) {
+    if (!prefix) return 0;
+    const p = prefix.toLowerCase();
+    const idx = suggestions.findIndex(s => s.label.toLowerCase().startsWith(p));
+    return idx >= 0 ? idx : 0;
   }
 
   hide() {
@@ -173,10 +180,13 @@ export class SuggestionUI {
     const ta = this.textarea;
     const end = ta.selectionStart;
 
-    // replaceFrom может быть устаревшим (update вызван по дебаунсу).
-    // Не даём ему уехать правее курсора.
-    let start = this.current.replaceFrom ?? end;
-    if (start > end) start = end;
+    let start;
+    if (this.current.replace === false) {
+      start = end;
+    } else {
+      start = this.current.replaceFrom ?? end;
+      if (start > end) start = end;
+    }
 
     ta.setRangeText(s.insert, start, end, 'end');
     ta.dispatchEvent(new Event('input', { bubbles: true }));
