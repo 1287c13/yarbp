@@ -1,4 +1,4 @@
-export class SuggestionTicker {
+export class Ticker {
   constructor(delay = 120) {
     this.delay = delay;
     this.timer = null;

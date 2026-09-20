@@ -74,8 +74,8 @@ export class SuggestionProvider {
     }
 
     if (ctx.parentKey === null) {
-      const prefix = currentWordValue(text, cursorOffset);
-      const filtered = filterAndSort(config.root?.variants ?? [], prefix);
+      const prefix = this.currentWord(text, cursorOffset).value;
+      const filtered = this.sortByPrefix(config.root?.variants ?? [], prefix);
       if (!filtered.length) return null;
       if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
       return { suggestions: filtered, blockDoc: config.root?.blockDoc ?? '', replaceFrom: ctx.replaceFrom };
@@ -88,8 +88,8 @@ export class SuggestionProvider {
 
     if (ctx.slot === 'key') {
       const variants = node.variants ?? [];
-      const prefix = currentWordValue(text, cursorOffset);
-      const filtered = filterAndSort(variants, prefix);
+      const prefix = this.currentWord(text, cursorOffset).value;
+      const filtered = this.sortByPrefix(variants, prefix);
       if (!filtered.length) return null;
       if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
       return { suggestions: filtered, blockDoc: node.blockDoc || '', replaceFrom: ctx.replaceFrom };
@@ -105,8 +105,8 @@ export class SuggestionProvider {
         if (alreadyTyped.length >= valueEntry.quantifier.max) return null;
       }
 
-      const prefix = currentWordValue(text, cursorOffset);
-      const filtered = filterAndSort(valueEntry.variants, prefix);
+      const prefix = this.currentWord(text, cursorOffset).value;
+      const filtered = this.sortByPrefix(valueEntry.variants, prefix);
       if (!filtered.length) return null;
       if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
       return { suggestions: filtered, blockDoc: valueEntry.blockDoc || '', replaceFrom: ctx.replaceFrom };
@@ -135,25 +135,4 @@ export class SuggestionProvider {
       return aMatch - bMatch;
     });
   }
-}
-
-function currentWordValue(text, cursorOffset) {
-  if (!text) return '';
-  let start = cursorOffset;
-  while (start > 0) {
-    const ch = text[start - 1];
-    if (ch === ' ' || ch === '\n' || ch === '\t') break;
-    start--;
-  }
-  return text.slice(start, cursorOffset);
-}
-
-function filterAndSort(variants, prefix) {
-  if (!prefix) return variants;
-  const p = prefix.toLowerCase();
-  return [...variants].sort((a, b) => {
-    const aMatch = a.label.toLowerCase().startsWith(p) ? 0 : 1;
-    const bMatch = b.label.toLowerCase().startsWith(p) ? 0 : 1;
-    return aMatch - bMatch;
-  });
 }

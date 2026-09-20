@@ -2,7 +2,8 @@
 import { YarbpJSONConverter } from './ast-converters/JSONConvertor.js'
 import { YarbpXMLConverter } from './ast-converters/XMLConvertor.js'
 import { YarbpProtoConverter } from './ast-converters/ProtobufConvertor.js'
-import { YarbpBPMNConverter } from './ast-converters/bpmn/YarbpBPMNConverter.js'
+
+/* suggestions */
 import { xpmSuggestions } from './suggestions/xpmSuggestions.js';
 
 /* renderers */

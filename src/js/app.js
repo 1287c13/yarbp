@@ -6,7 +6,7 @@ import { FileManager } from './modules/FileManager.js';
 
 import { SuggestionProvider } from './SuggestionProvider.js';
 import { SuggestionUI } from './SuggestionUI.js';
-import { SuggestionTicker } from './SuggestionTicker.js';
+import { Ticker } from './Ticker.js';
 
 const MIN_SIZE_PERCENT = 1;
 const MAX_SIDEBAR_PERCENT = 80;
@@ -508,7 +508,7 @@ let paneResizerHandler = null;
 let YarbpAppGlobals = setAppGlobals();
 
 YarbpAppGlobals.suggestionProvider = new SuggestionProvider();
-YarbpAppGlobals.suggestionTicker   = new SuggestionTicker();
+YarbpAppGlobals.suggestionTicker   = new Ticker();
 YarbpAppGlobals.suggestionUI       = new SuggestionUI(textarea, codePane);
 
 // Инициализация файлового менеджера
