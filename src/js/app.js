@@ -242,9 +242,17 @@ function updateViews() {
     flavor = new YarbpFlavor(firstDirective.value);
   }
 
+  let ast = null;
+  try {
+    ast = YarbpAppGlobals.parser.getAST();
+  } catch (e) {
+    console.error('[app] AST build failed:', e);
+  }
+
   YarbpAppGlobals.suggestionTicker.schedule(() => {
     const result = YarbpAppGlobals.suggestionProvider.update({
       tokens: YarbpAppGlobals.lexer.tokens,
+      ast,
       cursorOffset: textarea.selectionStart,
       text: textarea.value,
       flavor,
@@ -425,13 +433,22 @@ if (textarea) {
     // Alt — принудительный вызов подсказок
     if (e.key === 'Alt' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
+
+      let ast = null;
+      try {
+        ast = YarbpAppGlobals.parser.getAST();
+      } catch (err) {
+        console.error('[app] AST build failed:', err);
+      }
+
       YarbpAppGlobals.suggestionTicker.schedule(() => {
-        const tokens = YarbpAppGlobals.lexer.tokens;
-        const cursorOffset = textarea.selectionStart;
-        const text = textarea.value;
-        const flavor = YarbpAppGlobals.flavor;
         const result = YarbpAppGlobals.suggestionProvider.update({
-          tokens, cursorOffset, text, flavor, force: true,
+          tokens: YarbpAppGlobals.lexer.tokens,
+          ast,
+          cursorOffset: textarea.selectionStart,
+          text: textarea.value,
+          flavor: YarbpAppGlobals.flavor,
+          force: true,
         });
         if (result) YarbpAppGlobals.suggestionUI.show(result);
         else YarbpAppGlobals.suggestionUI.hide();

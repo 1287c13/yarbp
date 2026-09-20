@@ -480,7 +480,7 @@ export class YarbpXPMConverter {
     let pointStyle, bypassEnabled;
     let pointTypes = findChildrenByKeyValue(tile, 'key', 'тип');
     if (pointTypes.length) {
-      let pointType = pointTypes[0].value;
+      let pointType = pointTypes[0].value || '';
       pointStyle = [pointType.trim()[1], pointType.trim()[2]].includes('о')
         ? 'hollow' : [pointType.trim()[1], pointType.trim()[2]].includes('<')
         ? 'diamond' : 'filled';
@@ -534,7 +534,7 @@ export class YarbpXPMConverter {
     }
 
     const idNode = findChildrenByKeyValue(tile, 'key', 'ид')[0];
-    const id = idNode ? (idNode.value || '').trim() : null;
+    const id = idNode ? ( '' + idNode.value || '').trim() : null;
 
     const decisionTableNode = findChildrenByKeyValue(tile, 'key', 'таблица-решений')[0];
     const decisionTable = decisionTableNode ? this._extractDecisionTable(decisionTableNode) : null;

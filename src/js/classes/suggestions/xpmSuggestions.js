@@ -59,7 +59,7 @@ export const xpmSuggestions = {
           blockDoc: 'Особенность точки',
           variants: [
             { label: '-<>',   insert: '-<>', doc: 'Триггер' },
-            { label: '-o',    insert: '-o',  doc: 'Вне контроля' },
+            { label: '-о',    insert: '-о',  doc: 'Вне контроля' },
             { label: '-(',    insert: '-(',  doc: 'Опциональная' },
             { label: '-(<>',  insert: '-(',  doc: 'Опциональный триггер' },
           ],

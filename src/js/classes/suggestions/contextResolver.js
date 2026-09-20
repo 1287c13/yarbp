@@ -1,126 +1,207 @@
-import { TokenTypes } from '../YarbpLexer.js';
+export function resolveContext(ast, cursorOffset, text) {
+  console.log('===== [R] cursor=', cursorOffset);
 
-export function resolveContext(tokens, cursorOffset, text) {
-  const prev = findLastMeaningful(tokens, cursorOffset);
-  const open = findOpenScopes(tokens, cursorOffset);
-  const parentScope = findObjectScope(open);
-  const outerScope = findObjectScope(open.slice(0, -1));
+  const root = ast?.nodeType === 'ROOT' ? ast : ast?.root;
+  if (!root || root.nodeType !== 'ROOT') return null;
 
-  const parentKey = parentScope?.key ?? null;
-  const outerKey = outerScope?.key ?? null;
+  const cursorInd = cursorIndent(text, cursorOffset);
 
-  const base = { parentKey, outerKey, childKey: null, slot: 'key', rawValue: '' };
+  const found = findNode(root, cursorOffset, text, cursorInd);
+  const node = found?.node ?? null;
+  const path = found?.path ?? [root];
 
-  if (!prev) { return base; }
+  console.log('[R found]', found ? {
+    key: node?.key,
+    valueType: node?.valueType,
+    value: node?.value,
+    position: node?.position,
+    pathLen: path.length,
+    pathKeys: path.map(p => p.key ?? p.nodeType),
+  } : null);
 
-  if (prev.type === TokenTypes.DIRECTIVE) {
-    return { ...base, parentKey: null, outerKey: null, slot: 'directive' };
+  console.log('[R pos]',
+    'position=', node?.position,
+    'cursorOffset=', cursorOffset,
+    'inName=', node ? cursorOffset <= node.position.end : null);
+
+  let parentNode = null;
+  if (node) {
+    parentNode = findObjectParent(path, node);
+  } else {
+    parentNode = findLastObjectInPath(path);
   }
 
-  if (prev.type === TokenTypes.PREFIX) { return base; }
+  const parentKey = parentNode?.key ?? null;
+  console.log('[R] parentKey=', JSON.stringify(parentKey));
 
-  if (isKey(prev.type)) {
-    if (cursorOffset <= prev.end) {
-      const prevIsCurrentScope = parentScope && parentScope.key === prev.value;
-      if (prevIsCurrentScope) { return { ...base, parentKey: outerKey }; }
-      return base;
+  if (!node) {
+    console.log('[R branch] no node → key');
+    return { parentKey, childKey: null, slot: 'key', outerKey: null };
+  }
+
+  // Анонимный узел (значение массива) — используем ARRAY-предка
+  if (!node.key && node.valueType !== 'OBJECT' && node.valueType !== 'ARRAY') {
+    let arrayParent = null;
+    let arrayParentIdx = -1;
+    for (let i = path.length - 2; i >= 0; i--) {
+      const a = path[i];
+      if (a.nodeType === 'MEANING' && a.valueType === 'ARRAY') {
+        arrayParent = a;
+        arrayParentIdx = i;
+        break;
+      }
     }
-    return { ...base, childKey: (prev.prefix || '') + prev.value, slot: 'value' };
-  }
 
-  if (prev.type === TokenTypes.ANY_VALUE) {
-    const shorthandKey = findPrevKey(tokens, tokens.indexOf(prev));
-    const childKey = shorthandKey ? (shorthandKey.prefix || '') + shorthandKey.value : null;
-
-    const isEmptyShorthand = !prev.value || prev.value.trim() === '=';
-    const cursorInsideValue = prev.end > cursorOffset;
-
-    if ((isEmptyShorthand || cursorInsideValue) && shorthandKey) {
-      return { ...base, parentKey: shorthandKey.value, childKey: shorthandKey.value, slot: 'value' };
-    }
-
-    const isShorthand = (prev.value || '').trimStart().startsWith('=');
-    if (isShorthand) { return base; }
-
-    const segment = text.slice(prev.end, cursorOffset);
-    if (segment.includes('\n')) { return base; }
-
-    return { ...base, childKey, slot: 'value' };
-  }
-
-  return base;
-}
-
-function isMeaningful(type) {
-  return type === TokenTypes.OBJECT
-      || type === TokenTypes.ARRAY
-      || type === TokenTypes.PRIMITIVE
-      || type === TokenTypes.PREFIX
-      || type === TokenTypes.DIRECTIVE
-      || type === TokenTypes.ANY_VALUE;
-}
-
-function isScopeOwner(type) {
-  return type === TokenTypes.OBJECT
-      || type === TokenTypes.ARRAY;
-}
-
-function isKey(type) {
-  return type === TokenTypes.OBJECT
-      || type === TokenTypes.ARRAY
-      || type === TokenTypes.PRIMITIVE;
-}
-
-function findLastMeaningful(tokens, cursorOffset) {
-  let result = null;
-  for (const t of tokens) {
-    if (t.start >= cursorOffset) break;
-    if (isMeaningful(t.type)) result = t;
-  }
-  return result;
-}
-
-function findOpenScopes(tokens, cursorOffset) {
-  const open = [];
-
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
-
-    if (t.start > cursorOffset) break;
-
-    if (t.type === TokenTypes.SCOPE_IN) {
-      const next = nextScopeOwner(tokens, i + 1);
-      open.push({ key: next?.value ?? null, kind: next?.type ?? null, start: t.start });
-    } else if (t.type === TokenTypes.SCOPE_OUT) {
-      const willPop = t.start < cursorOffset && open.length > 0;
-      if (willPop) open.pop();
+    if (arrayParent) {
+      const ownerPath = path.slice(0, arrayParentIdx + 1);
+      const owner = findObjectParent(ownerPath, arrayParent);
+      console.log('[R branch] anonymous value → array-parent. arrayKey=', arrayParent.key, 'owner=', owner?.key);
+      return {
+        parentKey: owner?.key ?? null,
+        childKey: (arrayParent.prefix || '') + arrayParent.key,
+        slot: 'value',
+        outerKey: null,
+        rawValue: text.slice(arrayParent.position.end, cursorOffset).trim(),
+      };
     }
   }
 
-  return open;
+  if ((node.valueType === 'OBJECT' || node.valueType === 'ARRAY')
+      && node.value != null) {
+    const segment = text.slice(node.position.end, cursorOffset);
+    const cursorOnNewLine = segment.includes('\n');
+    console.log('[R shorthand] value=', JSON.stringify(node.value),
+      'segment=', JSON.stringify(segment), 'onNewLine=', cursorOnNewLine);
+
+    if (!cursorOnNewLine) {
+      const firstChild = node.children?.[0];
+      const childrenStart = firstChild ? firstChild.position.start : null;
+      const afterName = cursorOffset > node.position.end;
+      const beforeChildren = childrenStart === null || cursorOffset < childrenStart;
+      console.log('[R shorthand detail]', 'afterName=', afterName,
+        'beforeChildren=', beforeChildren, 'childrenStart=', childrenStart);
+
+      if (afterName && beforeChildren) {
+        console.log('[R branch] shorthand → null');
+        return null;
+      }
+    }
+  }
+
+  if (cursorOffset <= node.position.end) {
+    console.log('[R branch] inside name → key');
+    return { parentKey, childKey: null, slot: 'key', outerKey: null };
+  }
+
+  if (node.valueType !== 'OBJECT' && node.valueType !== 'ARRAY') {
+    const segment = text.slice(node.position.end, cursorOffset);
+    const cursorOnNewLine = segment.includes('\n');
+
+    console.log('[R primitive] segment=', JSON.stringify(segment), 'onNewLine=', cursorOnNewLine);
+
+    if (cursorOnNewLine) {
+      console.log('[R branch] primitive, cursor on new line → key in parent');
+      return { parentKey, childKey: null, slot: 'key', outerKey: null };
+    }
+
+    console.log('[R branch] primitive after name → value');
+    return {
+      parentKey,
+      childKey: (node.prefix || '') + node.key,
+      slot: 'value',
+      outerKey: null,
+    };
+  }
+
+  const segment = text.slice(node.position.end, cursorOffset);
+  const cursorOnNewLine = segment.includes('\n');
+
+  console.log('[R object/array] segment=', JSON.stringify(segment), 'onNewLine=', cursorOnNewLine);
+
+  if (!cursorOnNewLine) {
+    console.log('[R branch] same line → value-slot');
+    return {
+      parentKey,
+      childKey: (node.prefix || '') + node.key,
+      slot: 'value',
+      outerKey: null,
+    };
+  }
+
+  const nodeInd = cursorIndent(text, node.position.start);
+  console.log('[R] cursorInd=', cursorInd, 'nodeInd=', nodeInd);
+
+  if (cursorInd > nodeInd) {
+    console.log('[R branch] deeper → key in node');
+    return { parentKey: node.key, childKey: null, slot: 'key', outerKey: null };
+  }
+
+  console.log('[R branch] at level → key in parent');
+  return { parentKey, childKey: null, slot: 'key', outerKey: null };
 }
 
-function findObjectScope(open) {
-  for (let i = open.length - 1; i >= 0; i--) {
-    if (open[i].kind === TokenTypes.OBJECT) return open[i];
+function cursorIndent(text, pos) {
+  const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+  let i = lineStart;
+  while (i < text.length && (text[i] === ' ' || text[i] === '\t')) i++;
+  return i - lineStart;
+}
+
+function findNode(parent, cursorOffset, text, cursorInd) {
+  return findNodeRec(parent, cursorOffset, text, cursorInd, [parent]);
+}
+
+function findNodeRec(parent, cursorOffset, text, cursorInd, path) {
+  const children = parent.children ?? [];
+
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    const pos = child.position;
+    if (!pos) continue;
+
+    const inside = cursorOffset >= pos.start && cursorOffset <= pos.end;
+
+    if (inside) {
+      console.log('[findNode] inside node=', child.key);
+      const deeper = findNodeRec(child, cursorOffset, text, cursorInd, [...path, child]);
+      if (deeper.node) return deeper;
+      return { node: child, path: [...path, child] };
+    }
+
+    const nextStart = (i < children.length - 1) ? children[i + 1].position.start : Infinity;
+    if (cursorOffset > pos.end && cursorOffset < nextStart) {
+      const childInd = cursorIndent(text, pos.start);
+      const cursorLineStart = text.lastIndexOf('\n', cursorOffset - 1);
+      const childLineStart = text.lastIndexOf('\n', pos.end - 1);
+      const sameLine = cursorLineStart === childLineStart;
+
+      console.log('[findNode] after node=', child.key,
+        'sameLine=', sameLine, 'cursorInd=', cursorInd, 'childInd=', childInd);
+
+      if (sameLine || cursorInd > childInd) {
+        const deeper = findNodeRec(child, cursorOffset, text, cursorInd, [...path, child]);
+        if (deeper.node) return deeper;
+        return { node: child, path: [...path, child] };
+      }
+      return { node: null, path };
+    }
+  }
+
+  return { node: null, path };
+}
+
+function findObjectParent(path, node) {
+  for (let i = path.length - 2; i >= 0; i--) {
+    const a = path[i];
+    if (a.nodeType === 'MEANING' && a.valueType === 'OBJECT') return a;
   }
   return null;
 }
 
-function findPrevKey(tokens, fromIdx) {
-  for (let i = fromIdx - 1; i >= 0; i--) {
-    if (isKey(tokens[i].type)) return tokens[i];
-  }
-  return null;
-}
-
-function nextScopeOwner(tokens, from) {
-  for (let i = from; i < tokens.length; i++) {
-    const t = tokens[i];
-    if (isScopeOwner(t.type)) return t;
-    if (t.type === TokenTypes.ANY_VALUE
-        || t.type === TokenTypes.SCOPE_OUT
-        || t.type === TokenTypes.END) return null;
+function findLastObjectInPath(path) {
+  for (let i = path.length - 1; i >= 0; i--) {
+    const a = path[i];
+    if (a.nodeType === 'MEANING' && a.valueType === 'OBJECT') return a;
   }
   return null;
 }

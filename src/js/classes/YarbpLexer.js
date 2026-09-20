@@ -703,7 +703,7 @@ export class YarbpLexer {
       this.currentToken.slice(0, -2));
     this.addToken(
       TokenTypes.PREFIX,
-      this.currentMatchPosition + valueLength + 1,
+      pos - 1,
       '.');
 
     this.state = YarbpLexer.states.IN_PRIMITIVE;

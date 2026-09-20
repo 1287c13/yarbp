@@ -161,7 +161,9 @@ export class YarbpParser {
 
         enrichedEntities.forEach(enrichedEntity => {
           enrichedEntity.nodeType = nodeTypes.MEANING;
-          enrichedEntity.position = { start: token.start, end: token.end };
+          if (!enrichedEntity.position) {
+            enrichedEntity.position = { start: token.start, end: token.end };
+          }
 
           if (!root.children) { root.children = []; }
           root.children.push(enrichedEntity);
@@ -178,6 +180,13 @@ export class YarbpParser {
       } else
 
       if (token.type === TokenTypes.SCOPE_OUT) {
+        if (isNestedKeyMet && valueInConstructing) {
+          valueInConstructing.nodeType = nodeTypes.MEANING;
+          if (!root.children) { root.children = []; }
+          root.children.push(valueInConstructing);
+          isNestedKeyMet = false;
+          valueInConstructing = undefined;
+        }
         return root;
       }
 

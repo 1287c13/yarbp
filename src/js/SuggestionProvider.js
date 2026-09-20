@@ -5,14 +5,14 @@ import { resolveContext } from './classes/suggestions/contextResolver.js';
 const HINT = '▼ Alt';
 
 export class SuggestionProvider {
-  update({ tokens, cursorOffset, text, flavor, force = false }) {
+  update({ tokens, ast, cursorOffset, text, flavor, force = false }) {
     if (!tokens || !tokens.length) return null;
 
     const directive = this.findDirectiveAt(tokens, cursorOffset);
     if (directive) return this.resolveDirectiveContext(directive, cursorOffset, text, force);
 
-    if (flavor?.flavorData?.suggestions) {
-      return this.resolveFlavorContext(tokens, cursorOffset, text, flavor.flavorData.suggestions, force);
+    if (flavor?.flavorData?.suggestions && ast) {
+      return this.resolveFlavorContext(ast, cursorOffset, text, flavor.flavorData.suggestions, force);
     }
 
     return null;
@@ -61,8 +61,8 @@ export class SuggestionProvider {
     return { suggestions: sorted, blockDoc: entry.blockDoc || '', replaceFrom: from, replace: true, prefix: word };
   }
 
-  resolveFlavorContext(tokens, cursorOffset, text, config, force) {
-    const ctx = resolveContext(tokens, cursorOffset, text);
+  resolveFlavorContext(ast, cursorOffset, text, config, force) {
+    const ctx = resolveContext(ast, cursorOffset, text);
     if (!ctx) return null;
 
     const { from: replaceFrom, word: prefix } = this.currentWord(text, cursorOffset);
@@ -75,41 +75,12 @@ export class SuggestionProvider {
       return { suggestions: [], hint: HINT, blockDoc: '', replaceFrom, replace: true };
     }
 
-    let nodeKey = ctx.parentKey;
-    let node = nodeKey !== null ? config.nodes?.[nodeKey] : null;
+    let node = ctx.parentKey !== null ? config.nodes?.[ctx.parentKey] : null;
     if (!node && ctx.outerKey) {
-      nodeKey = ctx.outerKey;
-      node = config.nodes?.[nodeKey];
+      node = config.nodes?.[ctx.outerKey];
     }
 
-    if (ctx.parentKey === null && !node) {
-      const filtered = this.sortByPrefix(config.root?.variants ?? [], prefix);
-      if (!filtered.length) return null;
-      if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
-      return {
-        suggestions: filtered,
-        blockDoc: config.root?.blockDoc ?? '',
-        replaceFrom,
-        replace: config.root?.replace ?? true,
-        prefix,
-      };
-    }
-
-    if (ctx.slot === 'key') {
-      if (!node) return null;
-      const variants = node.variants ?? [];
-      const filtered = this.sortByPrefix(variants, prefix);
-      if (!filtered.length) return null;
-      if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
-      return {
-        suggestions: filtered,
-        blockDoc: node.blockDoc || '',
-        replaceFrom,
-        replace: node.replace ?? true,
-        prefix,
-      };
-    }
-
+    // 1. value-ветка (приоритет)
     if (ctx.slot === 'value' && ctx.childKey) {
       const childNode = config.nodes?.[ctx.childKey];
       if (childNode) {
@@ -133,7 +104,6 @@ export class SuggestionProvider {
             const alreadyTyped = raw.split(valueEntry.quantifier.separator).filter(Boolean);
             if (alreadyTyped.length >= valueEntry.quantifier.max) return null;
           }
-
           const filtered = this.sortByPrefix(valueEntry.variants, prefix);
           if (!filtered.length) return null;
           if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
@@ -145,23 +115,38 @@ export class SuggestionProvider {
             prefix,
           };
         }
-
-        // Fallback: не нашли values → возможно это ключ, вернуть variants
-        const variants = node.variants ?? [];
-        const filtered = this.sortByPrefix(variants, prefix);
-        if (filtered.length) {
-          if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
-          return {
-            suggestions: filtered,
-            blockDoc: node.blockDoc || '',
-            replaceFrom,
-            replace: node.replace ?? true,
-            prefix,
-          };
-        }
       }
 
       return null;
+    }
+
+    // 2. root-ветка
+    if (ctx.parentKey === null && !node && ctx.slot === 'key') {
+      const filtered = this.sortByPrefix(config.root?.variants ?? [], prefix);
+      if (!filtered.length) return null;
+      if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
+      return {
+        suggestions: filtered,
+        blockDoc: config.root?.blockDoc ?? '',
+        replaceFrom,
+        replace: config.root?.replace ?? true,
+        prefix,
+      };
+    }
+
+    // 3. key-ветка
+    if (ctx.slot === 'key') {
+      if (!node) return null;
+      const filtered = this.sortByPrefix(node.variants ?? [], prefix);
+      if (!filtered.length) return null;
+      if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
+      return {
+        suggestions: filtered,
+        blockDoc: node.blockDoc || '',
+        replaceFrom,
+        replace: node.replace ?? true,
+        prefix,
+      };
     }
 
     return null;
