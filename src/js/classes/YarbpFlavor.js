@@ -5,6 +5,7 @@ import { YarbpProtoConverter } from './ast-converters/ProtobufConvertor.js'
 
 /* suggestions */
 import { xpmSuggestions } from './suggestions/xpmSuggestions.js';
+import { bpmnSuggestions } from './suggestions/bpmnSuggestions.js';
 
 /* renderers */
 import { YarbpBasicRenderer } from './YarbpBasicRenderer.js'
@@ -119,7 +120,8 @@ const KnownFlavors = Object.freeze({
   BPMN: {
     names: ['бпмн', 'bpmn'],
     textExample: [],
-    renderer: BPMNRenderer
+    renderer: BPMNRenderer,
+    suggestions: bpmnSuggestions
   }
 });
 
