@@ -179,11 +179,32 @@ try {
         qtyInput.getAttribute('inputmode') : 'нет .qty-input-wrap input');
 
     /* Типовой спиннер number-поля — стиль самого браузера, поэтому снимается
-       только appearance:none (иначе всплывает по наведению поверх каунтера). */
+       только appearance:none (иначе всплывает по наведению поверх каунтера).
+       Мало снять appearance у контрола: стрелки — это псевдоэлементы движка
+       (::-webkit-inner/outer-spin-button), у них свои правила, поэтому
+       проверяем оба уровня и на всех числовых полях страницы (.qty-input-wrap
+       и numeric-поле в .control). */
     const qtyStyle = qtyInput ? innerWin.getComputedStyle(qtyInput) : null;
     expect('каунтер: типовой спиннер number-поля снят (appearance:none)',
       !!qtyStyle && qtyStyle.appearance === 'none',
       qtyStyle ? String(qtyStyle.appearance) : 'нет поля');
+
+    const numericInputs = Array.prototype.slice.call(
+      innerDoc.querySelectorAll('input[type="number"]'));
+    /* У псевдоэлементов спиннера проверяем appearance, а не display:
+       в Chromium display:none на них не применяется (computed остаётся
+       inline-block), стрелки убирает только appearance:none — проверено
+       пробой, поэтому проверка завязана на то, что реально работает. */
+    const spinnersLeft = numericInputs.filter(input => {
+      const own = innerWin.getComputedStyle(input).appearance;
+      const innerSpin = innerWin.getComputedStyle(input, '::-webkit-inner-spin-button');
+      const outerSpin = innerWin.getComputedStyle(input, '::-webkit-outer-spin-button');
+      return own !== 'none' ||
+        innerSpin.appearance !== 'none' || outerSpin.appearance !== 'none';
+    });
+    expect('каунтер: стрелки спиннера скрыты у всех number-полей',
+      numericInputs.length > 0 && spinnersLeft.length === 0,
+      'number-полей ' + numericInputs.length + ', со стрелками ' + spinnersLeft.length);
 
     if (qtyInput) {
       qtyInput.value = '';

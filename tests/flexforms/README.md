@@ -50,7 +50,8 @@ python yarbp/tests/flexforms/run_tests.py --help
 | проверка | что ловит |
 | --- | --- |
 | `readOnly` + `inputmode="none"` у поля количества и набор символов в него по `keydown` | «с выключенной клавиатурой нельзя ввести»: поле обязано оставаться `readonly`, а ввод — идти через мост сканера (`initScannerBridge`), как keyboard-wedge на ТСД |
-| `getComputedStyle(...).appearance === 'none'` | типовой спиннер `input[type=number]`, который всплывает по наведению, если `all:unset` из редизайна не доехал в редактор |
+| `getComputedStyle(...).appearance === 'none'` у `input[type=number]` | типовой спиннер, который всплывает по наведению, если `all:unset` из редизайна не доехал в редактор |
+| `appearance === 'none'` у `::-webkit-inner/outer-spin-button` на всех number-полях страницы | стрелки спиннера: у псевдоэлементов движка `appearance` свой, одного `all:unset` на `<input>` не хватает (`display: none` в Chromium на них не действует — проверено пробой, поэтому проверка завязана на `appearance`) |
 | `#track` → `translateX(-100%)` + `#stepNow` = `2` после синтетического свайпа | и листание жестом, и анимацию перехода: их делает движок страницы, а не рендерер |
 | `data-theme` + `tsd-theme` в `localStorage`, и та же тема в новом iframe после перерисовки | сброс выбранной темы при повторном рендере |
 
