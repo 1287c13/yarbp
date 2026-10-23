@@ -50,6 +50,9 @@ const finish = () => {
   document.title = failed.length ? 'SMOKE FAIL' : 'SMOKE PASS';
 };
 
+/* Выбранная в предпросмотре тема — чтобы после перерисовки iframe сверить её. */
+let themeChosen = null;
+
 
 try {
   /* 0. Пример из «Примеров» — тот самый текст, что видит пользователь. */
@@ -156,6 +159,78 @@ try {
     expect('движок: заголовок формы в шапке',
       !!brand && brand.textContent === 'Отправка данных в 1С',
       brand ? brand.textContent : 'нет #brandText');
+
+    /* 3a. Режим «клавиатура выключена» (scan — по умолчанию): поле readOnly и
+       inputmode=none, то есть ОС не поднимает экранную клавиатуру. Ввод при
+       этом не теряется: мост сканера (initScannerBridge) набирает символы
+       клавиатурного клина в readonly-поле и по Enter шлёт 'change' — ровно то,
+       что делает сканер на ТСД. */
+    const innerWin = innerDoc.defaultView;
+    const kbBtn = innerDoc.getElementById('kbBtn');
+    let qtyInput = innerDoc.querySelector('.qty-input-wrap input');
+    if (qtyInput && !qtyInput.readOnly && kbBtn) {   // остался режим 'type' прошлого запуска
+      kbBtn.click();
+      qtyInput = innerDoc.querySelector('.qty-input-wrap input');
+    }
+    expect('сканер: без клавиатуры поле readOnly + inputmode=none',
+      !!qtyInput && qtyInput.readOnly === true &&
+      qtyInput.getAttribute('inputmode') === 'none',
+      qtyInput ? 'readOnly=' + qtyInput.readOnly + ', inputmode=' +
+        qtyInput.getAttribute('inputmode') : 'нет .qty-input-wrap input');
+
+    /* Типовой спиннер number-поля — стиль самого браузера, поэтому снимается
+       только appearance:none (иначе всплывает по наведению поверх каунтера). */
+    const qtyStyle = qtyInput ? innerWin.getComputedStyle(qtyInput) : null;
+    expect('каунтер: типовой спиннер number-поля снят (appearance:none)',
+      !!qtyStyle && qtyStyle.appearance === 'none',
+      qtyStyle ? String(qtyStyle.appearance) : 'нет поля');
+
+    if (qtyInput) {
+      qtyInput.value = '';
+      innerWin.focus();
+      qtyInput.focus();
+      if (innerDoc.activeElement === qtyInput) {
+        '48120'.split('').forEach(symbol =>
+          innerDoc.dispatchEvent(new innerWin.KeyboardEvent('keydown', { key: symbol, bubbles: true })));
+        expect('сканер: мост набирает символы в readonly-поле',
+          qtyInput.value === '48120', JSON.stringify(qtyInput.value));
+      } else {
+        report.push('INFO мост сканера: фокус в iframe недоступен из автотеста');
+      }
+    }
+
+    /* 3b. Свайп и анимация перехода — код страницы (initSwipe → goTo), в
+       редакторе ничего дублировать не нужно: трек едет трансформацией. */
+    const pager = innerDoc.getElementById('pager');
+    const trackEl = innerDoc.getElementById('track');
+    const stepNow = innerDoc.getElementById('stepNow');
+    if (pager && trackEl && stepNow) {
+      const touch = (type, x) => {
+        const event = new innerWin.Event(type, { bubbles: true });
+        Object.defineProperty(event, type === 'touchend' ? 'changedTouches' : 'touches',
+          { value: [{ clientX: x, clientY: 200 }] });
+        pager.dispatchEvent(event);
+      };
+      touch('touchstart', 260);
+      touch('touchend', 140);            // dx = -120 → следующий экран
+      expect('свайп влево листает экран и двигает трек',
+        trackEl.style.transform === 'translateX(-100%)' && stepNow.textContent === '2',
+        'transform=' + trackEl.style.transform + ', шаг=' + stepNow.textContent);
+    } else {
+      report.push('FAIL свайп: нет #pager/#track/#stepNow');
+    }
+
+    /* 3c. Тема: кнопка пишет выбор в localStorage, отдельно от снимка полей. */
+    const themeBtn = innerDoc.getElementById('themeBtn');
+    const themeBefore = innerDoc.documentElement.getAttribute('data-theme');
+    if (themeBtn) {
+      themeBtn.click();
+      themeChosen = innerDoc.documentElement.getAttribute('data-theme');
+      const themeSaved = innerWin.localStorage.getItem('tsd-theme');
+      expect('тема: кнопка переключает и запоминает выбор',
+        themeChosen !== themeBefore && themeSaved === themeChosen,
+        themeBefore + ' → ' + themeChosen + ', localStorage=' + themeSaved);
+    }
   } else {
     report.push('INFO нет доступа к iframe.contentDocument (file:// origin)');
   }
@@ -182,6 +257,24 @@ try {
   await new Promise(resolve => setTimeout(resolve, 900));
   expect('после паузы предпросмотр перерисован один раз', mounts === 1,
     'перезагрузок: ' + mounts);
+
+  /* 5. Повторная отрисовка не сбрасывает выбор пользователя: тема и режим
+     клавиатуры лежат в localStorage отдельно от снимка формы (снимок IR
+     предпросмотр выбрасывает, а значения полей — сохраняет). */
+  if (themeChosen && iframe) {
+    let redrawn = null;
+    let themeAfter = null;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      try { redrawn = iframe.contentDocument; } catch (e) { redrawn = null; }
+      themeAfter = redrawn && redrawn !== innerDoc && redrawn.documentElement
+        ? redrawn.documentElement.getAttribute('data-theme') : null;
+      if (themeAfter) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    expect('после повторного рендера тема прежняя (не сбросилась)',
+      themeAfter === themeChosen,
+      'выбрана ' + themeChosen + ', в новом iframe ' + themeAfter);
+  }
 } catch (error) {
   report.push('FAIL исключение: ' + (error && error.message ? error.message : error));
 }
