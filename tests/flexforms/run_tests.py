@@ -7,8 +7,8 @@
   2. Золотой тест конвертера: ast.json → target.json (побайтово, с отступами).
   3. Паритет страницы: buildFormPage(IR образца) == редизайн/kb8-inventory-redesign.html
      (побайтово) — значит движок и вёрстка не «поплыли» при переносе.
-  4. Экспорт и предпросмотр различаются только скриптом сброса снимка;
-     в экспорте этого скрипта нет.
+  4. Экспорт и предпросмотр различаются только двумя скриптами предпросмотра —
+     сбросом снимка localStorage и заглушкой автофокуса; в экспорте их нет.
   5. Геометрия рамки/экрана и имя файла экспорта.
   6. Подсказки флейвора: набор узлов, видов полей, values.
   7. Предопределённый пример «Форма ТСД» в редакторе: текст в FileManager.js
@@ -247,16 +247,33 @@ def test_preview(export_page):
           "localStorage.getItem('tsd-form-state')" not in export_page)
 
     parts = preview.split('\n<script>\n')
-    ok_structure = len(parts) == 3
-    check('в предпросмотре два <script> (сброс + движок)', ok_structure, str(len(parts) - 1))
+    ok_structure = len(parts) == 4
+    check('в предпросмотре три <script> (сброс + движок + заглушка автофокуса)',
+          ok_structure, str(len(parts) - 1))
 
     if not ok_structure:
         return
 
-    rebuilt = parts[0] + '\n<script>\n' + parts[2]
-    check('отличие от экспорта — ровно блок сброса',
-          rebuilt == export_page, first_difference(rebuilt, export_page))
     check('блок сброса закрыт', parts[1].rstrip().endswith('</script>'))
+    check('движок в предпросмотре закрыт', parts[2].rstrip().endswith('</script>'))
+
+    # Автофокус — правка рендера, не редизайна: на ТСД движок после каждой
+    # отрисовки ставит курсор в поле «автофокус» (сканера ради), а в редакторе
+    # это выдёргивает фокус из окна кода. Заглушка должна стоять ПОСЛЕ движка —
+    # boot() подписан на DOMContentLoaded, к отрисовке setFocus уже подменён.
+    check('предпросмотр гасит автофокус (заглушка setFocus)', 'setFocus = function' in parts[3],
+          parts[3][:160])
+    check('заглушка автофокуса стоит после движка',
+          preview.index('setFocus = function') > preview.index('function setFocus()'),
+          '%d / %d' % (preview.index('setFocus = function'),
+                       preview.index('function setFocus()')))
+    check('в экспорте заглушки автофокуса нет (фокус нужен сканеру)',
+          'setFocus = function' not in export_page)
+
+    # Остальное совпадает с экспортом: снимаем два блока предпросмотра.
+    rebuilt = parts[0] + '\n<script>\n' + parts[2] + preview[preview.index('</body>'):]
+    check('отличие от экспорта — ровно блоки предпросмотра (снимок + автофокус)',
+          rebuilt == export_page, first_difference(rebuilt, export_page))
 
 
 # --------------------------------------------------------------------------

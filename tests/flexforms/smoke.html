@@ -27,6 +27,7 @@
    run_tests.py сравнивает с target-sample.json побайтово. */
 import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
 import { FlexFormsRenderer } from '../../src/js/classes/renderers/FlexFormsRenderer.js';
+import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
 import { YarbpLexer } from '../../src/js/classes/YarbpLexer.js';
 import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
 import { flexFormsSuggestions } from '../../src/js/classes/suggestions/flexFormsSuggestions.js';
@@ -180,6 +181,54 @@ try {
        клавиатурного клина в readonly-поле и по Enter шлёт 'change' — ровно то,
        что делает сканер на ТСД. */
     const innerWin = innerDoc.defaultView;
+
+    /* 3d. Автофокус — правка рендера, не редизайна. Движок после каждой
+       отрисовки зовёт setFocus() и ставит курсор в поле с маркером
+       .autofocus-mark (а без него — в выбор операции #action-input). На ТСД это
+       нужно сканеру, а в редакторе фокус уходит из окна кода на каждой
+       перерисовке, поэтому в предпросмотре setFocus() — пустышка. Маркер в
+       разметке при этом остаётся: меняется только вызов. */
+    const autofocusField = innerDoc.querySelector('.autofocus-mark');
+    expect('автофокус: маркер .autofocus-mark в разметке на месте',
+      !!autofocusField,
+      autofocusField ? (autofocusField.id || autofocusField.className) : 'нет .autofocus-mark');
+
+    /* setFocus() срабатывает через setTimeout(300) — ждём, чтобы фокус успел
+       бы «уехать», если заглушка не доехала в собранную страницу. */
+    await new Promise(resolve => setTimeout(resolve, 600));
+    const focusedEl = innerDoc.activeElement;
+    expect('автофокус: предпросмотр не забирает фокус у редактора',
+      !!autofocusField && focusedEl !== autofocusField &&
+      focusedEl !== innerDoc.getElementById('action-input'),
+      focusedEl ? focusedEl.tagName + (focusedEl.className ? '.' + focusedEl.className : '') : 'null');
+
+    /* Контроль обратной стороны: в ЭКСПОРТЕ (файл для ТСД) той же сборки правки
+       нет, и движок фокус ставит — иначе проверка выше ничего не доказывает:
+       она бы проходила и на сломанном движке. Страница экспорта
+       самодостаточна (один HTML без сети), поэтому грузим её в srcdoc. */
+    const controlFrame = document.createElement('iframe');
+    controlFrame.style.cssText = 'position:fixed;left:-9999px;top:0;width:356px;height:471px;border:0';
+    controlFrame.srcdoc = buildFormPage(document.getElementById('ir').textContent);
+    document.body.appendChild(controlFrame);
+    let controlDoc = null;
+    let controlWin = null;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      try { controlDoc = controlFrame.contentDocument; } catch (e) { controlDoc = null; }
+      controlWin = controlDoc && controlDoc.defaultView;
+      if (controlWin && controlDoc.querySelector('.autofocus-mark') &&
+          typeof controlWin.setFocus === 'function') break;
+    }
+    const controlField = controlDoc && controlDoc.querySelector('.autofocus-mark');
+    expect('автофокус: в экспорте setFocus живой (правка только в предпросмотре)',
+      !!controlWin && /setTimeout/.test(String(controlWin.setFocus)),
+      controlWin ? String(controlWin.setFocus).slice(0, 60) : 'нет окна');
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect('автофокус: в экспорте движок ставит фокус (контроль проверки выше)',
+      !!controlField && controlDoc.activeElement === controlField,
+      controlDoc ? String(controlDoc.activeElement && controlDoc.activeElement.className) : 'нет документа');
+    controlFrame.remove();
+
     const kbBtn = innerDoc.getElementById('kbBtn');
     let qtyInput = innerDoc.querySelector('.qty-input-wrap input');
     if (qtyInput && !qtyInput.readOnly && kbBtn) {   // остался режим 'type' прошлого запуска
