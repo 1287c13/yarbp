@@ -7,9 +7,12 @@
   2. Золотой тест конвертера: ast.json → target.json (побайтово, с отступами).
   3. Паритет страницы: buildFormPage(IR образца) == редизайн/kb8-inventory-redesign.html
      (побайтово) — значит движок и вёрстка не «поплыли» при переносе.
-  4. Экспорт и предпросмотр различаются только двумя скриптами предпросмотра —
-     сбросом снимка localStorage и заглушкой автофокуса; в экспорте их нет.
-  5. Геометрия рамки/экрана и имя файла экспорта.
+  4. Предпросмотр отличается от страницы редизайна только двумя скриптами —
+     сбросом снимка localStorage и заглушкой автофокуса; в странице без
+     предпросмотра их нет.
+  5. Геометрия рамки/экрана, имя файла и конфиг для 1С (кнопка «JSON»):
+     текст конфига = текст в `<data>` страницы, имя `<заголовок>.json`,
+     отказ на неполном IR.
   6. Подсказки флейвора: набор узлов, видов полей, values.
   7. Предопределённый пример «Форма ТСД» в редакторе: текст в FileManager.js
      дословно совпадает с образцом разметки, с которого сделан редизайн.
@@ -234,17 +237,17 @@ def test_page_parity():
 
 
 # --------------------------------------------------------------------------
-# 4. Экспорт и предпросмотр
+# 4. Предпросмотр и страница редизайна
 # --------------------------------------------------------------------------
 
-def test_preview(export_page):
-    print('4. экспорт / предпросмотр')
+def test_preview(plain_page):
+    print('4. предпросмотр / страница редизайна')
     preview = build_page(preview=True)
 
     check('в предпросмотре есть сброс снимка localStorage',
           "localStorage.getItem('tsd-form-state')" in preview)
-    check('в экспорте нет скрипта предпросмотра',
-          "localStorage.getItem('tsd-form-state')" not in export_page)
+    check('в странице без предпросмотра скрипта сброса снимка нет',
+          "localStorage.getItem('tsd-form-state')" not in plain_page)
 
     parts = preview.split('\n<script>\n')
     ok_structure = len(parts) == 4
@@ -267,22 +270,24 @@ def test_preview(export_page):
           preview.index('setFocus = function') > preview.index('function setFocus()'),
           '%d / %d' % (preview.index('setFocus = function'),
                        preview.index('function setFocus()')))
-    check('в экспорте заглушки автофокуса нет (фокус нужен сканеру)',
-          'setFocus = function' not in export_page)
+    check('в странице без предпросмотра заглушки автофокуса нет (фокус нужен сканеру)',
+          'setFocus = function' not in plain_page)
 
-    # Остальное совпадает с экспортом: снимаем два блока предпросмотра.
+    # Остальное совпадает с редизайном: снимаем два блока предпросмотра.
     rebuilt = parts[0] + '\n<script>\n' + parts[2] + preview[preview.index('</body>'):]
-    check('отличие от экспорта — ровно блоки предпросмотра (снимок + автофокус)',
-          rebuilt == export_page, first_difference(rebuilt, export_page))
+    check('отличие от страницы редизайна — ровно блоки предпросмотра (снимок + автофокус)',
+          rebuilt == plain_page, first_difference(rebuilt, plain_page))
 
 
 # --------------------------------------------------------------------------
-# 5. Геометрия и имя файла
+# 5. Геометрия, имя файла и конфиг для 1С
 # --------------------------------------------------------------------------
 
-def test_geometry():
-    print('5. геометрия рамки и имя файла')
+def test_geometry(plain_page):
+    print('5. геометрия рамки, имя файла и конфиг для 1С')
     code = bundle(PAGE) + '''
+var __ir = JSON.parse(%s);
+var __config = buildFormConfig(__ir);
 JSON.stringify({
   screen: FLEX_FORMS_SCREEN_STYLE,
   phone: FLEX_FORMS_PHONE,
@@ -290,10 +295,18 @@ JSON.stringify({
   previewCss: FLEX_FORMS_PREVIEW_CSS,
   fileName: formFileName({ 'заголовокФормы': 'Отправка данных в 1С' }),
   fallback: formFileName({}),
-  serialized: serializeFormIR({ 'b': 1, 'a': [1] })
+  serialized: serializeFormIR({ 'b': 1, 'a': [1] }),
+  config: __config,
+  configParsed: JSON.parse(__config),
+  configFirstChar: __config.charCodeAt(0),
+  okError: formConfigError(__ir),
+  emptyError: formConfigError({}),
+  noTypeError: formConfigError({ children: [] }),
+  noChildrenError: formConfigError({ type: 'форма' })
 });
-'''
+''' % json.dumps(read_text(SAMPLE_IR))
     result = js_json(code)
+    sample = json.loads(read_text(SAMPLE_IR))
 
     check('рамка увеличена под страницу формы: 364x799 (рисунок 346x758 +5.3%)',
           result['phone']['width'] == 364 and result['phone']['height'] == 799,
@@ -328,15 +341,37 @@ JSON.stringify({
           'class="ff-phone-scale"' in result['markup'] and
           'class="ff-phone" style="width:364px;height:799px"' in result['markup'],
           result['markup'][:120])
-    check('иконка скачивания ограничена (SVG 800x800 не растягивает кнопку)',
-          '.ff-export-btn img{display:block;width:auto;height:15px}' in result['previewCss'])
+    check('кнопка выгрузки — подпись «JSON», без иконки-растяжки',
+          '.ff-export-btn--config{font:' in result['previewCss'] and
+          '.ff-export-btn img' not in result['previewCss'],
+          result['previewCss'][-260:])
     check('имя файла из заголовка формы',
-          result['fileName'] == 'Отправка-данных-в-1С.html', result['fileName'])
-    check('имя файла по умолчанию', result['fallback'] == 'flex-forms.html',
+          result['fileName'] == 'Отправка-данных-в-1С.json', result['fileName'])
+    check('имя файла по умолчанию', result['fallback'] == 'flex-forms.json',
           result['fallback'])
     check('IR печатается как в редизайне (2 пробела)',
           result['serialized'] == '{\n  "b": 1,\n  "a": [\n    1\n  ]\n}',
           result['serialized'])
+
+    # Конфиг — то, что расширение 1С подставляет в оболочку вместо `<data>`:
+    # значит текст обязан совпадать с тем, что получает страница предпросмотра.
+    expected_config = json.dumps(sample, ensure_ascii=False, indent=2)
+    check('конфиг — ровно IR образца с отступами в 2 пробела',
+          result['config'] == expected_config,
+          first_difference(result['config'], expected_config))
+    check('конфиг разбирается обратно в IR образца',
+          result['configParsed'] == sample)
+    check('конфиг — тот же текст, что страница получает в <data>',
+          result['config'] in plain_page, 'конфига нет в странице')
+    check('конфиг без BOM и начинается с «{»',
+          result['configFirstChar'] == 0x7B, str(result['configFirstChar']))
+    check('валидный IR не даёт ошибки выгрузки', result['okError'] == '',
+          result['okError'])
+    check('неполный IR отвергается с понятным текстом',
+          bool(result['emptyError']) and bool(result['noTypeError']) and
+          bool(result['noChildrenError']),
+          '; '.join([result['emptyError'], result['noTypeError'],
+                     result['noChildrenError']]))
 
 
 # --------------------------------------------------------------------------
@@ -562,9 +597,9 @@ def main(argv):
         return 1 if FAILURES else 0
 
     test_converter()
-    export_page = test_page_parity()
-    test_preview(export_page)
-    test_geometry()
+    plain_page = test_page_parity()
+    test_preview(plain_page)
+    test_geometry(plain_page)
     test_suggestions()
     test_builtin_example()
 

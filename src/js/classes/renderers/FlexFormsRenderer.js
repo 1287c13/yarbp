@@ -1,8 +1,10 @@
 import { YarbpBasicRenderer } from '../YarbpBasicRenderer.js';
 import { YarbpFlexFormsConverter } from '../ast-converters/FlexFormsConvertor.js';
 import {
+  buildFormConfig,
   buildFormPage,
   buildPreviewMarkup,
+  formConfigError,
   formFileName,
   FLEX_FORMS_PREVIEW_CSS,
   FLEX_FORMS_PHONE,
@@ -25,6 +27,10 @@ const EMPTY_IR_HINT = '<!DOCTYPE html><meta charset="utf-8">' +
  * собранная дословно из редизайна ТСД (FlexFormsPage) → предпросмотр в рамке
  * корпуса ТСД внутри iframe.
  *
+ * Наружу рендерер отдаёт **конфиг JSON** (кнопка «JSON»): самодостаточную
+ * страницу для ТСД собирает расширение 1С, подставляя конфиг в оболочку
+ * редизайна; HTML редактор не выгружает.
+ *
  * Почему iframe: страница формы — самостоятельное приложение (свой `data-theme`,
  * localStorage, beforeunload, `100dvh`). В iframe она живёт ровно тем же кодом,
  * что и на ТСД, без правок CSS/движка. `srcdoc` наследует origin редактора,
@@ -35,9 +41,10 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     super(...args);
     this.container = null;
     this.iframe = null;
-    this.exportButton = null;
+    this.configButton = null;
     this.lastIR = '';          // IR, уже отданный в iframe (как строка)
     this.timer = null;         // таймер отложенной перерисовки
+    this.errorTimer = null;    // плашка ошибки выгрузки
     this.resizeObserver = null;
     this.windowResizeHandler = null;
   }
@@ -113,7 +120,7 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     this.container = container;
     this.iframe = iframe;
     this.lastIR = '';
-    this.exportButton = this.createExportButton(container);
+    this.configButton = this.createConfigButton(container);
     this.observeResize(container);
 
     return container;
@@ -123,43 +130,83 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
   applyTheme(container) {
     const isDark = document.body.classList.contains('dark');
     container.style.background = isDark ? '#2d2d2d' : '#ffffff';
-
-    // Иконка скачивания — из статики редактора, под текущую тему.
-    const icon = this.exportButton && this.exportButton.querySelector('img');
-    if (icon) {
-      icon.src = isDark ? 'static/download-white.svg' : 'static/download-black.svg';
-    }
   }
 
-  createExportButton(container) {
-    const isDark = document.body.classList.contains('dark');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'ff-export-btn';
-    btn.title = 'Скачать HTML формы (для ТСД)';
-    btn.setAttribute('aria-label', 'Скачать HTML формы');
-    btn.innerHTML = isDark
-      ? '<img src="static/download-white.svg" alt="">'
-      : '<img src="static/download-black.svg" alt="">';
-    btn.addEventListener('click', () => this.download());
-    container.appendChild(btn);
-    return btn;
+  /**
+   * Выгрузка одна — конфиг формы для расширения 1С: `СтрЗаменить(Оболочка,
+   * "__FF_IR__", Конфиг)`. Подпись «JSON» вместо иконки: одинаковые иконки
+   * ничего не объясняли бы, а скачивается именно JSON.
+   */
+  createConfigButton(container) {
+    const group = document.createElement('div');
+    group.className = 'ff-export-buttons';
+
+    const config = document.createElement('button');
+    config.type = 'button';
+    config.className = 'ff-export-btn ff-export-btn--config';
+    config.textContent = 'JSON';
+    config.title = 'Скачать конфиг формы (JSON для вставки в 1С)';
+    config.setAttribute('aria-label', 'Скачать конфиг формы в JSON');
+    config.addEventListener('click', () => this.downloadConfig());
+
+    group.appendChild(config);
+    container.appendChild(group);
+
+    return config;
   }
 
-  /** IR текущей разметки → файл-страница для ТСД (без скрипта предпросмотра). */
-  download() {
+  /**
+   * IR текущей разметки → файл конфига для расширения 1С.
+   *
+   * Текст — ровно тот JSON, который получает страница предпросмотра (см.
+   * buildFormConfig), поэтому на стороне 1С достаточно подставить его в
+   * оболочку вместо маркера. Файл пишется как UTF-8 без BOM: это стандарт JSON,
+   * и `ПрочитатьJSON` не спотыкается о первый символ.
+   */
+  downloadConfig() {
     const IR = this.convertToIR();
-    if (IR === null) return;
+    const error = formConfigError(IR);
+    if (error) {
+      this.showExportError(error);
+      return;
+    }
 
-    const blob = new Blob([buildFormPage(IR)], { type: 'text/html;charset=utf-8' });
+    this.saveFile(buildFormConfig(IR), formFileName(IR, 'json'), 'application/json;charset=utf-8');
+  }
+
+  /** Текст → файл. */
+  saveFile(text, fileName, mimeType) {
+    const blob = new Blob([text], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = formFileName(IR);
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Отказ выгрузки показываем в панели, а не тостом: тост макета занят
+   * сообщениями самой формы (хук, отправка), а молчание кнопки выглядит
+   * поломкой. Плашка уходит сама.
+   */
+  showExportError(message) {
+    if (!this.container || !this.container.isConnected) return;
+
+    let box = this.container.querySelector('.ff-export-error');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'ff-export-error';
+      this.container.appendChild(box);
+    }
+    box.textContent = message;
+
+    clearTimeout(this.errorTimer);
+    this.errorTimer = setTimeout(() => {
+      if (box.parentNode) box.parentNode.removeChild(box);
+    }, 4000);
   }
 
   mountPreview(IR, serialized) {

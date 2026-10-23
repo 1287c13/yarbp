@@ -100,7 +100,8 @@ try {
   const iframe = container && container.querySelector('.ff-phone-screen iframe');
   const scaleBox = container && container.querySelector('.ff-phone-scale');
   const screenBox = container && container.querySelector('.ff-phone-screen');
-  const exportBtn = container && container.querySelector('.ff-export-btn');
+  const exportButtons = container ? container.querySelectorAll('.ff-export-btn') : [];
+  const configBtn = container && container.querySelector('.ff-export-btn--config');
 
   expect('корпус ТСД (SVG getSVG) на месте', !!svg,
     svg ? svg.getAttribute('viewBox') : 'нет');
@@ -144,12 +145,18 @@ try {
     Math.abs(iframe.getBoundingClientRect().width - 356) <= 0.5,
     phone ? phone.style.transform + ', форма ' +
       (iframe ? iframe.getBoundingClientRect().width.toFixed(1) : 'нет') : 'нет');
-  /* Иконка скачивания — SVG 800x800: без ограничения кнопка растягивалась на
-     всю панель и накрывала макет. */
-  expect('кнопка скачивания не растягивается на панель',
-    !!exportBtn && exportBtn.offsetWidth > 0 && exportBtn.offsetWidth < 60 &&
-    exportBtn.offsetHeight < 60,
-    exportBtn ? exportBtn.offsetWidth + 'x' + exportBtn.offsetHeight : 'нет');
+  /* Выгрузка одна — конфиг JSON. Кнопка подписана текстом, а не иконкой:
+     прежняя `download-*.svg` объявлена как 800x800 и без ограничения
+     растягивалась на всю панель и накрывала макет. */
+  expect('кнопка выгрузки одна и подписана «JSON»',
+    exportButtons.length === 1 && !!configBtn &&
+    configBtn.textContent.trim() === 'JSON' && !configBtn.querySelector('img'),
+    exportButtons.length + ' кнопок, текст=' +
+      (configBtn ? configBtn.textContent.trim() : 'нет'));
+  expect('кнопка выгрузки не растягивается на панель',
+    !!configBtn && configBtn.offsetWidth > 0 && configBtn.offsetWidth < 60 &&
+    configBtn.offsetHeight < 60,
+    configBtn ? configBtn.offsetWidth + 'x' + configBtn.offsetHeight : 'нет');
 
   const srcdoc = iframe ? iframe.srcdoc : '';
   expect('iframe получил страницу формы', srcdoc.length > 100000, String(srcdoc.length));
@@ -202,9 +209,9 @@ try {
       focusedEl !== innerDoc.getElementById('action-input'),
       focusedEl ? focusedEl.tagName + (focusedEl.className ? '.' + focusedEl.className : '') : 'null');
 
-    /* Контроль обратной стороны: в ЭКСПОРТЕ (файл для ТСД) той же сборки правки
-       нет, и движок фокус ставит — иначе проверка выше ничего не доказывает:
-       она бы проходила и на сломанном движке. Страница экспорта
+    /* Контроль обратной стороны: в странице без предпросмотра (её собирает
+       расширение 1С) правки нет, и движок фокус ставит — иначе проверка выше
+       ничего не доказывает: она бы проходила и на сломанном движке. Страница
        самодостаточна (один HTML без сети), поэтому грузим её в srcdoc. */
     const controlFrame = document.createElement('iframe');
     controlFrame.style.cssText = 'position:fixed;left:-9999px;top:0;width:356px;height:471px;border:0';
@@ -220,11 +227,11 @@ try {
           typeof controlWin.setFocus === 'function') break;
     }
     const controlField = controlDoc && controlDoc.querySelector('.autofocus-mark');
-    expect('автофокус: в экспорте setFocus живой (правка только в предпросмотре)',
+    expect('автофокус: в странице для ТСД setFocus живой (правка только в предпросмотре)',
       !!controlWin && /setTimeout/.test(String(controlWin.setFocus)),
       controlWin ? String(controlWin.setFocus).slice(0, 60) : 'нет окна');
     await new Promise(resolve => setTimeout(resolve, 600));
-    expect('автофокус: в экспорте движок ставит фокус (контроль проверки выше)',
+    expect('автофокус: в странице для ТСД движок ставит фокус (контроль проверки выше)',
       !!controlField && controlDoc.activeElement === controlField,
       controlDoc ? String(controlDoc.activeElement && controlDoc.activeElement.className) : 'нет документа');
     controlFrame.remove();
@@ -318,6 +325,35 @@ try {
   } else {
     report.push('INFO нет доступа к iframe.contentDocument (file:// origin)');
   }
+
+  /* 3d. Кнопка «JSON»: перехватываем скачивание и проверяем сам файл.
+     IR берём из #ir — это тот же текст, что собран из разметки примера. */
+  let saved = null;
+  const realCreate = URL.createObjectURL;
+  const realClick = HTMLAnchorElement.prototype.click;
+  URL.createObjectURL = function (blob) { saved = { blob: blob }; return 'blob:smoke'; };
+  HTMLAnchorElement.prototype.click = function () { if (saved) saved.fileName = this.download; };
+  try {
+    if (configBtn) configBtn.click();
+  } finally {
+    URL.createObjectURL = realCreate;
+    HTMLAnchorElement.prototype.click = realClick;
+  }
+
+  const savedText = saved && saved.blob ? await saved.blob.text() : '';
+  const expectedConfig = document.getElementById('ir').textContent.trim();
+  expect('кнопка «JSON» скачивает файл .json',
+    !!saved && /\.json$/.test(saved.fileName || ''),
+    saved ? String(saved.fileName) : 'скачивания не было');
+  expect('в файле конфига — IR образца (побайтово)',
+    !!savedText && savedText.trim() === expectedConfig,
+    savedText ? String(savedText.length) + ' символов' : 'файла нет');
+  expect('конфиг — объект формы с детьми',
+    /^\{\s*"type": "форма"/.test(savedText) && savedText.indexOf('"children"') !== -1,
+    savedText.slice(0, 40));
+  expect('выгрузки HTML больше нет (кнопка одна — JSON)',
+    exportButtons.length === 1 && !/^\s*<!DOCTYPE/i.test(savedText),
+    exportButtons.length + ' кнопок, файл начинается с ' + JSON.stringify(savedText.slice(0, 12)));
 
   expect('подсказки: виды полей на месте',
     flexFormsSuggestions.nodes['группа'].variants.some(v => v.label === 'поле:штрихкод'));
