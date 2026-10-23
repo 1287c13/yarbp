@@ -95,13 +95,45 @@ export const FLEX_FORMS_SCREEN_STYLE = (() => {
   ].join(';');
 })();
 
-/** Разметка предпросмотра: корпус ТСД и пустой экран (iframe вставляет рендерер). */
+/**
+ * Масштаб страницы формы внутри нарисованного экрана.
+ *
+ * Странице нужна высота 471 (в ней нижняя панель формы видна целиком), а на
+ * рисунке корпуса под экран отведено 338x447 (по 4 точки корпуса с боков,
+ * 15 точек до меню и 8.6 до клавиатуры) — поэтому iframe верстается в своём
+ * логическом размере и показывается уменьшенным. Пересобирать его под размер
+ * экрана нельзя: при высоте меньше 471 форма обрезает нижнюю панель, а не
+ * перекомпоновывается.
+ *
+ * Минимум из двух отношений (по ширине и по высоте) гарантирует, что страница
+ * влезет в экран целиком: высота даёт 447/471 = 0.949, а ширина iframe выведена
+ * из той же пропорции (356 при высоте 471), поэтому второе отношение почти
+ * равно первому и форма закрывает экран без тёмных полей по краям.
+ */
+
+export const FLEX_FORMS_FORM_SCALE = +Math.min(
+  FLEX_FORMS_PHONE.screen.width / FLEX_FORMS_PHONE.form.width,
+  FLEX_FORMS_PHONE.screen.height / FLEX_FORMS_PHONE.form.height
+).toFixed(5);
+
+/**
+ * Разметка предпросмотра: корпус ТСД и пустой экран (iframe вставляет рендерер).
+ *
+ * Рамка имеет постоянный логический размер (как на рисунке 346x758), а под
+ * панель редактора её подгоняет рендерер трансформацией: `.ff-phone-scale`
+ * получает размер после масштаба, `.ff-phone` — `transform: scale()`.
+ * Поэтому экран (iframe) всегда один и тот же 356x471 в CSS-пикселях, и форма
+ * верстается один раз, а не перекомпоновывается под ширину панели. В нарисованный
+ * экран он вписывается через FLEX_FORMS_FORM_SCALE.
+ */
 export function buildPreviewMarkup() {
   return (
     '<div class="ff-preview">' +
-      '<div class="ff-phone" style="width:' + FLEX_FORMS_PHONE.width + 'px;height:' + FLEX_FORMS_PHONE.height + 'px">' +
-        '<div class="ff-phone-body">' + FLEX_FORMS_PHONE_SVG + '</div>' +
-        '<div class="ff-phone-screen" style="' + FLEX_FORMS_SCREEN_STYLE + '"></div>' +
+      '<div class="ff-phone-scale">' +
+        '<div class="ff-phone" style="width:' + FLEX_FORMS_PHONE.width + 'px;height:' + FLEX_FORMS_PHONE.height + 'px">' +
+          '<div class="ff-phone-body">' + FLEX_FORMS_PHONE_SVG + '</div>' +
+          '<div class="ff-phone-screen" style="' + FLEX_FORMS_SCREEN_STYLE + '"></div>' +
+        '</div>' +
       '</div>' +
     '</div>'
   );
@@ -113,14 +145,24 @@ export function buildPreviewMarkup() {
  * вместе с ним.
  */
 export const FLEX_FORMS_PREVIEW_CSS = [
-  '.ff-preview{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overflow:auto}',
-  '.ff-phone{position:relative;flex:0 0 auto}',
+  '.ff-preview{position:absolute;inset:0;display:flex;padding:16px;box-sizing:border-box;overflow:auto}',
+  '.ff-phone-scale{position:relative;flex:0 0 auto;margin:auto}',
+  '.ff-phone{position:absolute;top:0;left:0;transform-origin:0 0}',
   '.ff-phone-body{position:absolute;inset:0}',
   '.ff-phone-body svg{display:block;width:100%;height:100%}',
-  '.ff-phone-screen{position:absolute;overflow:hidden;border-radius:6px;background:#0a0c10}',
-  '.ff-phone-screen iframe{display:block;width:100%;height:100%;border:0;background:#0a0c10}',
+  // Углы экрана не скругляем: он должен выглядеть прямоугольным.
+  '.ff-phone-screen{position:absolute;overflow:hidden;border-radius:0;background:#0a0c10}',
+  // iframe — в своём логическом размере и уменьшенный до нарисованного экрана:
+  // пересборка под размер экрана обрезала бы нижнюю панель формы.
+  '.ff-phone-screen iframe{position:absolute;left:0;top:0;display:block;border:0;background:#0a0c10;' +
+    'width:' + FLEX_FORMS_PHONE.form.width + 'px;height:' + FLEX_FORMS_PHONE.form.height + 'px;' +
+    'transform-origin:0 0;transform:scale(' + FLEX_FORMS_FORM_SCALE + ')}',
+  // Иконка скачивания — SVG 800x800 без размера на странице: без явных width/height
+  // картинка растягивает кнопку на всю панель. В редакторе её ограничивает
+  // #day-icon из editor.css, здесь у кнопки свой класс — ограничиваем сами.
   '.ff-export-btn{position:absolute;top:12px;left:16px;z-index:5;padding:3px 6px;background:none;border:1px solid rgba(128,128,128,.45);border-radius:8px;cursor:pointer;line-height:0}',
   '.ff-export-btn:hover{background:rgba(128,128,128,.18)}',
+  '.ff-export-btn img{display:block;width:auto;height:15px}',
 ].join('\n');
 
 /** Имя файла для скачивания: по заголовку формы, без запрещённых символов. */

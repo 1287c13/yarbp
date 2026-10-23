@@ -11,14 +11,17 @@
      в экспорте этого скрипта нет.
   5. Геометрия рамки/экрана и имя файла экспорта.
   6. Подсказки флейвора: набор узлов, видов полей, values.
-  7. Дымовой тест в браузере: регистрация флейвора и монтирование предпросмотра
-     настоящей разметкой (Chrome/Edge headless).
+  7. Предопределённый пример «Форма ТСД» в редакторе: текст в FileManager.js
+     дословно совпадает с образцом разметки, с которого сделан редизайн.
+  8. Дымовой тест в браузере: регистрация флейвора, монтирование предпросмотра
+     примером из «Примеров» и IR этого примера (== IR образца) настоящими
+     модулями редактора (Chrome/Edge headless).
 
 Запуск (из корня репозитория):
     python yarbp/tests/flexforms/run_tests.py              # всё
     python yarbp/tests/flexforms/run_tests.py --no-browser # без браузера
 
-Зависимости: Python 3.8+, модуль quickjs (pip install quickjs), Chrome/Edge (п.7).
+Зависимости: Python 3.8+, модуль quickjs (pip install quickjs), Chrome/Edge (п.8).
 """
 
 from __future__ import print_function
@@ -49,6 +52,10 @@ SUGGESTIONS = os.path.join(CLASSES, 'suggestions', 'flexFormsSuggestions.js')
 GOLDEN_AST = os.path.join(TASK, 'ast.json')
 GOLDEN_IR = os.path.join(TASK, 'target.json')
 SAMPLE_IR = os.path.join(TASK, 'target-sample.json')
+SAMPLE_MARKUP = os.path.join(TASK, 'образцы разметки.md')
+
+FILE_MANAGER = os.path.join(ROOT, 'src', 'js', 'modules', 'FileManager.js')
+BUILTIN_ID = 'builtin-9'                                 # пример «Форма ТСД»
 
 BROWSERS = [
     r'C:\Program Files\Google\Chrome\Application\chrome.exe',
@@ -261,7 +268,10 @@ def test_geometry():
     code = bundle(PAGE) + '''
 JSON.stringify({
   screen: FLEX_FORMS_SCREEN_STYLE,
+  scale: FLEX_FORMS_FORM_SCALE,
   phone: FLEX_FORMS_PHONE,
+  markup: buildPreviewMarkup(),
+  previewCss: FLEX_FORMS_PREVIEW_CSS,
   fileName: formFileName({ 'заголовокФормы': 'Отправка данных в 1С' }),
   fallback: formFileName({}),
   serialized: serializeFormIR({ 'b': 1, 'a': [1] })
@@ -269,17 +279,43 @@ JSON.stringify({
 '''
     result = js_json(code)
 
-    check('экран в процентах от рамки (3/80, 308x400 внутри 346x758)',
-          result['screen'] == 'left:0.8671%;top:10.5541%;width:89.0173%;height:52.7704%',
+    check('экран в процентах от рамки (4/80, 338x447 внутри 346x758)',
+          result['screen'] == 'left:1.1561%;top:10.5541%;width:97.6879%;height:58.9710%',
           result['screen'])
     check('размеры рамки',
           result['phone']['width'] == 346 and result['phone']['height'] == 758,
           str(result['phone']))
     check('viewBox рамки', result['phone']['viewBox'] == '0 0 208 457',
           result['phone']['viewBox'])
-    check('положение экрана',
-          result['phone']['screen'] == {'left': 3, 'top': 80, 'width': 308, 'height': 400},
+    check('положение экрана (по 4 точки корпуса с боков, зазор до клавиатуры)',
+          result['phone']['screen'] == {'left': 4, 'top': 80, 'width': 338, 'height': 447},
           str(result['phone']['screen']))
+    check('логический размер страницы формы (iframe) — 356x471',
+          result['phone']['form'] == {'width': 356, 'height': 471},
+          str(result['phone'].get('form')))
+    check('iframe вписан в экран уменьшением (0.949), а не пересборкой размеров',
+          'width:356px;height:471px' in result['previewCss'] and
+          'transform:scale(0.94904)' in result['previewCss'],
+          result['previewCss'])
+    check('уменьшенная страница закрывает экран целиком (без тёмных полей)',
+          abs(result['phone']['form']['width'] * result['scale'] -
+              result['phone']['screen']['width']) <= 0.5 and
+          abs(result['phone']['form']['height'] * result['scale'] -
+              result['phone']['screen']['height']) <= 0.5,
+          '%r x %r при масштабе %r' % (
+              result['phone']['form']['width'] * result['scale'],
+              result['phone']['form']['height'] * result['scale'],
+              result['scale']))
+    check('углы экрана не скруглены',
+          'border-radius:0' in result['previewCss'] and
+          'border-radius:10px' not in result['previewCss'],
+          result['previewCss'])
+    check('рамка имеет постоянный логический размер и обёртку для масштаба',
+          'class="ff-phone-scale"' in result['markup'] and
+          'class="ff-phone" style="width:346px;height:758px"' in result['markup'],
+          result['markup'][:120])
+    check('иконка скачивания ограничена (SVG 800x800 не растягивает кнопку)',
+          '.ff-export-btn img{display:block;width:auto;height:15px}' in result['previewCss'])
     check('имя файла из заголовка формы',
           result['fileName'] == 'Отправка-данных-в-1С.html', result['fileName'])
     check('имя файла по умолчанию', result['fallback'] == 'flex-forms.html',
@@ -333,7 +369,47 @@ JSON.stringify({
 
 
 # --------------------------------------------------------------------------
-# 7. Дымовой тест в браузере
+# 7. Предопределённый пример в редакторе
+# --------------------------------------------------------------------------
+
+BUILTIN_ENTRY = re.compile(r"id:\s*'%s'[\s\S]*?content:\s*`([^`]*)`" % re.escape(BUILTIN_ID))
+MARKDOWN_BLOCK = re.compile(r'```[^\n]*\n(.*?)```', re.S)
+
+
+def test_builtin_example():
+    """Пример «Форма ТСД» в «Примерах» — дословно образец разметки редизайна.
+
+    Пользователь открывает пример и глазами сверяет рендер с редизайном;
+    чтобы эта сверка что-то значила, текст примера не должен «отъезжать» от
+    первоисточника. Единственное разрешённое отличие — директива: в образце
+    `! как аст` (показывает AST), в редакторе `! как форма-тсд`.
+    """
+    print('7. пример «Форма ТСД» в редакторе == образец разметки')
+
+    found = BUILTIN_ENTRY.search(read_text(FILE_MANAGER))
+    if not check('FileManager: встроенный пример %s' % BUILTIN_ID, found is not None):
+        return
+
+    actual = found.group(1).strip('\n')
+    blocks = MARKDOWN_BLOCK.findall(read_text(SAMPLE_MARKUP))
+    if not check('образцы разметки.md: найден блок разметки', bool(blocks)):
+        return
+
+    expected = re.sub(r'^! как аст[ \t]*$', '! как форма-тсд', blocks[0].strip('\n'),
+                      count=1, flags=re.M)
+
+    check('пример: директива «! как форма-тсд»',
+          actual.splitlines()[0].strip() == '! как форма-тсд',
+          actual.splitlines()[0].strip())
+    check('пример: текст дословно совпадает с первым блоком «образцы разметки.md»',
+          actual == expected, first_difference(actual, expected))
+    check('пример: «Кол\u2011во» с неразрывным дефисом (U+2011) не нормализован',
+          'Кол\u2011во' in actual and 'Кол-во' not in actual,
+          'U+2011 потерян — поля таблицы перестанут сопоставляться')
+
+
+# --------------------------------------------------------------------------
+# 8. Дымовой тест в браузере
 # --------------------------------------------------------------------------
 
 def find_browser():
@@ -373,7 +449,7 @@ def wait_for_port(port, timeout=15.0):
 
 
 def test_browser():
-    print('7. дымовой тест в браузере (smoke.html)')
+    print('8. дымовой тест в браузере (smoke.html)')
     browser = find_browser()
     if not browser:
         skip('smoke.html', 'не найден Chrome/Edge')
@@ -441,6 +517,17 @@ def test_browser():
           ' ok-строк: %d' % len(passed))
     check('smoke.html: все проверки прошли', not failed, '; '.join(failed))
 
+    # IR, собранный в браузере ИЗ ТЕКСТА ПРИМЕРА, должен совпасть с IR образца:
+    # значит пример в «Примерах» — тот же вход, что и у редизайна (а страница
+    # из этого IR уже сверена с редизайном побайтово в п.3).
+    ir = re.search(r'<pre id="ir"[^>]*>(.*?)</pre>', output, re.S)
+    if check('smoke.html: страница отдала IR примера', ir is not None):
+        # Chrome на Windows печатает --dump-dom с CRLF — приводим к LF, как read_text.
+        actual_ir = html_unescape(ir.group(1)).replace('\r\n', '\n').replace('\r', '\n').strip('\n')
+        expected_ir = read_text(SAMPLE_IR).strip('\n')
+        check('smoke.html: пример из «Примеров» → IR образца (побайтово)',
+              actual_ir == expected_ir, first_difference(actual_ir, expected_ir))
+
 
 # --------------------------------------------------------------------------
 # main
@@ -457,6 +544,7 @@ def main(argv):
         import quickjs  # noqa: F401
     except ImportError:
         skip('JS-тесты', 'нет модуля quickjs (pip install quickjs)')
+        test_builtin_example()      # примеру редактора quickjs не нужен
         return 1 if FAILURES else 0
 
     test_converter()
@@ -464,9 +552,13 @@ def main(argv):
     test_preview(export_page)
     test_geometry()
     test_suggestions()
+    test_builtin_example()
 
     if '--no-browser' not in argv:
         test_browser()
+    else:
+        skip('smoke.html', 'нужен браузер: пример → IR проверяется настоящими '
+                           'модулями (quickjs не умеет TDZ статических полей лексера)')
 
     print('')
     if FAILURES:

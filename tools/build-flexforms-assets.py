@@ -11,7 +11,11 @@
 Источники:
   редизайн/kb8-inventory-redesign.html  — CSS, оболочка страницы, движок
   flex-forms-legacy/constructor.html    — SVG-рамка корпуса ТСД (getSVG)
-                                          и геометрия экрана (renderMockup)
+
+Геометрия экрана предпросмотра задана здесь (PREVIEW_FORM, PREVIEW_SCREEN): в
+легаси она подбиралась вручную под старую вёрстку формы и с рисунком корпуса не
+совпадала. Отдельной области под экран в самом SVG нет — есть только шапка
+1С-клиента и клавиатура, поэтому прямоугольник экрана подобран по ним и на глаз.
 
 Выход (перезаписывается целиком, руками не править):
   src/js/classes/renderers/flexforms/FlexFormsStyles.js
@@ -138,9 +142,15 @@ def markup_module(skeleton, phone):
             "\n].join('\\n');\n\n"
             '/*\n'
             '  Рамка корпуса ТСД — дословный результат getSVG() из легаси-конструктора\n'
-            '  (flex-forms-legacy/constructor.html). Размеры рамки и положение экрана —\n'
-            '  из renderMockup() того же файла: рамка 346x758 рисуется по viewBox\n'
-            '  208x457, интерфейс лежит в 308x400 со сдвигом 3/80.\n'
+            '  (flex-forms-legacy/constructor.html): рамка 346x758 по viewBox 208x457.\n'
+            '  Отдельной области под экран в рисунке нет, поэтому прямоугольник экрана\n'
+            '  подобран по рисунку: шапка 1С-клиента кончается на y=64.9, клавиатура\n'
+            '  начинается на y=535.6, стенки корпуса — на x=0 и x=346. Экран 338x447\n'
+            '  в 4/80 оставляет по 4 точки корпуса с боков, 15 точек до трёх точек\n'
+            '  меню и 8.6 до клавиатуры — такой же зазор, как между её кнопками.\n'
+            '  Страница формы верстается в 356x471 и показывается уменьшенной (0.949):\n'
+            '  пропорции 338:447 и 356:471 совпадают, поэтому она закрывает экран\n'
+            '  целиком — см. PREVIEW_FORM/PREVIEW_SCREEN в build-flexforms-assets.py.\n'
             '*/\n'
             'export const FLEX_FORMS_PHONE = Object.freeze(%s);\n\n'
             'export const FLEX_FORMS_PHONE_SVG = %s;\n' % (
@@ -162,6 +172,8 @@ def main(argv):
     redesign = read_text(REDESIGN)
     styles, runtime, skeleton, ir_text = extract_redesign(redesign)
     phone = extract_phone(read_text(LEGACY))
+    phone['form'] = dict(PREVIEW_FORM)
+    phone['screen'] = dict(PREVIEW_SCREEN)
 
     # IR в первоисточнике должен быть ровно результатом json.dumps(indent=2):
     # иначе сборка страницы с этим IR не совпадёт с файлом.
@@ -189,10 +201,13 @@ def main(argv):
     print('styles:  %5d lines, %6d chars' % (styles.count('\n') + 1, len(styles)))
     print('runtime: %5d lines, %6d chars' % (runtime.count('\n') + 1, len(runtime)))
     print('page:    %5d lines' % (skeleton.count('\n') + 1))
-    print('phone:   svg %d chars, frame %dx%d, screen %dx%d at %d/%d' % (
+    print('phone:   svg %d chars, frame %dx%d, form %dx%d, screen %dx%d at %d/%d (scale %.3f)' % (
         len(phone['svg']), phone['width'], phone['height'],
+        phone['form']['width'], phone['form']['height'],
         phone['screen']['width'], phone['screen']['height'],
-        phone['screen']['left'], phone['screen']['top']))
+        phone['screen']['left'], phone['screen']['top'],
+        min(float(phone['screen']['width']) / phone['form']['width'],
+            float(phone['screen']['height']) / phone['form']['height'])))
 
     if check_only:
         if problems:
@@ -241,7 +256,39 @@ def extract_redesign(text):
 # Первоисточник: легаси-конструктор (SVG-рамка корпуса + геометрия экрана)
 # --------------------------------------------------------------------------
 
+# Логический размер страницы формы. Высота — минимум, при котором форма встаёт
+# целиком: у формы-образца кнопка «Добавить в заказ» кончается на y=468, и уже
+# при 458 её нижняя панель обрезается (проверено снимком). Ширина выводится из
+# пропорции нарисованного экрана (см. PREVIEW_SCREEN): страница масштабируется
+# целиком, поэтому при пропорции, отличной от экранной, по краям остались бы
+# тёмные полосы. По ширине форма тянется сама, так что 356 вместо 346 — это те
+# же +3 % к полям, а не другая вёрстка. Это размер iframe, а не экрана.
+PREVIEW_FORM_HEIGHT = 471
+
+# Экран предпросмотра — в координатах рамки (346x758), в которых нарисованы и
+# корпус, и клавиатура. В легаси-конструкторе #ui-mock-container стоял в
+# 308x400 со сдвигом 3/80: числа подбирались под старую вёрстку формы и с
+# рисунком не совпадают. По рисунку шапка 1С-клиента кончается на y=64.9, а
+# клавиатура начинается на y=535.6, стенки корпуса — на x=0 и x=346.
+#
+# Отсюда числа: по 4 точки корпуса с боков (338 при left=4); сверху 15 точек до
+# трёх точек меню (top=80); снизу 8.6 до клавиатуры (низ на y=527) — такой же
+# зазор, как между кнопками клавиатуры (между рядами 5 точек рисунка = 8.3 px).
+# Углы не скругляются — экран прямоугольный.
+PREVIEW_SCREEN = {'top': 80, 'left': 4, 'width': 338, 'height': 447}
+
+# Ширина iframe — из пропорции экрана, чтобы уменьшенная страница закрывала его
+# без полей: 471 * 338 / 447 = 356.
+PREVIEW_FORM = {
+    'width': int(round(PREVIEW_FORM_HEIGHT * float(PREVIEW_SCREEN['width']) /
+                       PREVIEW_SCREEN['height'])),
+    'height': PREVIEW_FORM_HEIGHT,
+}
+
+
+
 def extract_phone(text):
+    """SVG-рамка корпуса и её размеры из getSVG(); экран задаёт PREVIEW_SCREEN."""
     start = text.find('function getSVG()')
     if start == -1:
         raise SystemExit('не найден getSVG() в легаси-конструкторе')
@@ -258,24 +305,11 @@ def extract_phone(text):
     if not view:
         raise SystemExit('не разобраны размеры SVG-рамки')
 
-    mockup = slice_between(text, 'function renderMockup()', 'function getSVG()')
-    screen = re.search(
-        r'id="ui-mock-container"\s+style="width:\s*(\d+)px;\s*height:\s*(\d+)px;.*?'
-        r'margin:\s*(\d+)px 0 0 (\d+)px', mockup, re.S)
-    if not screen:
-        raise SystemExit('не разобрана геометрия #ui-mock-container')
-
     return {
         'svg': svg,
         'width': int(view.group(1)),
         'height': int(view.group(2)),
         'viewBox': view.group(3),
-        'screen': {
-            'top': int(screen.group(3)),
-            'left': int(screen.group(4)),
-            'width': int(screen.group(1)),
-            'height': int(screen.group(2)),
-        },
     }
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1:]))

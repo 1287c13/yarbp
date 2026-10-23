@@ -11,7 +11,7 @@ import {
 /** Пауза перед перезагрузкой предпросмотра: пока печатают — не дёргаем iframe. */
 const PREVIEW_DEBOUNCE_MS = 400;
 
-/** Предел увеличения рамки: дальше форма уходит в «планшетную» раскладку. */
+/** Предел увеличения рамки: крупнее телефон уже не помещается в панель с полями. */
 const PHONE_MAX_SCALE = 1.6;
 
 /** Заглушка экрана, если из разметки не собирается IR. */
@@ -211,15 +211,19 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
   }
 
   /**
-   * Рамка масштабируется целиком: SVG — вектор (не мылит), а iframe получает
-   * размер экрана в CSS-пикселях, поэтому текст формы остаётся чётким.
+   * Рамка масштабируется целиком: SVG — вектор (не мылит), а экран (iframe)
+   * сохраняет свой логический размер 356x471. Значит форма верстается один раз
+   * и дальше только масштабируется: в узкой панели она уменьшается, а не
+   * перекомпоновывается под её ширину (иначе при широкой панели форма «расползалась»
+   * бы на планшетную раскладку, а в узкой обрезалась).
    */
   fitPhone() {
     if (!this.container || !this.container.isConnected) return;
 
     const preview = this.container.querySelector('.ff-preview');
     const phone = this.container.querySelector('.ff-phone');
-    if (!preview || !phone) return;
+    const box = this.container.querySelector('.ff-phone-scale');
+    if (!preview || !phone || !box) return;
 
     const padding = 32;                        // .ff-preview padding:16px с двух сторон
     const availableW = Math.max(140, preview.clientWidth - padding);
@@ -230,8 +234,11 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
       PHONE_MAX_SCALE
     );
 
-    phone.style.width = Math.round(FLEX_FORMS_PHONE.width * scale) + 'px';
-    phone.style.height = Math.round(FLEX_FORMS_PHONE.height * scale) + 'px';
+    // Размер рамки в раскладке — уже умноженный: место занимает именно он,
+    // иначе трансформация вылезала бы за панель и рисовала бы скроллбары.
+    box.style.width = (FLEX_FORMS_PHONE.width * scale).toFixed(2) + 'px';
+    box.style.height = (FLEX_FORMS_PHONE.height * scale).toFixed(2) + 'px';
+    phone.style.transform = 'scale(' + scale.toFixed(4) + ')';
   }
 
   syncRenderScroll() {}

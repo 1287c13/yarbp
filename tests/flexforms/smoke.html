@@ -17,74 +17,28 @@
   </div>
 </div>
 <pre id="result">pending</pre>
+<pre id="ir" hidden></pre>
 
 <script type="module">
-/* Дымовой тест флейвора «форма-ТСД»: реальные модули редактора, реальная
-   разметка ЯРБП, настоящий рендерер. Результат печатается в #result, по нему
-   и по <title> run_tests.py понимает, прошёл тест или нет. */
+/* Дымовой тест флейвора «форма-ТСД»: реальные модули редактора, разметка —
+   предопределённый пример «Форма ТСД» из «Примеров», настоящий рендерер.
+   Результат печатается в #result, по нему и по <title> run_tests.py понимает,
+   прошёл тест или нет. В #ir лежит IR, собранный из текста примера, — его
+   run_tests.py сравнивает с target-sample.json побайтово. */
 import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
 import { FlexFormsRenderer } from '../../src/js/classes/renderers/FlexFormsRenderer.js';
 import { YarbpLexer } from '../../src/js/classes/YarbpLexer.js';
 import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
 import { flexFormsSuggestions } from '../../src/js/classes/suggestions/flexFormsSuggestions.js';
+import { FileManager } from '../../src/js/modules/FileManager.js';
+import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
 
-const MARKUP = `! как форма-тсд
-
-форма
-  .заголовокФормы Отправка данных в 1С
-  .заголовокПоляДействия Что нужно сделать?
-  .ширинаИнтерфейса 309px
-  .ширинаПоля 160px
-  .ширинаПодписи 130px
-
-
-  операция = Подобрать товар / a_1
-    .имяКнопки Добавить в заказ
-    .очиститьФорму да
-    .приемник a_2_t_1
-    .заголовокФормы Отсканируйте штрихкод
-
-    группа .сетка grid-template-columns: repeat(1, 1fr); gap: 10px; grid-auto-rows: 1fr;
-      поле:штрихкод = Штрихкод / a_1_f_1
-        .кнопкаОчистки да
-        .автофокус да
-        ..приемник a_1_f_2 a_1_f_3 a_1_f_4
-        ..значенияПриемниковПоУмолчанию "" "" 1
-        .хук http://127.0.0.1:8765/rt_morato_bot/hs/dp/link/
-        .поискПо
-        .режимСканирования суммироватьДоПереноса
-        .вызывать a_1
-      поле:надпись = Товар / a_1_f_2
-      поле:надпись = Характеристика / a_1_f_3
-      поле:число   = Кол-во / a_1_f_4
-
-
-  операция = Отправить результат / a_2
-    .имяКнопки отправить
-    ..проверятьЗаполнение a_2_f_1 a_2_t_1
-    .урл http://127.0.0.1:8765/rt_morato_bot/hs/dp/processing
-    .перезагрузить да
-
-    группа .сетка grid-template-columns: repeat(1, 1fr); gap: 10px; grid-auto-rows: 1fr;
-      поле:выбор = Магазин / a_2_f_1
-        .тип Справочник.Магазины
-        ..опции
-          :
-            .значение 000-000-000-000
-            .имя Магазин 1
-          :
-            .значение 000-000-000-001
-            .имя Магазин 2
-
-    группа .сетка grid-template-columns: repeat(1, 1fr); gap: 10px; grid-auto-rows: 1fr;
-      таблица = Товары в заказе / a_2_t_1
-        .редактируемая да
-        ..измерения Товар Характеристика
-        ..ресурсы Кол-во
-        ..шапка Товар Характеристика Кол-во
-        ..именаВПриемнике Номенклатура Характеристика Количество
-        ..типы Справочник.Номенклатура Справочник.ХарактеристикиНоменклатуры Число(15,3)
-`;
+/* Разметка берётся из самого редактора — предопределённый пример «Форма ТСД»
+   (FileManager, id = builtin-9). Так дым проверяет не копию разметки, а тот
+   самый текст, который пользователь видит в папке «Примеры». */
+const EXAMPLE_ID = 'builtin-9';
+const exampleFile = new FileManager().data.files.find(file => file.id === EXAMPLE_ID);
+const MARKUP = exampleFile ? exampleFile.content : '';
 
 const report = [];
 const expect = (name, ok, detail) => {
@@ -98,6 +52,9 @@ const finish = () => {
 
 
 try {
+  /* 0. Пример из «Примеров» — тот самый текст, что видит пользователь. */
+  expect('пример «Форма ТСД» найден в «Примерах» (' + EXAMPLE_ID + ')', !!exampleFile);
+
   /* 1. Регистрация флейвора: normalizeFlavorName снимает «-» и пробелы. */
   [['как форма-тсд', 'форматсд'], ['как тсд', 'тсд'],
    ['as flexforms', 'flexforms'], ['как сканер', 'сканер']].forEach(([directive, normalized]) => {
@@ -120,6 +77,12 @@ try {
 
   renderer.render();
 
+  /* IR, собранный из текста примера, run_tests.py сравнит с IR образца
+     (target-sample.json) побайтово: пример в редакторе — тот же вход, что у
+     редизайна, а страница из этого IR уже сверена с редизайном в п.3. */
+  document.getElementById('ir').textContent =
+    new YarbpFlexFormsConverter(parser.getAST()).toJSON(2);
+
   await new Promise(resolve => setTimeout(resolve, 1500));
 
   const container = document.querySelector('#render-pane .ui-render-container');
@@ -131,11 +94,44 @@ try {
   const phone = container && container.querySelector('.ff-phone');
   const svg = container && container.querySelector('.ff-phone-body svg');
   const iframe = container && container.querySelector('.ff-phone-screen iframe');
+  const scaleBox = container && container.querySelector('.ff-phone-scale');
+  const screenBox = container && container.querySelector('.ff-phone-screen');
+  const exportBtn = container && container.querySelector('.ff-export-btn');
 
   expect('корпус ТСД (SVG getSVG) на месте', !!svg,
     svg ? svg.getAttribute('viewBox') : 'нет');
   expect('рамка отмасштабирована под панель',
-    !!phone && parseInt(phone.style.width, 10) > 100, phone ? phone.style.width : 'нет');
+    !!scaleBox && scaleBox.clientWidth > 100 && scaleBox.clientHeight > 200,
+    scaleBox ? scaleBox.clientWidth + 'x' + scaleBox.clientHeight : 'нет');
+  /* Экран — нарисованное место в рамке (между шапкой 1С-клиента и клавиатурой),
+     а сам iframe — фиксированный логический размер: форма верстается один раз
+     и масштабируется трансформацией, а не перекомпоновывается под панель. */
+  expect('экран в рамке 338x447 (место на рисунке)',
+    !!screenBox && screenBox.offsetWidth === 338 && screenBox.offsetHeight === 447,
+    screenBox ? screenBox.offsetWidth + 'x' + screenBox.offsetHeight : 'нет');
+  expect('углы экрана не скруглены',
+    !!screenBox && screenBox.offsetWidth > 0 &&
+    getComputedStyle(screenBox).borderTopLeftRadius === '0px',
+    screenBox ? getComputedStyle(screenBox).borderTopLeftRadius : 'нет');
+  expect('iframe верстается в 356x471 (логический размер формы)',
+    !!iframe && iframe.offsetWidth === 356 && iframe.offsetHeight === 471,
+    iframe ? iframe.offsetWidth + 'x' + iframe.offsetHeight : 'нет');
+  expect('iframe вписан в экран (уменьшен, а не обрезан)',
+    !!iframe && !!screenBox &&
+    Math.abs(iframe.getBoundingClientRect().width - screenBox.getBoundingClientRect().width) <= 1 &&
+    Math.abs(iframe.getBoundingClientRect().height - screenBox.getBoundingClientRect().height) <= 1,
+    iframe && screenBox ? iframe.getBoundingClientRect().width.toFixed(1) + ' / ' +
+      screenBox.getBoundingClientRect().width.toFixed(1) : 'нет');
+  expect('рамка масштабируется трансформацией (без пересборки размеров)',
+    !!phone && /^scale\(/.test(phone.style.transform || '') &&
+    phone.style.width === '346px' && phone.style.height === '758px',
+    phone ? phone.style.transform + ' / ' + phone.style.width + 'x' + phone.style.height : 'нет');
+  /* Иконка скачивания — SVG 800x800: без ограничения кнопка растягивалась на
+     всю панель и накрывала макет. */
+  expect('кнопка скачивания не растягивается на панель',
+    !!exportBtn && exportBtn.offsetWidth > 0 && exportBtn.offsetWidth < 60 &&
+    exportBtn.offsetHeight < 60,
+    exportBtn ? exportBtn.offsetWidth + 'x' + exportBtn.offsetHeight : 'нет');
 
   const srcdoc = iframe ? iframe.srcdoc : '';
   expect('iframe получил страницу формы', srcdoc.length > 100000, String(srcdoc.length));
