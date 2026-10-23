@@ -6,3 +6,5 @@ Thumbs.db
 *.tmp
 dist/
 build/
+__pycache__/
+*.pyc

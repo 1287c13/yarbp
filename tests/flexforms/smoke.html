@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>flexforms smoke</title>
+<style>
+  html,body{margin:0;padding:0;background:#111;color:#ddd;font:13px/1.4 monospace}
+  #render-pane{position:fixed;right:0;top:0;width:460px;height:720px;border-left:1px solid #333}
+  #result{padding:8px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div id="render-pane">
+  <div class="editor-container">
+    <div id="render-highlight-div" class="highlight-layer"></div>
+    <textarea id="render-textarea" class="code-input"></textarea>
+  </div>
+</div>
+<pre id="result">pending</pre>
+
+<script type="module">
+/* Дымовой тест флейвора «форма-ТСД»: реальные модули редактора, реальная
+   разметка ЯРБП, настоящий рендерер. Результат печатается в #result, по нему
+   и по <title> run_tests.py понимает, прошёл тест или нет. */
+import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
+import { FlexFormsRenderer } from '../../src/js/classes/renderers/FlexFormsRenderer.js';
+import { YarbpLexer } from '../../src/js/classes/YarbpLexer.js';
+import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
+import { flexFormsSuggestions } from '../../src/js/classes/suggestions/flexFormsSuggestions.js';
+
+const MARKUP = `! как форма-тсд
+
+форма
+  .заголовокФормы Отправка данных в 1С
+  .заголовокПоляДействия Что нужно сделать?
+  .ширинаИнтерфейса 309px
+  .ширинаПоля 160px
+  .ширинаПодписи 130px
+
+
+  операция = Подобрать товар / a_1
+    .имяКнопки Добавить в заказ
+    .очиститьФорму да
+    .приемник a_2_t_1
+    .заголовокФормы Отсканируйте штрихкод
+
+    группа .сетка grid-template-columns: repeat(1, 1fr); gap: 10px; grid-auto-rows: 1fr;
+      поле:штрихкод = Штрихкод / a_1_f_1
+        .кнопкаОчистки да
+        .автофокус да
+        ..приемник a_1_f_2 a_1_f_3 a_1_f_4
+        ..значенияПриемниковПоУмолчанию "" "" 1
+        .хук http://127.0.0.1:8765/rt_morato_bot/hs/dp/link/
+        .поискПо
+        .режимСканирования суммироватьДоПереноса
+        .вызывать a_1
+      поле:надпись = Товар / a_1_f_2
+      поле:надпись = Характеристика / a_1_f_3
+      поле:число   = Кол-во / a_1_f_4
+
+
+  операция = Отправить результат / a_2
+    .имяКнопки отправить
+    ..проверятьЗаполнение a_2_f_1 a_2_t_1
+    .урл http://127.0.0.1:8765/rt_morato_bot/hs/dp/processing
+    .перезагрузить да
+
+    группа .сетка grid-template-columns: repeat(1, 1fr); gap: 10px; grid-auto-rows: 1fr;
+      поле:выбор = Магазин / a_2_f_1
+        .тип Справочник.Магазины
+        ..опции
+          :
+            .значение 000-000-000-000
+            .имя Магазин 1
+          :
+            .значение 000-000-000-001
+            .имя Магазин 2
+
+    группа .сетка grid-template-columns: repeat(1, 1fr); gap: 10px; grid-auto-rows: 1fr;
+      таблица = Товары в заказе / a_2_t_1
+        .редактируемая да
+        ..измерения Товар Характеристика
+        ..ресурсы Кол-во
+        ..шапка Товар Характеристика Кол-во
+        ..именаВПриемнике Номенклатура Характеристика Количество
+        ..типы Справочник.Номенклатура Справочник.ХарактеристикиНоменклатуры Число(15,3)
+`;
+
+const report = [];
+const expect = (name, ok, detail) => {
+  report.push((ok ? 'OK   ' : 'FAIL ') + name + (ok || !detail ? '' : ' :: ' + detail));
+};
+const finish = () => {
+  const failed = report.filter(line => line.indexOf('FAIL') === 0);
+  document.getElementById('result').textContent = report.join('\n');
+  document.title = failed.length ? 'SMOKE FAIL' : 'SMOKE PASS';
+};
+
+
+try {
+  /* 1. Регистрация флейвора: normalizeFlavorName снимает «-» и пробелы. */
+  [['как форма-тсд', 'форматсд'], ['как тсд', 'тсд'],
+   ['as flexforms', 'flexforms'], ['как сканер', 'сканер']].forEach(([directive, normalized]) => {
+    const flavor = new YarbpFlavor(directive);
+    expect('флейвор «' + directive + '» → ' + normalized,
+      flavor.flavorName === normalized && !!flavor.flavorData &&
+      flavor.flavorData.renderer === FlexFormsRenderer,
+      String(flavor.flavorName) + ' / ' + String(flavor.flavorData && flavor.flavorData.renderer));
+  });
+
+  /* 2. Разметка → AST → предпросмотр. */
+  const lexer = new YarbpLexer();
+  lexer.setInitialState(MARKUP);
+  lexer.tokenize();
+
+  const parser = new YarbpParser(lexer);
+  const textarea = document.getElementById('render-textarea');
+  const highlight = document.getElementById('render-highlight-div');
+  const renderer = new FlexFormsRenderer(lexer, parser, textarea, highlight, () => {});
+
+  renderer.render();
+
+  await new Promise(resolve => setTimeout(resolve, 1500));
+
+  const container = document.querySelector('#render-pane .ui-render-container');
+  expect('контейнер предпросмотра создан', !!container);
+  expect('редактор результата скрыт',
+    document.querySelector('.editor-container').style.display === 'none',
+    document.querySelector('.editor-container').style.display);
+
+  const phone = container && container.querySelector('.ff-phone');
+  const svg = container && container.querySelector('.ff-phone-body svg');
+  const iframe = container && container.querySelector('.ff-phone-screen iframe');
+
+  expect('корпус ТСД (SVG getSVG) на месте', !!svg,
+    svg ? svg.getAttribute('viewBox') : 'нет');
+  expect('рамка отмасштабирована под панель',
+    !!phone && parseInt(phone.style.width, 10) > 100, phone ? phone.style.width : 'нет');
+
+  const srcdoc = iframe ? iframe.srcdoc : '';
+  expect('iframe получил страницу формы', srcdoc.length > 100000, String(srcdoc.length));
+  expect('в странице IR из разметки',
+    srcdoc.indexOf('"заголовокФормы": "Отправка данных в 1С"') !== -1);
+  expect('в странице обе операции',
+    srcdoc.indexOf('"Подобрать товар"') !== -1 && srcdoc.indexOf('"Отправить"') !== -1);
+  expect('в странице скрипт предпросмотра',
+    srcdoc.indexOf("localStorage.getItem('tsd-form-state')") !== -1);
+
+  /* 3. Движок внутри iframe отрисовал форму (если origin доступен). */
+  let innerDoc = null;
+  try { innerDoc = iframe && iframe.contentDocument; } catch (e) { innerDoc = null; }
+  if (innerDoc) {
+    const track = innerDoc.getElementById('track');
+    const select = innerDoc.getElementById('action-input');
+    const brand = innerDoc.getElementById('brandText');
+    expect('движок: экраны операций отрисованы', !!track && track.children.length === 2,
+      track ? String(track.children.length) : 'нет #track');
+    expect('движок: выбор операции заполнен', !!select && select.options.length === 2,
+      select ? String(select.options.length) : 'нет #action-input');
+    expect('движок: заголовок формы в шапке',
+      !!brand && brand.textContent === 'Отправка данных в 1С',
+      brand ? brand.textContent : 'нет #brandText');
+  } else {
+    report.push('INFO нет доступа к iframe.contentDocument (file:// origin)');
+  }
+
+  expect('подсказки: виды полей на месте',
+    flexFormsSuggestions.nodes['группа'].variants.some(v => v.label === 'поле:штрихкод'));
+
+  /* 4. Дебаунс и пропуск по неизменившемуся IR: печать в разметке не должна
+     перезагружать iframe на каждое нажатие. */
+  let mounts = 0;
+  const mount = renderer.mountPreview.bind(renderer);
+  renderer.mountPreview = (IR, serialized) => { mounts++; return mount(IR, serialized); };
+
+  renderer.render();                       // тот же AST → IR тот же
+  await new Promise(resolve => setTimeout(resolve, 700));
+  expect('повторный render с тем же IR не перезагружает iframe', mounts === 0,
+    'перезагрузок: ' + mounts);
+
+  renderer.lastIR = 'stale';               // имитируем изменённую разметку
+  renderer.render();
+  expect('изменённый IR ждёт паузы в наборе (дебаунс)', mounts === 0,
+    'перезагрузок сразу: ' + mounts);
+
+  await new Promise(resolve => setTimeout(resolve, 900));
+  expect('после паузы предпросмотр перерисован один раз', mounts === 1,
+    'перезагрузок: ' + mounts);
+} catch (error) {
+  report.push('FAIL исключение: ' + (error && error.message ? error.message : error));
+}
+
+finish();
+</script>
+</body>
+</html>
