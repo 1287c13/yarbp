@@ -6,12 +6,14 @@ import { YarbpProtoConverter } from './ast-converters/ProtobufConvertor.js'
 /* suggestions */
 import { xpmSuggestions } from './suggestions/xpmSuggestions.js';
 import { bpmnSuggestions } from './suggestions/bpmnSuggestions.js';
+import { flexFormsSuggestions } from './suggestions/flexFormsSuggestions.js';
 
 /* renderers */
 import { YarbpBasicRenderer } from './YarbpBasicRenderer.js'
 import { HTMLUIRenderer } from './renderers/HTMLUIRenderer.js'
 import { XPMRenderer } from './renderers/XPMRenderer.js'
 import { BPMNRenderer } from './renderers/BPMNRenderer.js';
+import { FlexFormsRenderer } from './renderers/FlexFormsRenderer.js';
 
 /* highlighters */
 import { XMLHighlighter } from './highlighters/XMLHighlighter.js'
@@ -122,6 +124,14 @@ const KnownFlavors = Object.freeze({
     textExample: [],
     renderer: BPMNRenderer,
     suggestions: bpmnSuggestions
+  },
+  FLEX_FORMS: {
+    /* `normalizeFlavorName` снимает `[-_ ()]` и приводит к нижнему регистру,
+       поэтому в карте — только «сплющенные» имена: `как форма-тсд` → `форматсд`. */
+    names: ['форматсд', 'тсд', 'flexforms', 'сканер'],
+    textExample: [],
+    renderer: FlexFormsRenderer,
+    suggestions: flexFormsSuggestions,
   }
 });
 

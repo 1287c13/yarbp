@@ -11,6 +11,7 @@ export const COMMON_DIRECTIVES = {
         { label: 'джейсон', insert: 'джейсон\n', doc: 'Конвертировать в JSON' },
         { label: 'хмл',     insert: 'хмл\n',     doc: 'Конвертировать XML' },
         { label: 'бпмн',     insert: 'бпмн\n',   doc: 'Конвертировать BPMN XML' },
+        { label: 'форма-тсд', insert: 'форма-тсд\n', doc: 'Форма ТСД: предпросмотр в рамке терминала сбора данных' },
       ],
     },
     'as': {
@@ -20,6 +21,7 @@ export const COMMON_DIRECTIVES = {
         { label: 'json',  insert: 'json\n',     doc: 'convert to JSON' },
         { label: 'xml',   insert: 'xml\n',      doc: 'convert to XML' },
         { label: 'bpmn',     insert: 'bpmn\n',  doc: 'convert to BPMN XML' },
+        { label: 'flexforms', insert: 'flexforms\n', doc: 'PDA form: preview inside the handheld frame' },
       ],
     },
   },
