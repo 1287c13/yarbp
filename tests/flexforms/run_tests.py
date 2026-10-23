@@ -268,7 +268,6 @@ def test_geometry():
     code = bundle(PAGE) + '''
 JSON.stringify({
   screen: FLEX_FORMS_SCREEN_STYLE,
-  scale: FLEX_FORMS_FORM_SCALE,
   phone: FLEX_FORMS_PHONE,
   markup: buildPreviewMarkup(),
   previewCss: FLEX_FORMS_PREVIEW_CSS,
@@ -279,40 +278,38 @@ JSON.stringify({
 '''
     result = js_json(code)
 
-    check('экран в процентах от рамки (4/80, 338x447 внутри 346x758)',
-          result['screen'] == 'left:1.1561%;top:10.5541%;width:97.6879%;height:58.9710%',
-          result['screen'])
-    check('размеры рамки',
-          result['phone']['width'] == 346 and result['phone']['height'] == 758,
+    check('рамка увеличена под страницу формы: 364x799 (рисунок 346x758 +5.3%)',
+          result['phone']['width'] == 364 and result['phone']['height'] == 799,
           str(result['phone']))
     check('viewBox рамки', result['phone']['viewBox'] == '0 0 208 457',
           result['phone']['viewBox'])
-    check('положение экрана (по 4 точки корпуса с боков, зазор до клавиатуры)',
-          result['phone']['screen'] == {'left': 4, 'top': 80, 'width': 338, 'height': 447},
+    check('экран — точка в точку логический размер страницы (356x471)',
+          result['screen'] == 'left:4px;top:84px;width:356px;height:471px',
+          result['screen'])
+    check('размер экрана в рамке (нарисованное место между шапкой и клавиатурой)',
+          result['phone']['screen'] == {'left': 4, 'top': 84, 'width': 356, 'height': 471},
           str(result['phone']['screen']))
     check('логический размер страницы формы (iframe) — 356x471',
           result['phone']['form'] == {'width': 356, 'height': 471},
           str(result['phone'].get('form')))
-    check('iframe вписан в экран уменьшением (0.949), а не пересборкой размеров',
-          'width:356px;height:471px' in result['previewCss'] and
-          'transform:scale(0.94904)' in result['previewCss'],
+    # iframe не масштабируется: экран равен странице, 1 CSS px формы = 1 px рамки.
+    check('iframe без собственного масштаба (не мылит текст и рамки полей)',
+          'width:100%;height:100%' in result['previewCss'] and
+          'scale(' not in result['previewCss'],
           result['previewCss'])
-    check('уменьшенная страница закрывает экран целиком (без тёмных полей)',
-          abs(result['phone']['form']['width'] * result['scale'] -
-              result['phone']['screen']['width']) <= 0.5 and
-          abs(result['phone']['form']['height'] * result['scale'] -
-              result['phone']['screen']['height']) <= 0.5,
-          '%r x %r при масштабе %r' % (
-              result['phone']['form']['width'] * result['scale'],
-              result['phone']['form']['height'] * result['scale'],
-              result['scale']))
+    check('экран не меньше страницы (иначе форма обрезалась бы)',
+          result['phone']['screen']['width'] >= result['phone']['form']['width'] and
+          result['phone']['screen']['height'] >= result['phone']['form']['height'],
+          '%dx%d при форме %dx%d' % (
+              result['phone']['screen']['width'], result['phone']['screen']['height'],
+              result['phone']['form']['width'], result['phone']['form']['height']))
     check('углы экрана не скруглены',
           'border-radius:0' in result['previewCss'] and
           'border-radius:10px' not in result['previewCss'],
           result['previewCss'])
     check('рамка имеет постоянный логический размер и обёртку для масштаба',
           'class="ff-phone-scale"' in result['markup'] and
-          'class="ff-phone" style="width:346px;height:758px"' in result['markup'],
+          'class="ff-phone" style="width:364px;height:799px"' in result['markup'],
           result['markup'][:120])
     check('иконка скачивания ограничена (SVG 800x800 не растягивает кнопку)',
           '.ff-export-btn img{display:block;width:auto;height:15px}' in result['previewCss'])

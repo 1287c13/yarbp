@@ -107,10 +107,11 @@ try {
     !!scaleBox && scaleBox.clientWidth > 100 && scaleBox.clientHeight > 200,
     scaleBox ? scaleBox.clientWidth + 'x' + scaleBox.clientHeight : 'нет');
   /* Экран — нарисованное место в рамке (между шапкой 1С-клиента и клавиатурой),
-     а сам iframe — фиксированный логический размер: форма верстается один раз
-     и масштабируется трансформацией, а не перекомпоновывается под панель. */
-  expect('экран в рамке 338x447 (место на рисунке)',
-    !!screenBox && screenBox.offsetWidth === 338 && screenBox.offsetHeight === 447,
+     и он же ровно логический размер страницы: форма показывается 1:1, без
+     собственного масштаба iframe (иначе текст и 1px-рамки полей мылились, а
+     всё содержимое выглядело мельче редизайна). */
+  expect('экран в рамке 356x471 (равен логическому размеру формы)',
+    !!screenBox && screenBox.offsetWidth === 356 && screenBox.offsetHeight === 471,
     screenBox ? screenBox.offsetWidth + 'x' + screenBox.offsetHeight : 'нет');
   expect('углы экрана не скруглены',
     !!screenBox && screenBox.offsetWidth > 0 &&
@@ -119,16 +120,29 @@ try {
   expect('iframe верстается в 356x471 (логический размер формы)',
     !!iframe && iframe.offsetWidth === 356 && iframe.offsetHeight === 471,
     iframe ? iframe.offsetWidth + 'x' + iframe.offsetHeight : 'нет');
-  expect('iframe вписан в экран (уменьшен, а не обрезан)',
+  expect('iframe не масштабируется и точно совпадает с экраном (1:1)',
     !!iframe && !!screenBox &&
-    Math.abs(iframe.getBoundingClientRect().width - screenBox.getBoundingClientRect().width) <= 1 &&
-    Math.abs(iframe.getBoundingClientRect().height - screenBox.getBoundingClientRect().height) <= 1,
-    iframe && screenBox ? iframe.getBoundingClientRect().width.toFixed(1) + ' / ' +
+    getComputedStyle(iframe).transform === 'none' &&
+    Math.abs(iframe.getBoundingClientRect().width - screenBox.getBoundingClientRect().width) <= 0.5 &&
+    Math.abs(iframe.getBoundingClientRect().height - screenBox.getBoundingClientRect().height) <= 0.5,
+    iframe && screenBox ? getComputedStyle(iframe).transform + ', ' +
+      iframe.getBoundingClientRect().width.toFixed(1) + ' / ' +
       screenBox.getBoundingClientRect().width.toFixed(1) : 'нет');
   expect('рамка масштабируется трансформацией (без пересборки размеров)',
     !!phone && /^scale\(/.test(phone.style.transform || '') &&
-    phone.style.width === '346px' && phone.style.height === '758px',
+    phone.style.width === '364px' && phone.style.height === '799px',
     phone ? phone.style.transform + ' / ' + phone.style.width + 'x' + phone.style.height : 'нет');
+  /* Панель 460x720 (см. #render-pane вверху) выше экрана, поэтому масштаб должен
+     остаться 1: форма в предпросмотре ровно того же размера, что в редизайне.
+     Раньше рамка росла до 1.6, а в маленькой панели ужималась по корпусу — из-за
+     этого «в рендере всё на 15% мельче». Сравниваем числом: CSSOM нормализует
+     scale(1.0000) обратно в scale(1). */
+  const phoneScale = phone ? parseFloat((phone.style.transform || '').replace(/[^\d.]/g, '')) : 0;
+  expect('в панели 460x720 масштаб 1:1 (форма 356 точек, как в редизайне)',
+    Math.abs(phoneScale - 1) < 0.0005 && !!iframe &&
+    Math.abs(iframe.getBoundingClientRect().width - 356) <= 0.5,
+    phone ? phone.style.transform + ', форма ' +
+      (iframe ? iframe.getBoundingClientRect().width.toFixed(1) : 'нет') : 'нет');
   /* Иконка скачивания — SVG 800x800: без ограничения кнопка растягивалась на
      всю панель и накрывала макет. */
   expect('кнопка скачивания не растягивается на панель',

@@ -11,9 +11,6 @@ import {
 /** Пауза перед перезагрузкой предпросмотра: пока печатают — не дёргаем iframe. */
 const PREVIEW_DEBOUNCE_MS = 400;
 
-/** Предел увеличения рамки: крупнее телефон уже не помещается в панель с полями. */
-const PHONE_MAX_SCALE = 1.6;
-
 /** Заглушка экрана, если из разметки не собирается IR. */
 const EMPTY_IR_HINT = '<!DOCTYPE html><meta charset="utf-8">' +
   '<style>html,body{margin:0;height:100%;background:#0a0c10;color:#8b93a7;' +
@@ -216,6 +213,18 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
    * и дальше только масштабируется: в узкой панели она уменьшается, а не
    * перекомпоновывается под её ширину (иначе при широкой панели форма «расползалась»
    * бы на планшетную раскладку, а в узкой обрезалась).
+   *
+   * Крупнее 1:1 не увеличиваем. При масштабе 1 CSS-пиксель формы равен пикселю
+   * редизайна: предпросмотр показывает ровно тот же размер, что страница на ТСД,
+   * а текст и 1px-рамки полей остаются резкими. Раньше рамка могла расти до 1.6,
+   * и «тот же» макет в панели выглядел крупнее, чем на устройстве.
+   *
+   * Вписываем не корпус, а саму форму. Корпус нарисован вместе с клавиатурой и
+   * потому почти в два раза длиннее экрана (799 против 84+471): подгонка по
+   * корпусу ужимала бы форму даже в высокой панели (в панели 720 точек это
+   * −14%, то есть та самая разница с редизайном). Поэтому по высоте считаем
+   * запас до НИЗА ЭКРАНА, и если он влезает — масштаб остаётся 1, а «хвост»
+   * корпуса просто уезжает в прокрутку панели.
    */
   fitPhone() {
     if (!this.container || !this.container.isConnected) return;
@@ -227,11 +236,13 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
 
     const padding = 32;                        // .ff-preview padding:16px с двух сторон
     const availableW = Math.max(140, preview.clientWidth - padding);
-    const availableH = Math.max(300, preview.clientHeight - padding);
+    const availableH = Math.max(200, preview.clientHeight - padding);
+    const screenBottom = FLEX_FORMS_PHONE.screen.top + FLEX_FORMS_PHONE.screen.height;
+
     const scale = Math.min(
+      1,
       availableW / FLEX_FORMS_PHONE.width,
-      availableH / FLEX_FORMS_PHONE.height,
-      PHONE_MAX_SCALE
+      availableH / screenBottom
     );
 
     // Размер рамки в раскладке — уже умноженный: место занимает именно он,
