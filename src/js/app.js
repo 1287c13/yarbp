@@ -7,6 +7,7 @@ import { FileManager } from './modules/FileManager.js';
 import { SuggestionProvider } from './SuggestionProvider.js';
 import { SuggestionUI } from './SuggestionUI.js';
 import { Ticker } from './Ticker.js';
+import { IndentGuides } from './IndentGuides.js';
 
 const MIN_SIZE_PERCENT = 1;
 const MAX_SIDEBAR_PERCENT = 80;
@@ -232,6 +233,8 @@ function updateViews() {
   YarbpAppGlobals.highlighter.code = code;
   YarbpAppGlobals.highlighter.tokens = YarbpAppGlobals.lexer.tokens;
   highlightDiv.innerHTML = YarbpAppGlobals.highlighter.highlight();
+
+  YarbpAppGlobals.indentGuides?.refresh();
 
   const firstDirective = YarbpAppGlobals.lexer.tokens.find(token => token.type === TokenTypes.DIRECTIVE);
 
@@ -527,6 +530,11 @@ let YarbpAppGlobals = setAppGlobals();
 YarbpAppGlobals.suggestionProvider = new SuggestionProvider();
 YarbpAppGlobals.suggestionTicker   = new Ticker();
 YarbpAppGlobals.suggestionUI       = new SuggestionUI(textarea, codePane);
+
+YarbpAppGlobals.indentGuides = new IndentGuides(
+  textarea, document.getElementById('code-editor-container')
+);
+YarbpAppGlobals.indentGuides.init();
 
 // Инициализация файлового менеджера
 const fileManagerContainer = document.getElementById('file-manager-container');

@@ -7,6 +7,28 @@ export function calcLeadingSpaces(text) {
   return count;
 }
 
+let measureCanvas = null;
+
+/**
+ * Ширина символа моноширинного шрифта по вычисленному стилю элемента.
+ * @param {CSSStyleDeclaration} style - стиль элемента с нужным шрифтом
+ * @param {number} fallback - значение на случай, если измерить не удалось
+ */
+export function measureCharWidth(style, fallback = 7.2) {
+  try {
+    if (!measureCanvas) measureCanvas = document.createElement('canvas');
+    const context = measureCanvas.getContext('2d');
+    if (!context) return fallback;
+
+    const sample = '0000000000';
+    context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const width = context.measureText(sample).width / sample.length;
+    return width > 0 ? width : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
 export function findChildrenByKeyValue(node, key, value) {
   if (!node || !Array.isArray(node.children)) return [];
   return node.children.filter( child => child[key] === value );

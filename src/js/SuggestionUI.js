@@ -1,7 +1,4 @@
-const CHAR_WIDTH  = 7.3;
-const LINE_HEIGHT = 18;
-const INIT_HEIGHT = 35;
-const INIT_WIDTH = 0;
+import { measureCharWidth } from './utils.js';
 
 export class SuggestionUI {
   constructor(textarea, container) {
@@ -146,12 +143,19 @@ export class SuggestionUI {
 
     const taRect = this.textarea.getBoundingClientRect();
     const cRect  = this.container.getBoundingClientRect();
+    const style  = getComputedStyle(this.textarea);
+
+    const paddingLeft = parseFloat(style.paddingLeft) || 0;
+    const paddingTop  = parseFloat(style.paddingTop) || 0;
+    const fontSize    = parseFloat(style.fontSize) || 12;
+    const lineHeight  = parseFloat(style.lineHeight) || fontSize * 1.5;
+    const charWidth   = measureCharWidth(style, fontSize * 0.6);
 
     const baseLeft = taRect.left - cRect.left;
     const baseTop  = taRect.top  - cRect.top;
 
-    const x = baseLeft + INIT_WIDTH + col * CHAR_WIDTH;
-    const y = baseTop  + INIT_HEIGHT + row * LINE_HEIGHT - this.textarea.scrollTop;
+    const x = baseLeft + paddingLeft + col * charWidth - this.textarea.scrollLeft;
+    const y = baseTop  + paddingTop + (row + 1) * lineHeight - this.textarea.scrollTop;
 
     this.root.style.left = `${x}px`;
     this.root.style.top  = `${y}px`;

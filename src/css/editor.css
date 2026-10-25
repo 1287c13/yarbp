@@ -268,3 +268,49 @@ body.dark .suggestion-hint {
 body.dark .suggestion-hint {
   color: #b0b0b0;
 }
+
+/* Направляющие отступов и номера строк */
+#code-editor-container { --editor-gutter: 0px; }
+#code-editor-container .highlight-layer,
+#code-editor-container .code-input {
+  padding-left: calc(15px + var(--editor-gutter, 0px));
+}
+.indent-guide-overlay {
+  position: absolute; inset: 0; z-index: 1; overflow: hidden;
+  pointer-events: none; user-select: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-ligatures: none;
+  font-size: 12px; line-height: 1.5;
+  opacity: 0; transition: opacity 180ms ease;
+}
+.indent-guide-overlay.is-visible { opacity: 1; }
+.indent-guide-gutter,
+.indent-guide-lines,
+.indent-guide-numbers {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+}
+.indent-guide-gutter { width: var(--editor-gutter, 0px); }
+.indent-guide-lines,
+.indent-guide-numbers { will-change: transform; }
+.indent-guide-line {
+  position: absolute; width: 1px; background: #9aa0a6; opacity: 0.28;
+  transition: opacity 160ms ease;
+}
+.indent-guide-line.is-current { opacity: 0.5; }
+.indent-guide-label {
+  position: absolute; transform: translate(-50%, -100%);
+  padding-bottom: 2px; font-size: 9px; line-height: 1;
+  color: #9aa0a6; opacity: 0.85; white-space: nowrap;
+}
+.indent-guide-number {
+  position: absolute; right: 10px; font-size: 11px;
+  color: #a2a8ad; text-align: right; white-space: pre;
+}
+body.dark .indent-guide-line { background: #9aa0a6; opacity: 0.24; }
+body.dark .indent-guide-line.is-current { opacity: 0.46; }
+body.dark .indent-guide-label { color: #8b9298; }
+body.dark .indent-guide-number { color: #7f868c; }
+@media (prefers-reduced-motion: reduce) {
+  .indent-guide-overlay,
+  .indent-guide-line { transition: none; }
+}
