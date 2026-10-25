@@ -551,6 +551,14 @@ export class YarbpLexer {
 
       case S.IN_QUOTED_VALUE:
         if (this.previousState !== S.IN_QUOTED_VALUE) {
+          // Значение в начале новой строки — это следующий элемент массива.
+          // Закрываем deferred-scope предыдущего bareword, иначе оно станет
+          // его ребёнком (например, `g` + `'2'`).
+          if (this.previousState === S.WAITING_AFTER_NEWLINE) {
+            this.countCurrentIndent();
+            this.generateScopeTokens(pos, TokenTypes.PRIMITIVE);
+          }
+
           // После комментария currentMatchPosition может указывать на `--`.
           // Для кавычки начинаем токен с её реальной позиции, иначе
           // диапазоны VALUE и COMMENT пересекаются.

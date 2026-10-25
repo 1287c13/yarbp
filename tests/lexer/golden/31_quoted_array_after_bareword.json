@@ -1,0 +1,232 @@
+{
+  "file": "31_quoted_array_after_bareword.txt",
+  "flavor": "json",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as json",
+      "prefix": "!",
+      "start": 0,
+      "end": 9,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 10,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "..",
+      "start": 10,
+      "end": 12,
+      "error": ""
+    },
+    {
+      "type": "KEY(ARR)",
+      "value": "a",
+      "prefix": "..",
+      "start": 10,
+      "end": 13,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "'b c' '1' yes \"yes\" d \"e'\" f",
+      "start": 14,
+      "end": 42,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "g",
+      "start": 44,
+      "end": 47,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "'2'",
+      "start": 47,
+      "end": 50,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "2",
+      "start": 52,
+      "end": 55,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "no",
+      "start": 55,
+      "end": 57,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 57,
+      "end": 57,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 57,
+      "end": 57,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as json",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 9
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "a",
+        "valueType": "ARRAY",
+        "prefix": "..",
+        "position": {
+          "start": 10,
+          "end": 13
+        },
+        "children": [
+          {
+            "value": "b c",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "1",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": true,
+            "valueType": "BOOL",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "yes",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "d",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "e'",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "f",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "g",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 44,
+              "end": 47
+            }
+          },
+          {
+            "value": "2",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 47,
+              "end": 50
+            }
+          },
+          {
+            "value": 2,
+            "valueType": "NUMBER",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 52,
+              "end": 55
+            }
+          },
+          {
+            "value": false,
+            "valueType": "BOOL",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 55,
+              "end": 57
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "render": {
+    "kind": "json",
+    "text": "{\n  \"a\": [\n    \"b c\",\n    \"1\",\n    true,\n    \"yes\",\n    \"d\",\n    \"e'\",\n    \"f\",\n    \"g\",\n    \"2\",\n    2,\n    false\n  ]\n}"
+  }
+}

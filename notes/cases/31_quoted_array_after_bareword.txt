@@ -1,0 +1,23 @@
+! as json
+..a 'b c' '1' yes "yes" d "e'" f
+ g
+ '2'
+ 2
+ no
+
+render
+{
+  "a": [
+    "b c",
+    "1",
+    true,
+    "yes",
+    "d",
+    "e'",
+    "f",
+    "g",
+    "2",
+    2,
+    false
+  ]
+}
