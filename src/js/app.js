@@ -3,6 +3,7 @@ import { YarbpLexer, TokenTypes } from './classes/YarbpLexer.js';
 import { YarbpParser } from './classes/YarbpParser.js';
 import { YarbpHighlighter } from './classes/YarbpHighlighter.js';
 import { FileManager } from './modules/FileManager.js';
+import { toggleLineComments } from './modules/CommentToggler.js';
 
 import { SuggestionProvider } from './SuggestionProvider.js';
 import { SuggestionUI } from './SuggestionUI.js';
@@ -456,6 +457,17 @@ if (textarea) {
         if (result) YarbpAppGlobals.suggestionUI.show(result);
         else YarbpAppGlobals.suggestionUI.hide();
       });
+      return;
+    }
+
+    // Ctrl+/ (и Cmd+/ на macOS) — массовое комментирование/раскомментирование
+    const isSlash = e.code === 'Slash' || e.key === '/';
+    if (isSlash && (e.ctrlKey || e.metaKey) && !e.altKey) {
+      e.preventDefault();
+
+      if (toggleLineComments(textarea)) {
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
       return;
     }
 
