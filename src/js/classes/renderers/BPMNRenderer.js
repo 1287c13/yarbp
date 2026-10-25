@@ -3,6 +3,11 @@ import { YarbpBPMNConverter } from '../ast-converters/bpmn/YarbpBPMNConverter.js
 import { XMLHighlighter } from '../highlighters/XMLHighlighter.js';
 
 export class BPMNRenderer extends YarbpBasicRenderer {
+  constructor(...args) {
+    super(...args);
+    this.downloadButton = null;
+  }
+
   render() {
     const AST = this.parser.getAST();
     const converter = new YarbpBPMNConverter(AST);
@@ -18,28 +23,23 @@ export class BPMNRenderer extends YarbpBasicRenderer {
   }
 
   mountDownloadButton(xml) {
-    const controls = document.querySelector('.top-controls');
-    if (!controls) return;
+    const host = this.renderTextarea.closest('.editor-container') ||
+      this.renderTextarea.closest('#render-pane');
+    if (!host) return;
 
-    const old = controls.querySelector('.bpmn-download-btn');
+    // Повторная отрисовка того же флейвора не должна плодить кнопки.
+    const old = host.querySelector('.bpmn-download-btn');
     if (old) old.remove();
 
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'bpmn-download-btn';
+    btn.textContent = 'BPMN';
     btn.title = 'Скачать BPMN';
-    btn.innerHTML = `
-      <svg width="18" height="18" viewBox="0 0 24 24"
-           fill="none" stroke="currentColor"
-           stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-           aria-hidden="true">
-        <path d="M12 3v12" />
-        <path d="M7 11l5 5 5-5" />
-        <path d="M4 21h16" />
-      </svg>
-    `;
+    btn.setAttribute('aria-label', 'Скачать BPMN');
 
-    controls.prepend(btn);
+    host.appendChild(btn);
+    this.downloadButton = btn;
 
     btn.addEventListener('click', () => {
       const blob = new Blob([xml], { type: 'application/xml' });
@@ -52,5 +52,17 @@ export class BPMNRenderer extends YarbpBasicRenderer {
       a.remove();
       URL.revokeObjectURL(url);
     });
+  }
+
+  /** Смена флейвора: убрать кнопку, привязанную к BPMN-панели. */
+  destroy() {
+    if (this.downloadButton) {
+      this.downloadButton.remove();
+      this.downloadButton = null;
+    }
+
+    const host = this.renderTextarea.closest('.editor-container') ||
+      this.renderTextarea.closest('#render-pane');
+    if (host) host.querySelectorAll('.bpmn-download-btn').forEach(btn => btn.remove());
   }
 }

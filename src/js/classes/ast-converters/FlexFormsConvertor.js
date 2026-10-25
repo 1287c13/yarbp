@@ -36,6 +36,11 @@
  * Правила конвертации (без хардкода данных — только имена полей DSL и значения
  * вроде 'да'/'нет', которыми оперирует рантайм формы):
  *
+ *   0. Свойства шапки формы (`заголовокФормы`, `сервис`, …) — обычные
+ *      скалярные свойства корневого узла. `сервис` остаётся в IR как базовый
+ *      адрес; относительные `хук`/`урл` склеивает с ним движок страницы,
+ *      поэтому конфиг не зависит от конкретного стенда 1С.
+ *
  *   1. Значение объектного узла разбирается как «имя / идентификатор»:
  *      «Подобрать товар / a_1» → имя='Подобрать товар', ид='a_1'.
  *      Если разделителя нет — всё уходит в имя (ид не появляется),
@@ -159,8 +164,83 @@ export class YarbpFlexFormsConverter {
 
   /** AST → целевой конфиг (объект). Основная точка входа. */
   convert() {
-    this.result = this._convertRoot(this.ast);
+    this.result = this._applyDefaults(this._convertRoot(this.ast));
     return this.result;
+  }
+
+  /**
+   * Значения по умолчанию для полей и операций.
+   *
+   * Их не нужно повторять в разметке:
+   * - имя кнопки операции = имя операции;
+   * - очиститьФорму = да, заголовок формы = "", перезагрузить = нет;
+   * - у поля-штрихкода: очистка и автофокус = да,
+   *   режим сканирования = суммироватьДоПереноса;
+   * - значения приёмников: 1 для числовых полей, "" для остальных.
+   */
+  _applyDefaults(root) {
+    const fields = new Map();
+    const collect = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        node.forEach(collect);
+        return;
+      }
+      if (node.type === 'поле' && node['ид'] !== undefined) {
+        fields.set(String(node['ид']), node);
+      }
+      if (Array.isArray(node.children)) node.children.forEach(collect);
+    };
+    collect(root);
+
+    const visit = (node) => {
+      if (!node || typeof node !== 'object') return node;
+      if (Array.isArray(node)) return node.map(visit);
+
+      if (Array.isArray(node.children)) node.children = node.children.map(visit);
+
+      if (node.type === 'операция') {
+        if (node['имяКнопки'] === undefined) node['имяКнопки'] = node['имя'] || '';
+        // В движке эти два флага проверяются через truthy, поэтому строковое
+        // «нет» означает то же, что и «да». Для «нет» используем false, чтобы
+        // после добавления строки не происходило ложной перезагрузки/очистки.
+        if (node['очиститьФорму'] === undefined) node['очиститьФорму'] = YarbpFlexFormsConverter.YES;
+        else if (node['очиститьФорму'] === YarbpFlexFormsConverter.NO) node['очиститьФорму'] = false;
+        if (node['заголовокФормы'] === undefined) node['заголовокФормы'] = '';
+        if (node['перезагрузить'] === undefined ||
+            node['перезагрузить'] === YarbpFlexFormsConverter.NO) {
+          node['перезагрузить'] = false;
+        }
+        return this._finishNode(node, { typeKey: YarbpFlexFormsConverter.OPERATION_TYPE });
+      }
+
+      if (node.type === 'поле') {
+        const scanner = node['тип'] === 'Штрихкод' || node['вид'] === 'штрихкод';
+        if (scanner) {
+          if (node['кнопкаОчистки'] === undefined) node['кнопкаОчистки'] = YarbpFlexFormsConverter.YES;
+          if (node['автофокус'] === undefined) node['автофокус'] = YarbpFlexFormsConverter.YES;
+          if (node['режимСканирования'] === undefined) node['режимСканирования'] = 'суммироватьДоПереноса';
+          if (node['значенияПриемниковПоУмолчанию'] === undefined && node['приемник'] !== undefined) {
+            node['значенияПриемниковПоУмолчанию'] = this._asArray(node['приемник']).map(id => {
+              const receiver = fields.get(String(id));
+              return receiver && this._isNumericField(receiver)
+                ? '1'
+                : '';
+            });
+          }
+        }
+        return this._finishNode(node, { typeKey: node.type });
+      }
+
+      if (node.type === 'таблица') return this._finishNode(node, { typeKey: node.type });
+      return node;
+    };
+
+    return visit(root);
+  }
+
+  _isNumericField(field) {
+    return this._isNumericType(field && (field['вид'] || field['тип'] || ''));
   }
 
   /** AST → целевой конфиг (JSON-строка). */
@@ -203,7 +283,7 @@ export class YarbpFlexFormsConverter {
     }
 
     if (node.valueType === YarbpFlexFormsConverter.OBJECT) {
-      return this._buildNode(this._headOf(node, key), this._objectChildren(node));
+      return this._buildNode(this._headOf(node, key), this._objectChildren(node), node);
     }
 
     if (node.valueType === YarbpFlexFormsConverter.ARRAY) {
@@ -326,7 +406,7 @@ export class YarbpFlexFormsConverter {
   /** Собирает целевой узел из «паспорта» узла и «сырых» свойств (key/value).
    *  head = { type: <ключ разметки до ':'>, kind: <вид из суффикса ':'>,
    *           value: <значение объектного узла, «имя / ид»> } */
-  _buildNode(head, rawProps) {
+  _buildNode(head, rawProps, rawNode = null) {
     const plan = this._planProps(head, rawProps);
     const node = {};
 
@@ -339,6 +419,10 @@ export class YarbpFlexFormsConverter {
     // задаёт тип контейнера «поля» (DSL: `группа .сетка …` → `{type:'поля', …}`).
     if (head.typeKey === YarbpFlexFormsConverter.GROUP_KEY) {
       return this._containerNode(null, this._splitGroup(rawProps));
+    }
+
+    if (head.typeKey === YarbpFlexFormsConverter.TABLE_KEY) {
+      return this._buildTableNode(rawNode, head, plan);
     }
 
     node[YarbpFlexFormsConverter.TYPE_KEY] = head.type;
@@ -371,6 +455,89 @@ export class YarbpFlexFormsConverter {
     this._mergeOwnChildren(node, children);
 
     return this._finishNode(node, head);
+  }
+
+  /**
+   * Таблица в новом колоночном синтаксисе:
+   *
+   *   таблица = Товары в заказе / a2_t1
+   *     .редактируемая да
+   *     :
+   *       .имя Товар
+   *       .измерение да
+   *       .приемник:Справочник.Номенклатура = Номенклатура
+   *
+   * Колонки собираются в те же массивы, которые читает рантайм:
+   * шапка / измерения / ресурсы / именаВПриемнике / типы.
+   * Старый вариант с ..измерения / ..ресурсы / ... сохранён для совместимости.
+   */
+  _buildTableNode(astNode, head, plan) {
+    const table = { [YarbpFlexFormsConverter.TYPE_KEY]: YarbpFlexFormsConverter.TABLE_KEY };
+    this._resolveName(table, plan.nameProp);
+    this._resolveName(table, plan.pendingName);
+    this._mergeArrayProps(table, plan.rest);
+
+    const columns = this._tableColumns(astNode);
+    if (columns.length) {
+      ['измерения', 'ресурсы', 'шапка', 'именаВПриемнике', 'типы'].forEach(key => {
+        delete table[key];
+      });
+
+      table['измерения'] = columns
+        .filter(column => column.dimension)
+        .map(column => column.label);
+      table['ресурсы'] = columns
+        .filter(column => !column.dimension)
+        .map(column => column.label);
+      table['шапка'] = columns.map(column => column.label);
+      table['именаВПриемнике'] = columns.map(column => column.receiverName);
+      table['типы'] = columns.map(column => column.type);
+    } else {
+      // Старый пореквизитный синтаксис: необъектные дети таблицы (если есть).
+      this._mergeOwnChildren(table, (plan.childNodes || []).slice());
+    }
+
+    return this._finishNode(table, head);
+  }
+
+  /** Колонки таблицы из анонимных `:`-узлов. */
+  _tableColumns(astNode) {
+    const children = Array.isArray(astNode && astNode.children) ? astNode.children : [];
+    return children
+      .filter(child => this._isMeaningNode(child) && this._isColumnNode(child))
+      .map(child => {
+        const props = {};
+        (child.children || []).forEach(item => {
+          if (this._isMeaningNode(item)) props[this._cleanKey(item.key)] = item;
+        });
+
+        const receiver = props['приемник'];
+        const type = receiver && receiver.type ? String(receiver.type) : '';
+        const receiverValue = receiver ? String(this._scalar(receiver)).trim() : '';
+        const receiverName = receiverValue.replace(/^=\s*/, '');
+        const label = props['имя'] ? String(this._scalar(props['имя'])) : receiverName;
+        const explicitDimension = props['измерение']
+          ? this._scalar(props['измерение']) === YarbpFlexFormsConverter.YES
+          : null;
+
+        return {
+          label: label || receiverName,
+          receiverName: receiverName || label,
+          type,
+          dimension: explicitDimension === null
+            ? !this._isNumericType(type)
+            : explicitDimension,
+        };
+      })
+      .filter(column => column.label || column.receiverName || column.type);
+  }
+
+  _isColumnNode(node) {
+    return this._isArrayItemNode(node);
+  }
+
+  _isNumericType(type) {
+    return /^(число|целое|number|int|float|double|decimal)/i.test(String(type || '').trim());
   }
 
   /**
@@ -491,7 +658,7 @@ export class YarbpFlexFormsConverter {
     'поле': [
       'вид', 'ид', 'имя', 'тип', 'кнопкаОчистки', 'автофокус', 'приемник',
       'хук', 'значенияПриемниковПоУмолчанию', 'именаВИсточнике', 'поискПо',
-      'вызывать', 'режимСканирования',
+      'объектДляПоиска', 'вызывать', 'режимСканирования',
     ],
     'операция': [
       'имя', 'имяКнопки', 'очиститьФорму', 'приемник', 'заголовокФормы', 'ид',
@@ -911,7 +1078,7 @@ export class YarbpFlexFormsConverter {
     switch (node.valueType) {
       case YarbpFlexFormsConverter.OBJECT:
         return this._buildNode(this._headOf(node, this._cleanKey(node.key)),
-                               this._objectChildren(node));
+                               this._objectChildren(node), node);
       case YarbpFlexFormsConverter.ARRAY:
         return this._convertArrayNode(node);
       default:

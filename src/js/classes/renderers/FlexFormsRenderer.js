@@ -9,6 +9,7 @@ import {
   FLEX_FORMS_PREVIEW_CSS,
   FLEX_FORMS_PHONE,
 } from './flexforms/FlexFormsPage.js';
+import { FLEX_FORMS_MOCK_SERVER } from './flexforms/FlexFormsMockServer.js';
 
 /** Пауза перед перезагрузкой предпросмотра: пока печатают — не дёргаем iframe. */
 const PREVIEW_DEBOUNCE_MS = 400;
@@ -27,9 +28,11 @@ const EMPTY_IR_HINT = '<!DOCTYPE html><meta charset="utf-8">' +
  * собранная дословно из редизайна ТСД (FlexFormsPage) → предпросмотр в рамке
  * корпуса ТСД внутри iframe.
  *
- * Наружу рендерер отдаёт **конфиг JSON** (кнопка «JSON») и **готовую
- * HTML-страницу** (кнопка «Скачать»). JSON нужен расширению 1С, HTML можно
- * открыть как обычную страницу: CSS, движок и IR уже внутри.
+ * Наружу рендерер отдаёт **конфиг JSON** (кнопка «JSON»), **готовую
+ * HTML-страницу** (кнопка «HTML») и **Python-мок сервера** (кнопка
+ * «мок-сервер»). JSON нужен расширению 1С, HTML можно открыть как обычную
+ * страницу: CSS, движок и IR уже внутри, мок-сервер поднимает локальные
+ * эндпоинты хука/отправки/health для проверки формы.
  *
  * Почему iframe: страница формы — самостоятельное приложение (свой `data-theme`,
  * localStorage, beforeunload, `100dvh`). В iframe она живёт ровно тем же кодом,
@@ -132,8 +135,9 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
   }
 
   /**
-   * Две выгрузки: JSON-конфиг для расширения 1С и готовая HTML-страница.
-   * Подписи текстовые: одинаковые иконки не объясняли бы, что скачивается.
+   * Три выгрузки: JSON-конфиг для расширения 1С, готовая HTML-страница и
+   * Python-мок сервера. Подписи текстовые: одинаковые иконки не объясняли бы,
+   * что скачивается.
    */
   createExportButtons(container) {
     const group = document.createElement('div');
@@ -150,13 +154,22 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     const page = document.createElement('button');
     page.type = 'button';
     page.className = 'ff-export-btn ff-export-btn--html';
-    page.textContent = 'Скачать';
+    page.textContent = 'HTML';
     page.title = 'Скачать готовую HTML-страницу формы';
     page.setAttribute('aria-label', 'Скачать HTML-страницу формы');
     page.addEventListener('click', () => this.downloadPage());
 
+    const mock = document.createElement('button');
+    mock.type = 'button';
+    mock.className = 'ff-export-btn ff-export-btn--mock';
+    mock.textContent = 'мок-сервер';
+    mock.title = 'Скачать Python-мок сервера: хук, отправка и health';
+    mock.setAttribute('aria-label', 'Скачать Python-мок сервера');
+    mock.addEventListener('click', () => this.downloadMockServer());
+
     group.appendChild(config);
     group.appendChild(page);
+    group.appendChild(mock);
     container.appendChild(group);
 
     return config;
@@ -197,6 +210,15 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     }
 
     this.saveFile(buildFormPage(IR, { standalone: true }), formFileName(IR, 'html'), 'text/html;charset=utf-8');
+  }
+
+  /**
+   * Python-мок сервера: один stdlib-модуль с хуком, отправкой и health.
+   * Он не зависит от IR: метод определяется по последнему сегменту URL,
+   * поэтому подходит и для `/rt_morato_bot/hs/dp/link`, и для `/api/v2/link`.
+   */
+  downloadMockServer() {
+    this.saveFile(FLEX_FORMS_MOCK_SERVER, 'flexforms_mock_server.py', 'text/x-python;charset=utf-8');
   }
 
   /** Текст → файл. */

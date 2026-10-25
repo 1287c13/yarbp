@@ -24,7 +24,7 @@
    предопределённый пример «Форма ТСД» из «Примеров», настоящий рендерер.
    Результат печатается в #result, по нему и по <title> run_tests.py понимает,
    прошёл тест или нет. В #ir лежит IR, собранный из текста примера, — его
-   run_tests.py сравнивает с target-sample.json побайтово. */
+   run_tests.py сравнивает с builtin-ir.json побайтово. */
 import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
 import { FlexFormsRenderer } from '../../src/js/classes/renderers/FlexFormsRenderer.js';
 import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
@@ -81,11 +81,42 @@ try {
 
   renderer.render();
 
-  /* IR, собранный из текста примера, run_tests.py сравнит с IR образца
-     (target-sample.json) побайтово: пример в редакторе — тот же вход, что у
-     редизайна, а страница из этого IR уже сверена с редизайном в п.3. */
-  document.getElementById('ir').textContent =
-    new YarbpFlexFormsConverter(parser.getAST()).toJSON(2);
+  /* IR, собранный из текста примера, run_tests.py сравнит с builtin-ir.json
+     побайтово: пример в редакторе проверяется как единый вход, а страница из
+     этого IR уже сверена с редизайном в п.3. */
+  const irText = new YarbpFlexFormsConverter(parser.getAST()).toJSON(2);
+  document.getElementById('ir').textContent = irText;
+  const irConfig = JSON.parse(irText);
+  const irNodes = [];
+  const collectIrNodes = node => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(collectIrNodes); return; }
+    if (node.type) irNodes.push(node);
+    if (Array.isArray(node.children)) node.children.forEach(collectIrNodes);
+  };
+  collectIrNodes(irConfig);
+  const irTable = irNodes.find(node => node.type === 'таблица');
+  const irBarcode = irNodes.find(node => node.тип === 'Штрихкод');
+  expect('IR: таблица собрана из колонок',
+    !!irTable && irTable.шапка.length === 3 &&
+    irTable.измерения.join('|') === 'Товар|Характеристика' &&
+    irTable.ресурсы.join('|') === 'Кол‑во',
+    irTable ? JSON.stringify({ шапка: irTable.шапка, измерения: irTable.измерения, ресурсы: irTable.ресурсы }) : 'нет таблицы');
+  expect('IR: настройки штрихкода заполнены по умолчанию',
+    !!irBarcode &&
+    irBarcode.значенияПриемниковПоУмолчанию.join('|') === '||1' &&
+    irBarcode.кнопкаОчистки === 'да' && irBarcode.автофокус === 'да' &&
+    irBarcode.режимСканирования === 'суммироватьДоПереноса',
+    irBarcode ? JSON.stringify({
+      значения: irBarcode.значенияПриемниковПоУмолчанию,
+      кнопкаОчистки: irBarcode.кнопкаОчистки,
+      автофокус: irBarcode.автофокус,
+      режимСканирования: irBarcode.режимСканирования,
+    }) : 'нет штрихкода');
+  const irActions = irConfig.children.filter(child => child.type === 'операция');
+  expect('IR: «перезагрузить» по умолчанию — реальное false',
+    irActions.length === 2 && irActions.every(action => action.перезагрузить === false),
+    irActions.map(action => action.имя + '=' + String(action.перезагрузить)).join(', '));
 
   await new Promise(resolve => setTimeout(resolve, 1500));
 
@@ -103,6 +134,7 @@ try {
   const exportButtons = container ? container.querySelectorAll('.ff-export-btn') : [];
   const configBtn = container && container.querySelector('.ff-export-btn--config');
   const htmlBtn = container && container.querySelector('.ff-export-btn--html');
+  const mockBtn = container && container.querySelector('.ff-export-btn--mock');
 
   expect('корпус ТСД (SVG getSVG) на месте', !!svg,
     svg ? svg.getAttribute('viewBox') : 'нет');
@@ -146,31 +178,43 @@ try {
     Math.abs(iframe.getBoundingClientRect().width - 356) <= 0.5,
     phone ? phone.style.transform + ', форма ' +
       (iframe ? iframe.getBoundingClientRect().width.toFixed(1) : 'нет') : 'нет');
-  /* Две выгрузки: JSON-конфиг для 1С и готовая HTML-страница. Подписи
+  /* Три выгрузки: JSON-конфиг, HTML-страница и Python-мок сервера. Подписи
      текстовые, без иконок: одинаковые download-*.svg ничего не объясняли. */
-  expect('кнопки выгрузки: JSON и Скачать',
-    exportButtons.length === 2 && !!configBtn && !!htmlBtn &&
+  expect('кнопки выгрузки: JSON, HTML и мок-сервер',
+    exportButtons.length === 3 && !!configBtn && !!htmlBtn && !!mockBtn &&
     configBtn.textContent.trim() === 'JSON' &&
-    htmlBtn.textContent.trim() === 'Скачать' &&
-    !configBtn.querySelector('img') && !htmlBtn.querySelector('img'),
+    htmlBtn.textContent.trim() === 'HTML' &&
+    mockBtn.textContent.trim() === 'мок-сервер' &&
+    !configBtn.querySelector('img') && !htmlBtn.querySelector('img') &&
+    !mockBtn.querySelector('img'),
     exportButtons.length + ' кнопок, текст=' +
       (configBtn ? configBtn.textContent.trim() : 'нет') + ' / ' +
-      (htmlBtn ? htmlBtn.textContent.trim() : 'нет'));
+      (htmlBtn ? htmlBtn.textContent.trim() : 'нет') + ' / ' +
+      (mockBtn ? mockBtn.textContent.trim() : 'нет'));
   expect('кнопки выгрузки не растягиваются на панель',
-    !!configBtn && !!htmlBtn &&
+    !!configBtn && !!htmlBtn && !!mockBtn &&
     configBtn.offsetWidth > 0 && configBtn.offsetWidth < 70 &&
     configBtn.offsetHeight < 60 &&
     htmlBtn.offsetWidth > 0 && htmlBtn.offsetWidth < 70 &&
-    htmlBtn.offsetHeight < 60,
+    htmlBtn.offsetHeight < 60 &&
+    mockBtn.offsetWidth > 0 && mockBtn.offsetWidth < 70 &&
+    mockBtn.offsetHeight < 60,
     (configBtn ? configBtn.offsetWidth + 'x' + configBtn.offsetHeight : 'нет') +
-      ' / ' + (htmlBtn ? htmlBtn.offsetWidth + 'x' + htmlBtn.offsetHeight : 'нет'));
+      ' / ' + (htmlBtn ? htmlBtn.offsetWidth + 'x' + htmlBtn.offsetHeight : 'нет') +
+      ' / ' + (mockBtn ? mockBtn.offsetWidth + 'x' + mockBtn.offsetHeight : 'нет'));
 
   const srcdoc = iframe ? iframe.srcdoc : '';
   expect('iframe получил страницу формы', srcdoc.length > 100000, String(srcdoc.length));
   expect('в странице IR из разметки',
     srcdoc.indexOf('"заголовокФормы": "Отправка данных в 1С"') !== -1);
   expect('в странице обе операции',
-    srcdoc.indexOf('"Подобрать товар"') !== -1 && srcdoc.indexOf('"Отправить"') !== -1);
+    srcdoc.indexOf('"Подобрать товар"') !== -1 &&
+    srcdoc.indexOf('"Отправить результат"') !== -1);
+  expect('в странице адрес сервиса из шапки',
+    srcdoc.indexOf('"сервис": "http://127.0.0.1:8765/rt_morato_bot/hs/dp"') !== -1);
+  expect('в странице относительные хук и урл',
+    srcdoc.indexOf('"хук": "/link"') !== -1 &&
+    srcdoc.indexOf('"урл": "/processing"') !== -1);
   expect('в странице скрипт предпросмотра',
     srcdoc.indexOf("localStorage.getItem('tsd-form-state')") !== -1);
 
@@ -185,9 +229,18 @@ try {
       track ? String(track.children.length) : 'нет #track');
     expect('движок: выбор операции заполнен', !!select && select.options.length === 2,
       select ? String(select.options.length) : 'нет #action-input');
+    const innerTable = innerDoc.querySelector('table.ff-table');
+    expect('движок: таблица-приёмник отрисована',
+      !!innerTable && innerTable.id === 'a2_t1' &&
+      innerTable.classList.contains('is-empty'),
+      innerTable ? innerTable.id + ' / ' + innerTable.className : 'нет table.ff-table');
     expect('движок: заголовок формы в шапке',
       !!brand && brand.textContent === 'Отправка данных в 1С',
       brand ? brand.textContent : 'нет #brandText');
+    const server = innerDoc.getElementById('brandServer');
+    expect('движок: адрес сервера выведен в шапку',
+      !!server && server.textContent.indexOf('http://127.0.0.1:8765/rt_morato_bot/hs/dp') !== -1,
+      server ? server.textContent : 'нет #brandServer');
 
     /* 3a. Режим «клавиатура выключена» (scan — по умолчанию): поле readOnly и
        inputmode=none, то есть ОС не поднимает экранную клавиатуру. Ввод при
@@ -195,6 +248,23 @@ try {
        клавиатурного клина в readonly-поле и по Enter шлёт 'change' — ровно то,
        что делает сканер на ТСД. */
     const innerWin = innerDoc.defaultView;
+    const serviceBase = 'http://127.0.0.1:8765/rt_morato_bot/hs/dp';
+    expect('адрес: относительный хук склеен с сервисом из шапки',
+      typeof innerWin.resolveFormUrl === 'function' &&
+      innerWin.resolveFormUrl('/link', serviceBase) === serviceBase + '/link',
+      typeof innerWin.resolveFormUrl === 'function'
+        ? innerWin.resolveFormUrl('/link', serviceBase) : 'нет resolveFormUrl');
+    expect('адрес: относительный урл склеен с сервисом из шапки',
+      typeof innerWin.resolveFormUrl === 'function' &&
+      innerWin.resolveFormUrl('/processing', serviceBase) === serviceBase + '/processing',
+      typeof innerWin.resolveFormUrl === 'function'
+        ? innerWin.resolveFormUrl('/processing', serviceBase) : 'нет resolveFormUrl');
+    expect('адрес: полный URL не переписывается',
+      typeof innerWin.resolveFormUrl === 'function' &&
+      innerWin.resolveFormUrl('https://other.example/processing', serviceBase) ===
+        'https://other.example/processing',
+      typeof innerWin.resolveFormUrl === 'function'
+        ? innerWin.resolveFormUrl('https://other.example/processing', serviceBase) : 'нет resolveFormUrl');
 
     /* 3d. Автофокус — правка рендера, не редизайна. Движок после каждой
        отрисовки зовёт setFocus() и ставит курсор в поле с маркером
@@ -352,14 +422,14 @@ try {
   expect('кнопка «JSON» скачивает файл .json',
     !!saved && /\.json$/.test(saved.fileName || ''),
     saved ? String(saved.fileName) : 'скачивания не было');
-  expect('в файле конфига — IR образца (побайтово)',
+  expect('в файле конфига — IR примера (побайтово)',
     !!savedText && savedText.trim() === expectedConfig,
     savedText ? String(savedText.length) + ' символов' : 'файла нет');
   expect('конфиг — объект формы с детьми',
     /^\{\s*"type": "форма"/.test(savedText) && savedText.indexOf('"children"') !== -1,
     savedText.slice(0, 40));
 
-  /* 3e. Кнопка «Скачать»: та же страница, но без preview-заглушек. */
+  /* 3e. Кнопка «HTML»: та же страница, но без preview-заглушек. */
   saved = null;
   URL.createObjectURL = function (blob) { saved = { blob: blob }; return 'blob:smoke'; };
   HTMLAnchorElement.prototype.click = function () { if (saved) saved.fileName = this.download; };
@@ -371,7 +441,7 @@ try {
   }
 
   const pageText = saved && saved.blob ? await saved.blob.text() : '';
-  expect('кнопка «Скачать» скачивает файл .html',
+  expect('кнопка «HTML» скачивает файл .html',
     !!saved && /\.html$/.test(saved.fileName || ''),
     saved ? String(saved.fileName) : 'скачивания не было');
   expect('HTML — самостоятельная страница формы',
@@ -388,8 +458,47 @@ try {
     pageText.indexOf('/* ЯРБП: предпросмотр формы') === -1,
     'страница должна быть без редакторских правок');
 
+  /* 3f. Кнопка «мок-сервер»: скачивается один Python-модуль со всеми тремя
+     контрактами (hook, processing, health). */
+  saved = null;
+  URL.createObjectURL = function (blob) { saved = { blob: blob }; return 'blob:smoke'; };
+  HTMLAnchorElement.prototype.click = function () { if (saved) saved.fileName = this.download; };
+  try {
+    if (mockBtn) mockBtn.click();
+  } finally {
+    URL.createObjectURL = realCreate;
+    HTMLAnchorElement.prototype.click = realClick;
+  }
+
+  const mockText = saved && saved.blob ? await saved.blob.text() : '';
+  expect('кнопка «мок-сервер» скачивает файл .py',
+    !!saved && /\.py$/.test(saved.fileName || ''),
+    saved ? String(saved.fileName) : 'скачивания не было');
+  expect('мок-сервер: хук, отправка и health по последнему сегменту',
+    mockText.indexOf('#!/usr/bin/env python3') !== -1 &&
+    mockText.indexOf('def _method_name') !== -1 &&
+    mockText.indexOf("== 'link'") !== -1 &&
+    mockText.indexOf("== 'processing'") !== -1 &&
+    mockText.indexOf("('ping', 'health', 'healthz')") !== -1 &&
+    mockText.indexOf('Access-Control-Allow-Origin') !== -1,
+    mockText ? String(mockText.length) + ' символов' : 'файла нет');
+
   expect('подсказки: виды полей на месте',
     flexFormsSuggestions.nodes['группа'].variants.some(v => v.label === 'поле:штрихкод'));
+  expect('подсказки: объектДляПоиска в свойствах поля',
+    flexFormsSuggestions.nodes['поле'].variants.some(v => v.label === '.объектДляПоиска'));
+  expect('подсказки: таблица без устаревших массивов',
+    flexFormsSuggestions.nodes['таблица'].variants.some(v => v.label === ':') &&
+    !flexFormsSuggestions.nodes['таблица'].variants.some(v =>
+      ['..измерения', '..ресурсы', '..шапка', '..именаВПриемнике', '..типы']
+        .includes(v.label)));
+  expect('подсказки: свойства колонки таблицы',
+    flexFormsSuggestions.nodes[''].variants.some(v => v.label === '.имя') &&
+    flexFormsSuggestions.nodes[''].variants.some(v => v.label === '.измерение') &&
+    flexFormsSuggestions.nodes[''].variants.some(v => v.label === '.приемник:'));
+  expect('подсказки: вариант «суммировать в приемнике»',
+    flexFormsSuggestions.nodes['поле'].values['.режимСканирования'].variants
+      .some(v => v.label === 'суммировать в приемнике'));
 
   /* 4. Дебаунс и пропуск по неизменившемуся IR: печать в разметке не должна
      перезагружать iframe на каждое нажатие. */

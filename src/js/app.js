@@ -17,6 +17,19 @@ const MAX_PANE_PERCENT = 99;
 const STORAGE_SIDEBAR = 'cachedSidebarWidth';
 const STORAGE_CODE_PANE_WIDTH = 'codePaneWidth';
 const STORAGE_CODE_PANE_HEIGHT = 'codePaneHeight';
+const STORAGE_LAYOUT_MODE = 'layoutMode';
+
+const LAYOUT_MODES = ['auto', 'horizontal', 'vertical'];
+
+function getSavedLayoutMode() {
+  try {
+    const saved = localStorage.getItem(STORAGE_LAYOUT_MODE);
+    if (LAYOUT_MODES.includes(saved)) return saved;
+  } catch (e) { /* приватный режим / quota */ }
+  return 'auto';
+}
+
+let layoutMode = getSavedLayoutMode();
 
 const sidebar = document.getElementById('sidebar');
 const resizer = document.getElementById('sidebar-resizer-first');
@@ -29,10 +42,13 @@ const paneResizer = document.getElementById('pane-resizer');
 const workArea = document.getElementById('work-area');
 const renderTextarea = document.getElementById('render-textarea');
 const themeBtn = document.querySelector('.theme-btn');
+const layoutSwitch = document.getElementById('layout-switch');
 
 if (!app || !sidebar || !resizer || !codePane || !paneResizer || !workArea) {
   console.error('Missing required DOM elements. Some features may not work.');
 }
+
+if (workArea) workArea.dataset.layout = layoutMode;
 
 function setAppHeight() {
   const vh = window.innerHeight * 0.01;
@@ -224,6 +240,22 @@ function syncRenderScroll() {
 
 /* region code & render */
 
+function cleanupRenderer() {
+  const renderer = YarbpAppGlobals.renderer;
+  if (renderer && typeof renderer.destroy === 'function') {
+    try { renderer.destroy(); } catch (e) { console.error('[app] renderer cleanup failed:', e); }
+  }
+  YarbpAppGlobals.renderer = null;
+
+  // Страховка для флейворов, которые рисуют кнопки/контейнеры вне редактора:
+  // после смены флейвора в панели результата не должно остаться чужих действий.
+  const renderPane = renderTextarea ? renderTextarea.closest('#render-pane') : null;
+  if (renderPane) {
+    renderPane.querySelectorAll('.bpmn-download-btn, .ui-render-container')
+      .forEach(element => element.remove());
+  }
+}
+
 function updateViews() {
   if (!textarea || !highlightDiv) return;
 
@@ -265,12 +297,19 @@ function updateViews() {
     else YarbpAppGlobals.suggestionUI.hide();
   });
 
+  const flavorChanged = !!YarbpAppGlobals.flavor &&
+    YarbpAppGlobals.flavor.flavorName !== flavor.flavorName;
+
+  // Сначала убираем UI прошлого рендерера (BPMN-кнопку и т.п.), иначе его
+  // действия остаются в панели результата после переключения конвертера.
+  if (flavorChanged) cleanupRenderer();
+
   if (!flavor.flavorData) {
     renderHighlightDiv.innerHTML = `<div>Unknown flavor!</div>`;
     return;
   }
 
-  if (!YarbpAppGlobals.flavor || YarbpAppGlobals.flavor.flavorName !== flavor.flavorName) {
+  if (!YarbpAppGlobals.flavor || flavorChanged || !YarbpAppGlobals.renderer) {
     const renderPane = renderTextarea.closest('#render-pane');
 
     if (renderPane) {
@@ -286,6 +325,7 @@ function updateViews() {
       YarbpAppGlobals.lexer, YarbpAppGlobals.parser,
       renderTextarea, renderHighlightDiv, syncRenderScroll
     );
+    YarbpAppGlobals.renderer = renderer;
     YarbpAppGlobals.lexer.setObserver(renderer);
     YarbpAppGlobals.lexer.callRendererObserver();
   }
@@ -293,7 +333,11 @@ function updateViews() {
 
 /* endregion */
 
+/* Эффективная ориентация: auto следует за окном, явный режим принудительно
+   задаёт сторону, на которой находится код. */
 function getOrientation() {
+  if (layoutMode === 'horizontal') return 'landscape';
+  if (layoutMode === 'vertical') return 'portrait';
   return window.matchMedia(
     '(orientation: landscape)').matches ? 'landscape' : 'portrait';
 }
@@ -330,6 +374,37 @@ if (localStorage.getItem('theme') === 'dark') {
   document.body.classList.add('dark');
   document.getElementById('night-icon').src = 'static/night-white.svg';
   document.getElementById('day-icon').src = 'static/day-white.svg';
+}
+
+/* endregion */
+
+/* region layout mode */
+
+function updateLayoutSwitch() {
+  document.querySelectorAll('.layout-switch-btn').forEach(btn => {
+    btn.setAttribute('aria-pressed', btn.dataset.layout === layoutMode ? 'true' : 'false');
+  });
+}
+
+function setLayoutMode(mode) {
+  layoutMode = LAYOUT_MODES.includes(mode) ? mode : 'auto';
+
+  if (workArea) workArea.dataset.layout = layoutMode;
+  try {
+    localStorage.setItem(STORAGE_LAYOUT_MODE, layoutMode);
+  } catch (e) { /* приватный режим / quota */ }
+
+  updateLayoutSwitch();
+  setupPaneResizer();
+  updateCodePaneBorder();
+}
+
+if (layoutSwitch) {
+  layoutSwitch.addEventListener('click', (event) => {
+    const button = event.target.closest('.layout-switch-btn');
+    if (!button || !layoutSwitch.contains(button)) return;
+    setLayoutMode(button.dataset.layout);
+  });
 }
 
 /* endregion */
@@ -531,7 +606,8 @@ function setAppGlobals() {
     lexer: lexer,
     parser: new YarbpParser(lexer),
     highlighter: new YarbpHighlighter(),
-    flavor: undefined
+    flavor: undefined,
+    renderer: undefined
   };
 }
 
@@ -556,6 +632,7 @@ fileManager.init(textarea, fileManagerContainer, updateViews);
 /* endregion */
 
 setupPaneResizer();
+updateLayoutSwitch();
 
 window.addEventListener('resize', () => {
   requestAnimationFrame(() => {

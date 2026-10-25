@@ -13,9 +13,10 @@
  *      окна кода на каждой перерисовке.
  *
  * Страница используется и предпросмотром, и выгрузкой. Редактор отдаёт
- * **конфиг JSON** (кнопка «JSON») для расширения 1С и **готовую HTML-страницу**
- * (кнопка «Скачать»). Для HTML вызывается `buildFormPage(ir)` без preview:
- * CSS, движок и IR уже внутри, страница открывается без сборки и сети.
+ * **конфиг JSON** (кнопка «JSON»), **готовую HTML-страницу** (кнопка «HTML») и
+ * **Python-мок сервера** (кнопка «мок-сервер»). Для HTML вызывается
+ * `buildFormPage(ir)` без preview: CSS, движок и IR уже внутри, страница
+ * открывается без сборки и сети.
  */
 import { FLEX_FORMS_STYLES } from './FlexFormsStyles.js';
 import { FLEX_FORMS_RUNTIME } from './FlexFormsRuntime.js';
@@ -232,14 +233,15 @@ export const FLEX_FORMS_PREVIEW_CSS = [
   // как в редизайне. Любой scale здесь мылил бы текст и 1px-рамки полей.
   '.ff-phone-screen iframe{position:absolute;left:0;top:0;display:block;border:0;background:#0a0c10;' +
     'width:100%;height:100%}',
-  // Две выгрузки: JSON-конфиг и готовая HTML-страница. Подписи вместо иконок:
-  // прежняя `download-*.svg` объявлена как 800x800 и без ограничения
-  // растягивала кнопку на всю панель.
+  // Три выгрузки: JSON-конфиг, готовая HTML-страница и Python-мок сервера.
+  // Подписи вместо иконок: прежняя `download-*.svg` объявлена как 800x800 и
+  // без ограничения растягивала кнопку на всю панель.
   '.ff-export-buttons{position:absolute;top:12px;left:16px;z-index:5;display:flex;gap:6px}',
   '.ff-export-btn{display:inline-flex;align-items:center;justify-content:center;min-height:23px;padding:3px 6px;background:none;border:1px solid rgba(128,128,128,.45);border-radius:8px;cursor:pointer;line-height:1;color:#8b93a7}',
   '.ff-export-btn:hover{background:rgba(128,128,128,.18)}',
   '.ff-export-btn--config{font:700 10px/1 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.04em}',
   '.ff-export-btn--html{font:600 10px/1 ui-monospace,SFMono-Regular,Consolas,monospace}',
+  '.ff-export-btn--mock{font:600 10px/1 ui-monospace,SFMono-Regular,Consolas,monospace}',
   // Сообщение об ошибке выгрузки: не тост (его в предпросмотре нет), а плашка
   // под кнопкой — иначе отказ «ничего не скачалось» выглядит как поломка.
   '.ff-export-error{position:absolute;top:46px;left:16px;right:16px;z-index:6;padding:6px 10px;border-radius:8px;background:rgba(190,48,48,.94);color:#fff;font:12px/1.35 system-ui,sans-serif}',

@@ -11,6 +11,7 @@
 Источники:
   редизайн/kb8-inventory-redesign.html  — CSS, оболочка страницы, движок
   flex-forms-legacy/constructor.html    — SVG-рамка корпуса ТСД (getSVG)
+  tools/flexforms_mock_server.py        — Python-мок для кнопки «мок-сервер»
 
 Геометрия экрана предпросмотра задана здесь (PREVIEW_FORM, PREVIEW_SCREEN): в
 легаси она подбиралась вручную под старую вёрстку формы и с рисунком корпуса не
@@ -21,6 +22,7 @@
   src/js/classes/renderers/flexforms/FlexFormsStyles.js
   src/js/classes/renderers/flexforms/FlexFormsRuntime.js
   src/js/classes/renderers/flexforms/FlexFormsMarkup.js
+  src/js/classes/renderers/flexforms/FlexFormsMockServer.js
 
 Запуск:  python tools/build-flexforms-assets.py [--check]
   --check  ничего не пишет, только сверяет модули с первоисточниками.
@@ -48,6 +50,8 @@ LEGACY = os.path.join(REPO, 'flex-forms-legacy', 'constructor.html')
 STYLES_MODULE = os.path.join(SRC, 'FlexFormsStyles.js')
 RUNTIME_MODULE = os.path.join(SRC, 'FlexFormsRuntime.js')
 MARKUP_MODULE = os.path.join(SRC, 'FlexFormsMarkup.js')
+MOCK_SERVER_SOURCE = os.path.join(HERE, 'flexforms_mock_server.py')
+MOCK_SERVER_MODULE = os.path.join(SRC, 'FlexFormsMockServer.js')
 
 IR_MARKER = '__FF_IR__'
 STYLES_MARKER = '__FF_STYLES__'
@@ -117,6 +121,14 @@ def runtime_module(runtime):
             '*/\n'
             'export const FLEX_FORMS_RUNTIME = [\n'
             + js_lines_array(runtime.split('\n')) +
+            "\n].join('\\n');\n")
+    return js_module(header, body)
+
+
+def mock_server_module(source):
+    header = GENERATED_BANNER % 'tools/flexforms_mock_server.py'
+    body = ('\nexport const FLEX_FORMS_MOCK_SERVER = [\n'
+            + js_lines_array(source.split('\n')) +
             "\n].join('\\n');\n")
     return js_module(header, body)
 
@@ -203,6 +215,7 @@ def main(argv):
         (STYLES_MODULE, styles_module(styles)),
         (RUNTIME_MODULE, runtime_module(runtime)),
         (MARKUP_MODULE, markup_module(skeleton, phone)),
+        (MOCK_SERVER_MODULE, mock_server_module(read_text(MOCK_SERVER_SOURCE))),
     ]
 
     problems = []

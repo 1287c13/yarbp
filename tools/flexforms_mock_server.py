@@ -1,0 +1,329 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Мок-сервер для формы ТСД.
+
+Один файл, только стандартная библиотека Python 3. Повторяет три контракта,
+которые использует движок формы:
+
+* POST <любой префикс>/link/     — поиск товара по штрихкоду;
+* POST <любой префикс>/processing — приём полей и таблицы заказа;
+* GET  <любой префикс>/ping      — health для индикатора сети.
+
+Метод определяется по ПОСЛЕДНЕМУ сегменту пути, а не по зашитому префиксу:
+`rt_morato_bot/hs/dp` в примере — просто адрес конкретной публикации 1С.
+Поэтому форма может задать `.сервис http://host/api/v2` и относительные
+`.хук /link`, `.урл /processing`; мок ответит на `/api/v2/link` и
+`/api/v2/processing`. Короткие `/link`, `/processing`, `/ping`, `/health`
+тоже работают — удобно проверять curl-ом. По умолчанию сервер слушает
+127.0.0.1:8765 — именно этот адрес стоит в примере формы.
+
+Запуск:
+    python flexforms_mock_server.py
+    python flexforms_mock_server.py --host 0.0.0.0 --port 8765
+"""
+
+from __future__ import print_function
+
+import argparse
+import json
+import sys
+from datetime import datetime
+
+try:
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+except ImportError:  # pragma: no cover - Python 2 не поддерживается, но импорт не ломаем
+    from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+
+try:
+    from http.server import ThreadingHTTPServer
+except ImportError:  # Python < 3.7
+    ThreadingHTTPServer = None
+
+try:
+    from urllib.parse import urlparse
+except ImportError:  # pragma: no cover
+    from urlparse import urlparse
+
+
+DEFAULT_HOST = '127.0.0.1'
+DEFAULT_PORT = 8765
+SERVICE_NAME = 'yarbp-flexforms-mock'
+
+# Демо-товары. Любой другой непустой ШК тоже считается найденным, чтобы
+# форму можно было проверять сканером с произвольным кодом.
+DEMO_PRODUCTS = {
+    '460000000001': ('Молоко 3,2%', '1 л'),
+    '460000000002': ('Хлеб Бородинский', '400 г'),
+    '460000000003': ('Кофе молотый', '250 г'),
+}
+
+
+def product_for(barcode):
+    """Вернуть (название, характеристика) для штрихкода."""
+    barcode = str(barcode or '').strip()
+    if barcode in DEMO_PRODUCTS:
+        return DEMO_PRODUCTS[barcode]
+    if barcode:
+        return ('Товар по ШК ' + barcode, '1 шт')
+    return ('Демо-товар', '1 шт')
+
+
+def field_value(field_id, product):
+    """Значение поля приёмника по его id из requested_fields.
+
+    В примере формы:
+      a1_f2 — товар, a1_f3 — характеристика, a1_f4 — количество.
+    Для произвольных id возвращаем товар, чтобы демонстрационный хук не падал.
+    """
+    name, characteristic = product
+    field_id = str(field_id or '').lower()
+    if 'f3' in field_id or 'характер' in field_id or 'character' in field_id:
+        return characteristic
+    if 'f4' in field_id or 'кол' in field_id or 'quantity' in field_id or 'qty' in field_id:
+        return '1'
+    return name
+
+
+def requested_ids(payload):
+    """Достать requested_fields из запроса; поддержать и объекты, и строки."""
+    raw = payload.get('requested_fields')
+    if raw is None and isinstance(payload.get('requestedFields'), list):
+        raw = payload.get('requestedFields')
+    if raw is None:
+        return []
+    if isinstance(raw, dict):
+        raw = [raw]
+    if not isinstance(raw, list):
+        raw = [raw]
+
+    result = []
+    for item in raw:
+        if isinstance(item, dict):
+            item = item.get('id', item.get('field', item.get('name', '')))
+        item = str(item or '').strip()
+        if item:
+            result.append(item)
+    return result
+
+
+def hook_response(payload):
+    """Ответ хука в формате, который читает handleOnchange в движке."""
+    barcode = str(payload.get('id') or payload.get('barcode') or '').strip()
+    product = product_for(barcode)
+    name, _characteristic = product
+
+    fields = []
+    for field_id in requested_ids(payload):
+        fields.append({
+            'id': field_id,
+            'name': field_value(field_id, product),
+            'uid': barcode + ('-' + field_id if field_id not in ('a1_f2',) else ''),
+        })
+
+    message = {
+        'requested_fields': fields,
+        'name': name,
+        'uid': barcode or 'demo-uid',
+    }
+    if not fields:
+        message['text'] = 'По коду «%s» ничего не найдено' % (barcode or '')
+    return {'ok': True, 'message': message}
+
+
+def processing_response(payload):
+    """Подтверждение отправки. Движку достаточно правдивого JSON-ответа."""
+    fields = payload.get('fields')
+    table = payload.get('table')
+    fields_count = len(fields) if isinstance(fields, list) else 0
+    table_count = len(table) if isinstance(table, list) else 0
+
+    print('[mock] processing: fields=%d, table=%d, at=%s' % (
+        fields_count, table_count, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+    if fields:
+        _safe_print('[mock] fields: ' + json.dumps(fields, ensure_ascii=False))
+    if table:
+        _safe_print('[mock] table: ' + json.dumps(table, ensure_ascii=False))
+
+    return {
+        'ok': True,
+        'success': True,
+        'message': {
+            'text': 'Принято: полей %d, строк таблицы %d' % (fields_count, table_count),
+        },
+        'received': {
+            'fields': fields_count,
+            'table': table_count,
+        },
+    }
+
+
+def health_response():
+    return {
+        'ok': True,
+        'status': 'ok',
+        'service': SERVICE_NAME,
+        'time': datetime.now().isoformat(' '),
+    }
+
+
+def _safe_print(text):
+    """Печать логов без падения на узкой кодировке Windows-консоли."""
+    try:
+        print(text, flush=True)
+    except UnicodeEncodeError:
+        try:
+            sys.stdout.buffer.write((text + '\n').encode('utf-8'))
+            sys.stdout.buffer.flush()
+        except Exception:
+            print(text.encode('ascii', 'replace').decode('ascii'))
+
+
+class MockHandler(BaseHTTPRequestHandler):
+    server_version = 'YarbpFlexFormsMock/1.0'
+    protocol_version = 'HTTP/1.1'
+
+    def log_message(self, fmt, *args):
+        print('[mock] %s - %s' % (self.address_string(), fmt % args))
+
+    def _cors_headers(self):
+        # Страница формы может быть открыта из file:// или с другого порта.
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+
+    def _send_json(self, status, payload):
+        body_text = json.dumps(payload, ensure_ascii=False, indent=2)
+        body = body_text.encode('utf-8')
+        _safe_print('[mock] response %s %s -> %d\n%s' % (
+            self.command, self.path, status, body_text))
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Cache-Control', 'no-store')
+        self._cors_headers()
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        if self.command != 'HEAD':
+            self.wfile.write(body)
+
+    def _read_json(self):
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+        except (TypeError, ValueError):
+            length = 0
+        if length <= 0:
+            return {}
+        raw = self.rfile.read(length)
+        if isinstance(raw, bytes):
+            try:
+                raw = raw.decode('utf-8')
+            except (UnicodeDecodeError, AttributeError):
+                return None
+        try:
+            value = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if isinstance(value, dict) else {}
+
+
+    def _path(self):
+        return (urlparse(self.path).path or '/').rstrip('/') or '/'
+
+    def _method_name(self, path):
+        """Имя метода — последняя секция пути, без привязки к префиксу.
+
+        `/rt_morato_bot/hs/dp/link/` и `/api/v2/link` дают `link`;
+        `/custom/processing` — `processing`. Именно так форма собирает URL
+        из `.сервис` и относительного `.хук`/`.урл`.
+        """
+        normalized = (path or '/').rstrip('/')
+        if not normalized or normalized == '/':
+            return ''
+        return normalized.rsplit('/', 1)[-1].lower()
+
+    def _is_link(self, path):
+        return self._method_name(path) == 'link'
+
+    def _is_processing(self, path):
+        return self._method_name(path) == 'processing'
+
+    def _is_health(self, path):
+        return self._method_name(path) in ('ping', 'health', 'healthz')
+
+    def do_OPTIONS(self):
+        # Это CORS-preflight браузера, а не второй POST. Браузер сам
+        # спрашивает разрешение перед cross-origin POST с JSON.
+        _safe_print('[mock] OPTIONS %s -> 204 (CORS preflight, без тела)' % self.path)
+        self.send_response(204)
+        self._cors_headers()
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+    def do_GET(self):
+        path = self._path()
+        if self._is_health(path):
+            self._send_json(200, health_response())
+            return
+        if path == '/':
+            self._send_json(200, {
+                'ok': True,
+                'service': SERVICE_NAME,
+                'endpoints': {
+                    'hook': 'POST <prefix>/link/',
+                    'processing': 'POST <prefix>/processing',
+                    'health': 'GET <prefix>/ping',
+                },
+                'note': 'Метод определяется по последнему сегменту пути; префикс любой.',
+            })
+            return
+        self._send_json(404, {'ok': False, 'error': 'not found', 'path': path})
+
+    def do_POST(self):
+        path = self._path()
+        payload = self._read_json()
+        if payload is None:
+            _safe_print('[mock] request %s %s -> invalid JSON' % (self.command, self.path))
+            self._send_json(400, {'ok': False, 'error': 'invalid JSON'})
+            return
+        _safe_print('[mock] request %s %s\n%s' % (
+            self.command, self.path, json.dumps(payload, ensure_ascii=False, indent=2)))
+        if self._is_link(path):
+            self._send_json(200, hook_response(payload))
+            return
+        if self._is_processing(path):
+            self._send_json(200, processing_response(payload))
+            return
+        self._send_json(404, {'ok': False, 'error': 'not found', 'path': path})
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description='Мок-сервер формы ТСД (stdlib Python 3)')
+    parser.add_argument('--host', default=DEFAULT_HOST,
+                        help='адрес прослушивания (по умолчанию %s)' % DEFAULT_HOST)
+    parser.add_argument('--port', type=int, default=DEFAULT_PORT,
+                        help='порт (по умолчанию %d)' % DEFAULT_PORT)
+    return parser
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    server_class = ThreadingHTTPServer or HTTPServer
+    server = server_class((args.host, args.port), MockHandler)
+    print('%s: http://%s:%d (префикс пути любой)' % (SERVICE_NAME, args.host, args.port))
+    print('  переопределите префикс в .сервис формы, например http://%s:%d/api/v2'
+          % (args.host, args.port))
+    print('  hook:       POST <prefix>/link/')
+    print('  processing: POST <prefix>/processing')
+    print('  health:     GET  <prefix>/ping')
+    print('Ctrl+C - остановить.')
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print('')
+    finally:
+        server.server_close()
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
+

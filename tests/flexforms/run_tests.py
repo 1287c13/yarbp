@@ -10,14 +10,14 @@
   4. Предпросмотр отличается от страницы редизайна только двумя скриптами —
      сбросом снимка localStorage и заглушкой автофокуса; в странице без
      предпросмотра их нет.
-  5. Геометрия рамки/экрана, имя файла, конфиг для 1С и HTML-выгрузка:
-     текст конфига = текст в `<data>` страницы, имена `<заголовок>.json` и
-     `<заголовок>.html`, отказ на неполном IR.
+  5. Геометрия рамки/экрана, имя файла, конфиг для 1С, HTML-выгрузка и
+     Python-мок: текст конфига = текст в `<data>` страницы, имена
+     `<заголовок>.json` / `<заголовок>.html`, отказ на неполном IR.
   6. Подсказки флейвора: набор узлов, видов полей, values.
-  7. Предопределённый пример «Форма ТСД» в редакторе: текст в FileManager.js
-     дословно совпадает с образцом разметки, с которого сделан редизайн.
+  7. Предопределённый пример «Форма ТСД» в редакторе: компактная разметка без
+     автопараметров, таблица описана поколоночно.
   8. Дымовой тест в браузере: регистрация флейвора, монтирование предпросмотра
-     примером из «Примеров» и IR этого примера (== IR образца) настоящими
+     примером из «Примеров» и IR этого примера (== builtin-ir.json) настоящими
      модулями редактора (Chrome/Edge headless).
 
 Запуск (из корня репозитория):
@@ -55,10 +55,10 @@ SUGGESTIONS = os.path.join(CLASSES, 'suggestions', 'flexFormsSuggestions.js')
 GOLDEN_AST = os.path.join(TASK, 'ast.json')
 GOLDEN_IR = os.path.join(TASK, 'target.json')
 SAMPLE_IR = os.path.join(TASK, 'target-sample.json')
-SAMPLE_MARKUP = os.path.join(TASK, 'образцы разметки.md')
 
 FILE_MANAGER = os.path.join(ROOT, 'src', 'js', 'modules', 'FileManager.js')
 BUILTIN_ID = 'builtin-9'                                 # пример «Форма ТСД»
+BUILTIN_IR = os.path.join(HERE, 'builtin-ir.json')       # компактный пример → IR
 
 BROWSERS = [
     r'C:\Program Files\Google\Chrome\Application\chrome.exe',
@@ -341,9 +341,10 @@ JSON.stringify({
           'class="ff-phone-scale"' in result['markup'] and
           'class="ff-phone" style="width:364px;height:799px"' in result['markup'],
           result['markup'][:120])
-    check('кнопки выгрузки — подписи JSON и Скачать, без иконок-растяжек',
+    check('кнопки выгрузки — JSON, HTML и мок-сервер, без иконок-растяжек',
           '.ff-export-btn--config{font:' in result['previewCss'] and
           '.ff-export-btn--html{font:' in result['previewCss'] and
+          '.ff-export-btn--mock{font:' in result['previewCss'] and
           '.ff-export-btn img' not in result['previewCss'],
           result['previewCss'][-260:])
     check('имя файла из заголовка формы',
@@ -423,36 +424,50 @@ JSON.stringify({
 # --------------------------------------------------------------------------
 
 BUILTIN_ENTRY = re.compile(r"id:\s*'%s'[\s\S]*?content:\s*`([^`]*)`" % re.escape(BUILTIN_ID))
-MARKDOWN_BLOCK = re.compile(r'```[^\n]*\n(.*?)```', re.S)
 
 
 def test_builtin_example():
-    """Пример «Форма ТСД» в «Примерах» — дословно образец разметки редизайна.
+    """Пример «Форма ТСД» в «Примерах» — компактный актуальный синтаксис.
 
-    Пользователь открывает пример и глазами сверяет рендер с редизайном;
-    чтобы эта сверка что-то значила, текст примера не должен «отъезжать» от
-    первоисточника. Единственное разрешённое отличие — директива: в образце
-    `! как аст` (показывает AST), в редакторе `! как форма-тсд`.
+    Автопараметры в примере не дублируются: их подставляет конвертер. Таблица
+    описана поколоночно, а старые массивы `..измерения` / `..ресурсы` / ... в
+    актуальном примере не используются.
     """
-    print('7. пример «Форма ТСД» в редакторе == образец разметки')
+    print('7. пример «Форма ТСД» в редакторе — компактный актуальный синтаксис')
 
     found = BUILTIN_ENTRY.search(read_text(FILE_MANAGER))
     if not check('FileManager: встроенный пример %s' % BUILTIN_ID, found is not None):
         return
 
     actual = found.group(1).strip('\n')
-    blocks = MARKDOWN_BLOCK.findall(read_text(SAMPLE_MARKUP))
-    if not check('образцы разметки.md: найден блок разметки', bool(blocks)):
-        return
-
-    expected = re.sub(r'^! как аст[ \t]*$', '! как форма-тсд', blocks[0].strip('\n'),
-                      count=1, flags=re.M)
 
     check('пример: директива «! как форма-тсд»',
           actual.splitlines()[0].strip() == '! как форма-тсд',
           actual.splitlines()[0].strip())
-    check('пример: текст дословно совпадает с первым блоком «образцы разметки.md»',
-          actual == expected, first_difference(actual, expected))
+
+    old_table = [key for key in ('..измерения', '..ресурсы', '..шапка',
+                                  '..именаВПриемнике', '..типы')
+                 if key in actual]
+    check('пример: нет старого пореквизитного описания таблицы', not old_table,
+          ', '.join(old_table))
+
+    old_defaults = [key for key in ('.имяКнопки', '.очиститьФорму', '.перезагрузить',
+                                    '.значенияПриемниковПоУмолчанию', '.кнопкаОчистки',
+                                    '.автофокус', '.режимСканирования')
+                    if key in actual]
+    check('пример: автопараметры не дублируются', not old_defaults,
+          ', '.join(old_defaults))
+
+    check('пример: адрес сервера задан в шапке',
+          '.сервис http://127.0.0.1:8765/rt_morato_bot/hs/dp' in actual,
+          'нет .сервис в шапке формы')
+    check('пример: хук и урл относительные',
+          '\n        .хук /link' in actual and '\n    .урл /processing' in actual,
+          'хук/урл должны быть относительными (/link, /processing)')
+    check('пример: таблица описана поколоночно',
+          '\n        :\n          .имя ' in actual and
+          '.приемник:Справочник.Номенклатура = Номенклатура' in actual,
+          'нет блока колонки таблицы')
     check('пример: «Кол\u2011во» с неразрывным дефисом (U+2011) не нормализован',
           'Кол\u2011во' in actual and 'Кол-во' not in actual,
           'U+2011 потерян — поля таблицы перестанут сопоставляться')
@@ -567,15 +582,15 @@ def test_browser():
           ' ok-строк: %d' % len(passed))
     check('smoke.html: все проверки прошли', not failed, '; '.join(failed))
 
-    # IR, собранный в браузере ИЗ ТЕКСТА ПРИМЕРА, должен совпасть с IR образца:
-    # значит пример в «Примерах» — тот же вход, что и у редизайна (а страница
-    # из этого IR уже сверена с редизайном побайтово в п.3).
+    # IR, собранный в браузере ИЗ ТЕКСТА ПРИМЕРА, должен совпасть с эталоном
+    # компактного примера: так проверяется и разметка, и автопараметры,
+    # которые подставляет конвертер.
     ir = re.search(r'<pre id="ir"[^>]*>(.*?)</pre>', output, re.S)
     if check('smoke.html: страница отдала IR примера', ir is not None):
         # Chrome на Windows печатает --dump-dom с CRLF — приводим к LF, как read_text.
         actual_ir = html_unescape(ir.group(1)).replace('\r\n', '\n').replace('\r', '\n').strip('\n')
-        expected_ir = read_text(SAMPLE_IR).strip('\n')
-        check('smoke.html: пример из «Примеров» → IR образца (побайтово)',
+        expected_ir = read_text(BUILTIN_IR).strip('\n')
+        check('smoke.html: пример из «Примеров» → компактный IR (побайтово)',
               actual_ir == expected_ir, first_difference(actual_ir, expected_ir))
 
 
