@@ -55,31 +55,10 @@
       "error": ""
     },
     {
-      "type": "SCOPE_IN",
-      "value": "",
-      "start": 28,
-      "end": 28,
-      "error": ""
-    },
-    {
       "type": "TODO",
       "value": "--? todo",
       "start": 28,
       "end": 36,
-      "error": ""
-    },
-    {
-      "type": "SCOPE_OUT",
-      "value": "",
-      "start": 37,
-      "end": 37,
-      "error": ""
-    },
-    {
-      "type": "SCOPE_IN",
-      "value": "",
-      "start": 37,
-      "end": 37,
       "error": ""
     },
     {
@@ -90,30 +69,9 @@
       "error": ""
     },
     {
-      "type": "SCOPE_OUT",
-      "value": "",
-      "start": 51,
-      "end": 51,
-      "error": ""
-    },
-    {
-      "type": "SCOPE_IN",
-      "value": "",
-      "start": 51,
-      "end": 51,
-      "error": ""
-    },
-    {
       "type": "DELETED",
       "value": "--/ deleted",
       "start": 51,
-      "end": 62,
-      "error": ""
-    },
-    {
-      "type": "SCOPE_OUT",
-      "value": "",
-      "start": 62,
       "end": 62,
       "error": ""
     },
@@ -158,11 +116,7 @@
               "start": 16,
               "end": 27
             }
-          }
-        ]
-      },
-      {
-        "comments": [
+          },
           {
             "nodeType": "TODO",
             "value": "--? todo",
@@ -170,11 +124,7 @@
               "start": 28,
               "end": 36
             }
-          }
-        ]
-      },
-      {
-        "comments": [
+          },
           {
             "nodeType": "IMPORTANT",
             "value": "--! important",
@@ -182,11 +132,7 @@
               "start": 37,
               "end": 50
             }
-          }
-        ]
-      },
-      {
-        "comments": [
+          },
           {
             "nodeType": "DELETED",
             "value": "--/ deleted",
@@ -201,6 +147,6 @@
   },
   "render": {
     "kind": "lexer",
-    "text": "+-----------+---------------+--------+-------+-----+-------+\n| type      | value         | prefix | start | end | error |\n+-----------+---------------+--------+-------+-----+-------+\n| START     |               |        | 0     | 0   |       |\n| PREFIX    | !             |        | 0     | 1   |       |\n| DIRECTIVE | as lexer      | !      | 0     | 10  |       |\n| PREFIX    | .             |        | 11    | 12  |       |\n| KEY       | a             | .      | 11    | 13  |       |\n| VALUE     | b             |        | 14    | 16  |       |\n| COMMENT   | --- comment   |        | 16    | 27  |       |\n| SCOPE_IN  |               |        | 28    | 28  |       |\n| TODO      | --? todo      |        | 28    | 36  |       |\n| SCOPE_OUT |               |        | 37    | 37  |       |\n| SCOPE_IN  |               |        | 37    | 37  |       |\n| IMPORTANT | --! important |        | 37    | 50  |       |\n| SCOPE_OUT |               |        | 51    | 51  |       |\n| SCOPE_IN  |               |        | 51    | 51  |       |\n| DELETED   | --/ deleted   |        | 51    | 62  |       |\n| SCOPE_OUT |               |        | 62    | 62  |       |\n| END       |               |        | 62    | 62  |       |\n+-----------+---------------+--------+-------+-----+-------+\n"
+    "text": "+-----------+---------------+--------+-------+-----+-------+\n| type      | value         | prefix | start | end | error |\n+-----------+---------------+--------+-------+-----+-------+\n| START     |               |        | 0     | 0   |       |\n| PREFIX    | !             |        | 0     | 1   |       |\n| DIRECTIVE | as lexer      | !      | 0     | 10  |       |\n| PREFIX    | .             |        | 11    | 12  |       |\n| KEY       | a             | .      | 11    | 13  |       |\n| VALUE     | b             |        | 14    | 16  |       |\n| COMMENT   | --- comment   |        | 16    | 27  |       |\n| TODO      | --? todo      |        | 28    | 36  |       |\n| IMPORTANT | --! important |        | 37    | 50  |       |\n| DELETED   | --/ deleted   |        | 51    | 62  |       |\n| END       |               |        | 62    | 62  |       |\n+-----------+---------------+--------+-------+-----+-------+\n"
   }
 }

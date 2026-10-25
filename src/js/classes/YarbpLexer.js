@@ -194,7 +194,7 @@ export class YarbpLexer {
   tokenize() {
     for (let pos = 0; pos < this.text.length; pos++) {
       const char = this.text[pos];
-      this.state = this.defineState(char);
+      this.state = this.defineState(char, pos);
       this.handleState(char, pos);
     }
 
@@ -413,7 +413,7 @@ export class YarbpLexer {
 
   /* region state engine */
 
-  defineState(char) {
+  defineState(char, pos) {
 
     this.previousState = this.state;
 
@@ -504,8 +504,15 @@ export class YarbpLexer {
       return YarbpLexer.states.ARRAY_ENDED;
 
     if (this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE && !YarbpLexer.isSpaceChar(char)
-        && !YarbpLexer.isPrefixChar(char))
+        && !YarbpLexer.isPrefixChar(char)) {
+      // `---`, `--?`, `--!`, `--/` — комментарий, а не неявный объект.
+      // Проверяем первые два дефиса, иначе комментарий успевает открыть
+      // пустой scope и в IR появляется ключ "".
+      if (char === '-' &&
+          (this.text[pos + 1] === '-' || this.currentToken.trim().endsWith('-')))
+        return YarbpLexer.states.WAITING_AFTER_NEWLINE;
       return YarbpLexer.states.IMPLICIT_OBJECT_ENCOUNTERED;
+    }
 
     if (this.state === YarbpLexer.states.WAITING
         && this.tokens.at(-1).type === TokenTypes.START)

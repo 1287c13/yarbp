@@ -207,8 +207,8 @@ JSON.stringify({
     check('ast.json → target.json (текст с отступами)', actual == expected,
           first_difference(actual, expected))
     check('корень IR — форма', result['type'] == 'форма', str(result['type']))
-    check('дети формы: стили + операции',
-          result['children'] == ['стили', 'операция', 'операция'], str(result['children']))
+    check('дети формы: операции без синтезированных стилей',
+          result['children'] == ['операция', 'операция'], str(result['children']))
 
 
 # --------------------------------------------------------------------------

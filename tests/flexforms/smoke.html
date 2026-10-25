@@ -379,8 +379,13 @@ try {
     pageText.indexOf('data id="form-params"') !== -1 &&
     pageText.indexOf('"заголовокФормы"') !== -1,
     pageText ? String(pageText.length) + ' символов' : 'файла нет');
-  expect('в HTML нет preview-заглушки localStorage',
-    pageText.indexOf("localStorage.getItem('tsd-form-state')") === -1,
+  expect('в HTML есть защита от устаревшего localStorage',
+    pageText.indexOf('ffCurrent') !== -1 &&
+    pageText.indexOf('ffSaved.ir') !== -1,
+    'нет standalone-скрипта проверки IR');
+  expect('в HTML нет preview-заглушек',
+    pageText.indexOf('window.setFocus = function () {};') === -1 &&
+    pageText.indexOf('/* ЯРБП: предпросмотр формы') === -1,
     'страница должна быть без редакторских правок');
 
   expect('подсказки: виды полей на месте',

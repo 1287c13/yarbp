@@ -196,7 +196,7 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
       return;
     }
 
-    this.saveFile(buildFormPage(IR), formFileName(IR, 'html'), 'text/html;charset=utf-8');
+    this.saveFile(buildFormPage(IR, { standalone: true }), formFileName(IR, 'html'), 'text/html;charset=utf-8');
   }
 
   /** Текст → файл. */

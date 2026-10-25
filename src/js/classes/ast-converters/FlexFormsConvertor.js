@@ -58,25 +58,14 @@
  *      массивного свойства, если он лежит среди его детей, иначе — элементом
  *      children родителя.
  *
- *   5. Узел «стили» — первый ребёнок формы (словарь DSL: `форма.children =
- *      ['стили', 'операция']`, см. yarbp/docs/flex-forms-dsl.md §3, §4.2, §8.2).
- *      Если стили описаны в разметке явным узлом — они переносятся как есть;
- *      если их нет, целевой формат всё равно требует этот узел, поэтому он
- *      собирается из ЗНАЧЕНИЙ СХЕМЫ DSL по умолчанию (STYLE_DEFAULTS) — это
- *      словарь языка, а не данные конкретной формы. Значения, заданные в
- *      разметке, перекрывают умолчания.
+ *   5. Узел «стили» — только если он явно описан в разметке. Конвертер не
+ *      синтезирует блок оформления: умолчания живут в CSS страницы формы.
  *
  *   6. Значения приводятся по значению, а не по имени ключа:
  *      - булевы узлы (valueType BOOL) → 'да'/'нет' (формат флагов рантайма);
  *      - массивы (valueType ARRAY) → массив значений, вложенные структуры
  *        внутри массива сохраняются как объекты (опции выпадающего списка);
  *      - пустой массив детей → пустой массив (а не исчезнувшее свойство).
- *
- *   6. «Стили» в разметке не описаны, но присутствуют в целевом конфиге.
- *      Конвертер не выдумывает данные: узел «стили» собирается из атрибутов
- *      формы, имена которых совпадают с именами атрибутов стилей
- *      (.обводка/.поля/.фон/.фокус/.кнопка/.текст) — так описано в DSL
- *      (yarbp/docs/flex-forms-dsl.md §8.1). Нет таких атрибутов — нет узла.
  *
  * Проверка: см. ast_to_target.py (пример «файл → файл» во внешней обёртке).
  * ==========================================================================*/
@@ -132,20 +121,10 @@ export class YarbpFlexFormsConverter {
   static TABLE_KEY = 'таблица';      // узел таблицы
   static OPERATION_TYPE = 'операция'; // тип узла операции (порядок свойств особый)
   /**
-   * Узел «стили»: имя узла и умолчания его свойств из СЛОВАРЯ DSL
-   * (flex-forms-legacy/constructor.html, fpmlEditorGlobals.syntaxTree.стили).
-   * Это декларация языка, а не данные формы: разметка может вовсе не писать
-   * «стили», но целевой формат требует этот узел первым ребёнком формы.
+   * Узел «стили». Конвертер переносит его только если он явно описан в
+   * разметке; умолчания оформления живут в CSS страницы, а не в данных формы.
    */
   static STYLES_KEY = 'стили';
-  static STYLE_DEFAULTS = Object.freeze({
-    'обводка': 'CECECE',
-    'поля': 'FFFFFF',
-    'фон': 'EEEEEE',
-    'фокус': 'CFEF1A',
-    'кнопка': 'CFEF1A',
-    'текст': '000000',
-  });
   static ID_SEPARATOR = '/';         // разделитель «имя / идентификатор»
   static KEY_SEPARATOR = ':';        // разделитель «ключ / вид» в ключе разметки
   static PREFIX_CHARS = './:';       // пунктуация префиксов AST (не часть ключа)
@@ -286,10 +265,8 @@ export class YarbpFlexFormsConverter {
    * Узел «форма».
    * Собственные свойства формы идут после `type` в порядке разметки; группы
    * формы становятся контейнерами «поля» (сетка + поля формы).
-   * Первым ребёнком формы всегда идёт узел «стили» (словарь DSL:
-   * `форма.children = ['стили', 'операция']`). Если в разметке есть явный узел
-   * «стили» — берутся его значения; если нет — умолчания схемы DSL, потому что
-   * целевой формат требует этот узел, а разметка вправе его не писать.
+   * Узел «стили» первым ребёнком добавляется только при наличии явного узла
+   * в разметке. Без него оформление берётся из CSS страницы.
    */
   _buildFormNode(node, head, plan) {
     node[YarbpFlexFormsConverter.TYPE_KEY] = head.type;
@@ -299,7 +276,8 @@ export class YarbpFlexFormsConverter {
     this._resolveName(node, plan.pendingName);
     this._mergeArrayProps(node, plan.rest);
 
-    const children = [this._stylesNode(plan)];
+    const styles = this._stylesNode(plan);
+    const children = styles ? [styles] : [];
 
     // Группы формы — контейнеры «поля».
     plan.groupProps.forEach(prop => {
@@ -321,29 +299,19 @@ export class YarbpFlexFormsConverter {
   }
 
   /**
-   * Узел «стили»: значения из авторского узла «стили» (если он есть в разметке)
-   * поверх умолчаний схемы DSL. Это словарь языка — целевой формат требует
-   * узел «стили» первым ребёнком формы даже когда разметка его не пишет.
+   * Узел «стили»: только если он явно описан в разметке. Без авторского узла
+   * ничего не синтезируем: оформление по умолчанию задаёт CSS страницы, а не
+   * данные формы.
    */
   _stylesNode(plan) {
-    const styles = { [YarbpFlexFormsConverter.TYPE_KEY]: YarbpFlexFormsConverter.STYLES_KEY };
-    Object.keys(YarbpFlexFormsConverter.STYLE_DEFAULTS).forEach(name => {
-      styles[name] = YarbpFlexFormsConverter.STYLE_DEFAULTS[name];
-    });
-
     const authored = (plan.childNodes || []).concat(plan.directNodes || [])
       .filter(item => this._isStylesChild(item))[0];
-    if (authored) {
-      Object.keys(YarbpFlexFormsConverter.STYLE_DEFAULTS).forEach(name => {
-        if (authored[name] !== undefined) styles[name] = authored[name];
-      });
-      (authored[YarbpFlexFormsConverter.CHILDREN_KEY] || []).forEach(child => {
-        // Прочие свойства авторского узла «стили» сохраняются как есть.
-        Object.keys(child).forEach(key => {
-          if (key !== YarbpFlexFormsConverter.TYPE_KEY) styles[key] = child[key];
-        });
-      });
-    }
+    if (!authored) return null;
+
+    const styles = { [YarbpFlexFormsConverter.TYPE_KEY]: YarbpFlexFormsConverter.STYLES_KEY };
+    Object.keys(authored).forEach(key => {
+      if (key !== YarbpFlexFormsConverter.TYPE_KEY) styles[key] = authored[key];
+    });
     return styles;
   }
 

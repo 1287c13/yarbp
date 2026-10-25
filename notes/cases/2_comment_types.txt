@@ -94,66 +94,54 @@ render
                 "start": 62,
                 "end": 67
               }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "comments": [
-        {
-          "nodeType": "COMMENT",
-          "value": "--- p",
-          "position": {
-            "start": 68,
-            "end": 73
-          }
-        }
-      ]
-    },
-    {
-      "comments": [
-        {
-          "nodeType": "TODO",
-          "value": "--? q",
-          "position": {
-            "start": 74,
-            "end": 79
-          }
-        }
-      ],
-      "children": [
-        {
-          "nodeType": "MEANING",
-          "key": "e",
-          "prefix": ".",
-          "position": {
-            "start": 84,
-            "end": 86
-          },
-          "type": "f",
-          "valueType": "STRING",
-          "value": "g",
-          "comments": [
+            },
             {
-              "nodeType": "IMPORTANT",
-              "value": "--! r",
+              "nodeType": "COMMENT",
+              "value": "--- p",
               "position": {
-                "start": 91,
-                "end": 96
+                "start": 68,
+                "end": 73
+              }
+            },
+            {
+              "nodeType": "TODO",
+              "value": "--? q",
+              "position": {
+                "start": 74,
+                "end": 79
               }
             }
-          ]
-        },
-        {
-          "comments": [
+          ],
+          "children": [
             {
-              "nodeType": "DELETED",
-              "value": "--/.s",
+              "nodeType": "MEANING",
+              "key": "e",
+              "prefix": ".",
               "position": {
-                "start": 101,
-                "end": 106
-              }
+                "start": 84,
+                "end": 86
+              },
+              "type": "f",
+              "valueType": "STRING",
+              "value": "g",
+              "comments": [
+                {
+                  "nodeType": "IMPORTANT",
+                  "value": "--! r",
+                  "position": {
+                    "start": 91,
+                    "end": 96
+                  }
+                },
+                {
+                  "nodeType": "DELETED",
+                  "value": "--/.s",
+                  "position": {
+                    "start": 101,
+                    "end": 106
+                  }
+                }
+              ]
             }
           ]
         },

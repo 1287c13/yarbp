@@ -77,6 +77,32 @@ const PREVIEW_AUTOFOCUS_SCRIPT = `<script>
 window.setFocus = function () {};
 </script>`;
 
+/**
+ * Скачанная страница: убираем только устаревший IR из localStorage.
+ *
+ * Рантайм намеренно восстанавливает IR и значения полей, чтобы строки таблиц
+ * переживали перезагрузку. Но если открыть новый HTML из редактора в браузере,
+ * где уже лежит снимок другой формы, старый IR подменит актуальный. Сверяем
+ * снимок с IR, вшитым в страницу, и при расхождении выбрасываем только IR и
+ * индекс; значения полей с совпадающими id остаются.
+ */
+const STANDALONE_STATE_SCRIPT = `<script>
+/* ЯРБП: скачанная форма. Не даём старому снимку localStorage подменить IR. */
+try {
+  var ffCurrent = JSON.parse(document.getElementById('form-params').textContent);
+  var ffRaw = localStorage.getItem('tsd-form-state');
+  if (ffRaw) {
+    var ffSaved = JSON.parse(ffRaw);
+    if (ffSaved && ffSaved.ir &&
+        JSON.stringify(ffSaved.ir) !== JSON.stringify(ffCurrent)) {
+      delete ffSaved.ir;
+      delete ffSaved.index;
+      localStorage.setItem('tsd-form-state', JSON.stringify(ffSaved));
+    }
+  }
+} catch (ffErr) {}
+</script>`;
+
 /** IR → текст (и для `<data>` страницы, и для конфига): 2 пробела, как в редизайне. */
 export function serializeFormIR(ir) {
   if (typeof ir === 'string') return ir;
@@ -116,7 +142,7 @@ export function formConfigError(ir) {
 /**
  * IR → полная HTML-страница формы.
  * @param {object|string} ir      конфиг формы (или уже готовый JSON-текст)
- * @param {{preview?: boolean}} [options]
+ * @param {{preview?: boolean, standalone?: boolean}} [options]
  * @returns {string}
  */
 export function buildFormPage(ir, options = {}) {
@@ -129,6 +155,9 @@ export function buildFormPage(ir, options = {}) {
     skeleton = skeleton
       .replace('\n<script>\n', () => '\n' + PREVIEW_STATE_SCRIPT + '\n\n<script>\n')
       .replace('\n</script>\n</body>', () => '\n</script>\n\n' + PREVIEW_AUTOFOCUS_SCRIPT + '\n</body>');
+  } else if (options.standalone) {
+    skeleton = skeleton
+      .replace('\n<script>\n', () => '\n' + STANDALONE_STATE_SCRIPT + '\n\n<script>\n');
   }
 
   return skeleton
