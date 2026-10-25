@@ -1,6 +1,6 @@
 ! as xml
 ! use macro
-@a(xx) --? macro name works strange, rethink requirements
+@a --? имя раскрытия задаёт вызов
   b .c #(( d )).e
     ab = ac (( ad ))
     ..f
@@ -9,7 +9,7 @@
       ag
 k
   r
-    a
+    a(xx)
       .ad ae
       .d k
       ..g
@@ -17,7 +17,7 @@ k
         o .p q
 s
   t
-    a
+    a(yy)
       ..g
         v .w x
         y .z aa
@@ -43,7 +43,7 @@ render
 </k>
 <s>
   <t>
-    <xx>
+    <yy>
       <b c="#u.e">
         <ab></ab>
         <f>
@@ -53,6 +53,6 @@ render
           <string>ag</string>
         </f>
       </b>
-    </xx>
+    </yy>
   </t>
 </s>

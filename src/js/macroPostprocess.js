@@ -18,7 +18,9 @@ export function expandMacros(ast) {
     });
   };
 
-  const macroDefRegex = /^@(\w+)(?:\((\w+)\))?$/;
+  /* Определение: @a. Имя раскрытия задаёт вызов: a(xx), a(yy). */
+  const macroDefRegex = /^@(\w+)$/;
+  const macroCallRegex = /^(\w+)(?:\((\w+)\))?$/;
 
   const macros = new Map();
   const otherRoot = [];
@@ -28,15 +30,12 @@ export function expandMacros(ast) {
       const match = child.key.match(macroDefRegex);
       if (match) {
         const macroName = match[1];
-        const inheritedName = match[2] || null;
         const macroBody = clone(child);
         macroBody.key = macroName;
-        macros.set(macroName, { inherited: inheritedName, body: macroBody });
+        macros.set(macroName, { body: macroBody });
       } else {
-        const macroName = child.key.slice(1);
-        const macroBody = clone(child);
-        macroBody.key = macroName;
-        macros.set(macroName, { inherited: null, body: macroBody });
+        // Неизвестное `@...` не молча теряем.
+        otherRoot.push(child);
       }
     } else {
       otherRoot.push(child);
@@ -114,10 +113,13 @@ export function expandMacros(ast) {
   }
 
   function expandCall(callNode) {
-    const macroDef = macros.get(callNode.key);
-    if (!macroDef) return clone(callNode);
+    const callMatch = callNode.key.match(macroCallRegex);
+    if (!callMatch) return clone(callNode);
 
-    const { body: macroBody, inherited } = macroDef;
+    const macroName = callMatch[1];
+    const inherited = callMatch[2] || null;
+    const macroDef = macros.get(macroName);
+    if (!macroDef) return clone(callNode);
 
     const params = new Map();
     for (const child of callNode.children || []) {
@@ -125,7 +127,7 @@ export function expandMacros(ast) {
         params.set(child.key, clone(child));
       }
     }
-    const bodyClone = clone(macroBody);
+    const bodyClone = clone(macroDef.body);
     const result = substitute(bodyClone, params);
 
     if (result && result.nodeType === 'MEANING' && result.valueType === 'OBJECT') {
@@ -140,7 +142,9 @@ export function expandMacros(ast) {
   function transform(node) {
     if (!node || node.nodeType !== 'MEANING') return node;
 
-    if (node.valueType === 'OBJECT' && macros.has(node.key) && !node.key.startsWith('@') && !node.__macroExpanded) {
+    const callMatch = node.key && node.key.match(macroCallRegex);
+    if (node.valueType === 'OBJECT' && callMatch && macros.has(callMatch[1]) &&
+        !node.key.startsWith('@') && !node.__macroExpanded) {
       const expanded = expandCall(node);
       if (Array.isArray(expanded)) {
         return expanded.map(item => transform(item)).flat();

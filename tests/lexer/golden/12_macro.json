@@ -49,631 +49,631 @@
     },
     {
       "type": "KEY(OBJ)",
-      "value": "@a(xx)",
+      "value": "@a",
       "start": 21,
-      "end": 27,
+      "end": 23,
       "error": ""
     },
     {
       "type": "TODO",
-      "value": "--? macro name works strange, rethink requirements",
-      "start": 28,
-      "end": 78,
+      "value": "--? имя раскрытия задаёт вызов",
+      "start": 24,
+      "end": 54,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 81,
-      "end": 81,
+      "start": 57,
+      "end": 57,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "b",
-      "start": 81,
-      "end": 82,
+      "start": 57,
+      "end": 58,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": ".",
-      "start": 83,
-      "end": 84,
+      "start": 59,
+      "end": 60,
       "error": ""
     },
     {
       "type": "KEY",
       "value": "c",
       "prefix": ".",
-      "start": 83,
-      "end": 85,
+      "start": 59,
+      "end": 61,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "#(( d )).e",
-      "start": 86,
-      "end": 96,
+      "start": 62,
+      "end": 72,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 101,
-      "end": 101,
+      "start": 77,
+      "end": 77,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "ab",
-      "start": 101,
-      "end": 103,
+      "start": 77,
+      "end": 79,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "= ac (( ad ))",
-      "start": 105,
-      "end": 118,
+      "start": 81,
+      "end": 94,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 122,
-      "end": 122,
+      "start": 98,
+      "end": 98,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 122,
-      "end": 122,
+      "start": 98,
+      "end": 98,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": "..",
-      "start": 122,
-      "end": 124,
+      "start": 98,
+      "end": 100,
       "error": ""
     },
     {
       "type": "KEY(ARR)",
       "value": "f",
       "prefix": "..",
-      "start": 122,
-      "end": 125,
+      "start": 98,
+      "end": 101,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "(( g ))",
-      "start": 132,
-      "end": 139,
+      "start": 108,
+      "end": 115,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 146,
-      "end": 146,
+      "start": 122,
+      "end": 122,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "h",
-      "start": 146,
-      "end": 147,
+      "start": 122,
+      "end": 123,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": ".",
-      "start": 148,
-      "end": 149,
+      "start": 124,
+      "end": 125,
       "error": ""
     },
     {
       "type": "KEY",
       "value": "i",
       "prefix": ".",
-      "start": 148,
-      "end": 150,
+      "start": 124,
+      "end": 126,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "j",
-      "start": 151,
-      "end": 152,
+      "start": 127,
+      "end": 128,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 159,
-      "end": 159,
+      "start": 135,
+      "end": 135,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "ag",
-      "start": 159,
-      "end": 162,
+      "start": 135,
+      "end": 138,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 162,
-      "end": 162,
+      "start": 138,
+      "end": 138,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 162,
-      "end": 162,
+      "start": 138,
+      "end": 138,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 162,
-      "end": 162,
+      "start": 138,
+      "end": 138,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 162,
-      "end": 162,
+      "start": 138,
+      "end": 138,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "k",
-      "start": 162,
-      "end": 163,
+      "start": 138,
+      "end": 139,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 166,
-      "end": 166,
+      "start": 142,
+      "end": 142,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "r",
-      "start": 166,
-      "end": 167,
+      "start": 142,
+      "end": 143,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 172,
-      "end": 172,
+      "start": 148,
+      "end": 148,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
-      "value": "a",
-      "start": 172,
-      "end": 173,
+      "value": "a(xx)",
+      "start": 148,
+      "end": 153,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": ".",
-      "start": 180,
-      "end": 181,
+      "start": 160,
+      "end": 161,
       "error": ""
     },
     {
       "type": "KEY",
       "value": "ad",
       "prefix": ".",
-      "start": 180,
-      "end": 183,
+      "start": 160,
+      "end": 163,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "ae",
-      "start": 184,
-      "end": 186,
+      "start": 164,
+      "end": 166,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": ".",
-      "start": 193,
-      "end": 194,
+      "start": 173,
+      "end": 174,
       "error": ""
     },
     {
       "type": "KEY",
       "value": "d",
       "prefix": ".",
-      "start": 193,
-      "end": 195,
+      "start": 173,
+      "end": 175,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "k",
-      "start": 196,
-      "end": 197,
+      "start": 176,
+      "end": 177,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 204,
-      "end": 204,
+      "start": 184,
+      "end": 184,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": "..",
-      "start": 204,
-      "end": 206,
+      "start": 184,
+      "end": 186,
       "error": ""
     },
     {
       "type": "KEY(ARR)",
       "value": "g",
       "prefix": "..",
-      "start": 204,
-      "end": 207,
+      "start": 184,
+      "end": 187,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 216,
-      "end": 216,
+      "start": 196,
+      "end": 196,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "l",
-      "start": 216,
-      "end": 217,
+      "start": 196,
+      "end": 197,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": ".",
-      "start": 218,
-      "end": 219,
+      "start": 198,
+      "end": 199,
       "error": ""
     },
     {
       "type": "KEY",
       "value": "m",
       "prefix": ".",
-      "start": 218,
-      "end": 220,
+      "start": 198,
+      "end": 200,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "n",
-      "start": 221,
-      "end": 222,
+      "start": 201,
+      "end": 202,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 231,
-      "end": 231,
+      "start": 211,
+      "end": 211,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 231,
-      "end": 231,
+      "start": 211,
+      "end": 211,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "o",
-      "start": 231,
-      "end": 232,
+      "start": 211,
+      "end": 212,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": ".",
-      "start": 233,
-      "end": 234,
+      "start": 213,
+      "end": 214,
       "error": ""
     },
     {
       "type": "KEY",
       "value": "p",
       "prefix": ".",
-      "start": 233,
-      "end": 235,
+      "start": 213,
+      "end": 215,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "q",
-      "start": 236,
-      "end": 237,
+      "start": 216,
+      "end": 217,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 238,
-      "end": 238,
+      "start": 218,
+      "end": 218,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 238,
-      "end": 238,
+      "start": 218,
+      "end": 218,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 238,
-      "end": 238,
+      "start": 218,
+      "end": 218,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 238,
-      "end": 238,
+      "start": 218,
+      "end": 218,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 238,
-      "end": 238,
+      "start": 218,
+      "end": 218,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 238,
-      "end": 238,
+      "start": 218,
+      "end": 218,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "s",
-      "start": 238,
-      "end": 239,
+      "start": 218,
+      "end": 219,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 242,
-      "end": 242,
+      "start": 222,
+      "end": 222,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "t",
-      "start": 242,
-      "end": 243,
+      "start": 222,
+      "end": 223,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 248,
-      "end": 248,
+      "start": 228,
+      "end": 228,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
-      "value": "a",
-      "start": 248,
-      "end": 249,
+      "value": "a(yy)",
+      "start": 228,
+      "end": 233,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 256,
-      "end": 256,
+      "start": 240,
+      "end": 240,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": "..",
-      "start": 256,
-      "end": 258,
+      "start": 240,
+      "end": 242,
       "error": ""
     },
     {
       "type": "KEY(ARR)",
       "value": "g",
       "prefix": "..",
-      "start": 256,
-      "end": 259,
+      "start": 240,
+      "end": 243,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 268,
-      "end": 268,
+      "start": 252,
+      "end": 252,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "v",
-      "start": 268,
-      "end": 269,
+      "start": 252,
+      "end": 253,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": ".",
-      "start": 270,
-      "end": 271,
+      "start": 254,
+      "end": 255,
       "error": ""
     },
     {
       "type": "KEY",
       "value": "w",
       "prefix": ".",
-      "start": 270,
-      "end": 272,
+      "start": 254,
+      "end": 256,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "x",
-      "start": 273,
-      "end": 274,
+      "start": 257,
+      "end": 258,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 283,
-      "end": 283,
+      "start": 267,
+      "end": 267,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 283,
-      "end": 283,
+      "start": 267,
+      "end": 267,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "y",
-      "start": 283,
-      "end": 284,
+      "start": 267,
+      "end": 268,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": ".",
-      "start": 285,
-      "end": 286,
+      "start": 269,
+      "end": 270,
       "error": ""
     },
     {
       "type": "KEY",
       "value": "z",
       "prefix": ".",
-      "start": 285,
-      "end": 287,
+      "start": 269,
+      "end": 271,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "aa",
-      "start": 288,
-      "end": 290,
+      "start": 272,
+      "end": 274,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 297,
-      "end": 297,
+      "start": 281,
+      "end": 281,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 297,
-      "end": 297,
+      "start": 281,
+      "end": 281,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": ".",
-      "start": 297,
-      "end": 298,
+      "start": 281,
+      "end": 282,
       "error": ""
     },
     {
       "type": "KEY",
       "value": "d",
       "prefix": ".",
-      "start": 297,
-      "end": 299,
+      "start": 281,
+      "end": 283,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "u",
-      "start": 300,
-      "end": 301,
+      "start": 284,
+      "end": 285,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": ".",
-      "start": 308,
-      "end": 309,
+      "start": 292,
+      "end": 293,
       "error": ""
     },
     {
       "type": "KEY",
       "value": "ad",
       "prefix": ".",
-      "start": 308,
-      "end": 311,
+      "start": 292,
+      "end": 295,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "af",
-      "start": 312,
-      "end": 314,
+      "start": 296,
+      "end": 298,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 314,
-      "end": 314,
+      "start": 298,
+      "end": 298,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 314,
-      "end": 314,
+      "start": 298,
+      "end": 298,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 314,
-      "end": 314,
+      "start": 298,
+      "end": 298,
       "error": ""
     },
     {
       "type": "END",
       "value": "",
-      "start": 314,
-      "end": 314,
+      "start": 298,
+      "end": 298,
       "error": ""
     }
   ],
@@ -707,8 +707,8 @@
         "valueType": "OBJECT",
         "prefix": "",
         "position": {
-          "start": 162,
-          "end": 163
+          "start": 138,
+          "end": 139
         },
         "children": [
           {
@@ -717,8 +717,8 @@
             "valueType": "OBJECT",
             "prefix": "",
             "position": {
-              "start": 166,
-              "end": 167
+              "start": 142,
+              "end": 143
             },
             "children": [
               {
@@ -728,15 +728,15 @@
                 "prefix": "",
                 "position": {
                   "start": 21,
-                  "end": 27
+                  "end": 23
                 },
                 "comments": [
                   {
                     "nodeType": "TODO",
-                    "value": "--? macro name works strange, rethink requirements",
+                    "value": "--? имя раскрытия задаёт вызов",
                     "position": {
-                      "start": 28,
-                      "end": 78
+                      "start": 24,
+                      "end": 54
                     }
                   }
                 ],
@@ -747,8 +747,8 @@
                     "valueType": "OBJECT",
                     "prefix": "",
                     "position": {
-                      "start": 81,
-                      "end": 82
+                      "start": 57,
+                      "end": 58
                     },
                     "children": [
                       {
@@ -756,8 +756,8 @@
                         "key": "c",
                         "prefix": ".",
                         "position": {
-                          "start": 83,
-                          "end": 85
+                          "start": 59,
+                          "end": 61
                         },
                         "valueType": "STRING",
                         "value": "#k.e"
@@ -768,8 +768,8 @@
                         "valueType": "OBJECT",
                         "prefix": "",
                         "position": {
-                          "start": 101,
-                          "end": 103
+                          "start": 77,
+                          "end": 79
                         },
                         "value": "ac (( ad ))"
                       },
@@ -779,8 +779,8 @@
                         "valueType": "ARRAY",
                         "prefix": "..",
                         "position": {
-                          "start": 122,
-                          "end": 125
+                          "start": 98,
+                          "end": 101
                         },
                         "children": [
                           {
@@ -789,8 +789,8 @@
                             "valueType": "OBJECT",
                             "prefix": "",
                             "position": {
-                              "start": 216,
-                              "end": 217
+                              "start": 196,
+                              "end": 197
                             },
                             "children": [
                               {
@@ -798,8 +798,8 @@
                                 "key": "m",
                                 "prefix": ".",
                                 "position": {
-                                  "start": 218,
-                                  "end": 220
+                                  "start": 198,
+                                  "end": 200
                                 },
                                 "valueType": "STRING",
                                 "value": "n"
@@ -812,8 +812,8 @@
                             "valueType": "OBJECT",
                             "prefix": "",
                             "position": {
-                              "start": 231,
-                              "end": 232
+                              "start": 211,
+                              "end": 212
                             },
                             "children": [
                               {
@@ -821,8 +821,8 @@
                                 "key": "p",
                                 "prefix": ".",
                                 "position": {
-                                  "start": 233,
-                                  "end": 235
+                                  "start": 213,
+                                  "end": 215
                                 },
                                 "valueType": "STRING",
                                 "value": "q"
@@ -835,8 +835,8 @@
                             "valueType": "OBJECT",
                             "prefix": "",
                             "position": {
-                              "start": 146,
-                              "end": 147
+                              "start": 122,
+                              "end": 123
                             },
                             "children": [
                               {
@@ -844,8 +844,8 @@
                                 "key": "i",
                                 "prefix": ".",
                                 "position": {
-                                  "start": 148,
-                                  "end": 150
+                                  "start": 124,
+                                  "end": 126
                                 },
                                 "valueType": "STRING",
                                 "value": "j"
@@ -857,8 +857,8 @@
                             "valueType": "STRING",
                             "nodeType": "MEANING",
                             "position": {
-                              "start": 159,
-                              "end": 162
+                              "start": 135,
+                              "end": 138
                             }
                           }
                         ]
@@ -878,8 +878,8 @@
         "valueType": "OBJECT",
         "prefix": "",
         "position": {
-          "start": 238,
-          "end": 239
+          "start": 218,
+          "end": 219
         },
         "children": [
           {
@@ -888,26 +888,26 @@
             "valueType": "OBJECT",
             "prefix": "",
             "position": {
-              "start": 242,
-              "end": 243
+              "start": 222,
+              "end": 223
             },
             "children": [
               {
                 "nodeType": "MEANING",
-                "key": "xx",
+                "key": "yy",
                 "valueType": "OBJECT",
                 "prefix": "",
                 "position": {
                   "start": 21,
-                  "end": 27
+                  "end": 23
                 },
                 "comments": [
                   {
                     "nodeType": "TODO",
-                    "value": "--? macro name works strange, rethink requirements",
+                    "value": "--? имя раскрытия задаёт вызов",
                     "position": {
-                      "start": 28,
-                      "end": 78
+                      "start": 24,
+                      "end": 54
                     }
                   }
                 ],
@@ -918,8 +918,8 @@
                     "valueType": "OBJECT",
                     "prefix": "",
                     "position": {
-                      "start": 81,
-                      "end": 82
+                      "start": 57,
+                      "end": 58
                     },
                     "children": [
                       {
@@ -927,8 +927,8 @@
                         "key": "c",
                         "prefix": ".",
                         "position": {
-                          "start": 83,
-                          "end": 85
+                          "start": 59,
+                          "end": 61
                         },
                         "valueType": "STRING",
                         "value": "#u.e"
@@ -939,8 +939,8 @@
                         "valueType": "OBJECT",
                         "prefix": "",
                         "position": {
-                          "start": 101,
-                          "end": 103
+                          "start": 77,
+                          "end": 79
                         },
                         "value": "ac (( ad ))"
                       },
@@ -950,8 +950,8 @@
                         "valueType": "ARRAY",
                         "prefix": "..",
                         "position": {
-                          "start": 122,
-                          "end": 125
+                          "start": 98,
+                          "end": 101
                         },
                         "children": [
                           {
@@ -960,8 +960,8 @@
                             "valueType": "OBJECT",
                             "prefix": "",
                             "position": {
-                              "start": 268,
-                              "end": 269
+                              "start": 252,
+                              "end": 253
                             },
                             "children": [
                               {
@@ -969,8 +969,8 @@
                                 "key": "w",
                                 "prefix": ".",
                                 "position": {
-                                  "start": 270,
-                                  "end": 272
+                                  "start": 254,
+                                  "end": 256
                                 },
                                 "valueType": "STRING",
                                 "value": "x"
@@ -983,8 +983,8 @@
                             "valueType": "OBJECT",
                             "prefix": "",
                             "position": {
-                              "start": 283,
-                              "end": 284
+                              "start": 267,
+                              "end": 268
                             },
                             "children": [
                               {
@@ -992,8 +992,8 @@
                                 "key": "z",
                                 "prefix": ".",
                                 "position": {
-                                  "start": 285,
-                                  "end": 287
+                                  "start": 269,
+                                  "end": 271
                                 },
                                 "valueType": "STRING",
                                 "value": "aa"
@@ -1006,8 +1006,8 @@
                             "valueType": "OBJECT",
                             "prefix": "",
                             "position": {
-                              "start": 146,
-                              "end": 147
+                              "start": 122,
+                              "end": 123
                             },
                             "children": [
                               {
@@ -1015,8 +1015,8 @@
                                 "key": "i",
                                 "prefix": ".",
                                 "position": {
-                                  "start": 148,
-                                  "end": 150
+                                  "start": 124,
+                                  "end": 126
                                 },
                                 "valueType": "STRING",
                                 "value": "j"
@@ -1028,8 +1028,8 @@
                             "valueType": "STRING",
                             "nodeType": "MEANING",
                             "position": {
-                              "start": 159,
-                              "end": 162
+                              "start": 135,
+                              "end": 138
                             }
                           }
                         ]
@@ -1047,6 +1047,6 @@
   },
   "render": {
     "kind": "xml",
-    "text": "<k>\n  <r>\n    <xx>\n      <b c=\"#k.e\">\n        <ab></ab>\n        <f>\n          <l m=\"n\"></l>\n          <o p=\"q\"></o>\n          <h i=\"j\"></h>\n          <string>ag</string>\n        </f>\n      </b>\n    </xx>\n  </r>\n</k>\n<s>\n  <t>\n    <xx>\n      <b c=\"#u.e\">\n        <ab></ab>\n        <f>\n          <v w=\"x\"></v>\n          <y z=\"aa\"></y>\n          <h i=\"j\"></h>\n          <string>ag</string>\n        </f>\n      </b>\n    </xx>\n  </t>\n</s>"
+    "text": "<k>\n  <r>\n    <xx>\n      <b c=\"#k.e\">\n        <ab></ab>\n        <f>\n          <l m=\"n\"></l>\n          <o p=\"q\"></o>\n          <h i=\"j\"></h>\n          <string>ag</string>\n        </f>\n      </b>\n    </xx>\n  </r>\n</k>\n<s>\n  <t>\n    <yy>\n      <b c=\"#u.e\">\n        <ab></ab>\n        <f>\n          <v w=\"x\"></v>\n          <y z=\"aa\"></y>\n          <h i=\"j\"></h>\n          <string>ag</string>\n        </f>\n      </b>\n    </yy>\n  </t>\n</s>"
   }
 }
