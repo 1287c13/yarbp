@@ -28,6 +28,7 @@
     "27_array_bare_todo.txt",
     "28_nested_array_bare.txt",
     "29_array_bare_comment_types.txt",
+    "30_quoted_array_comment_types.txt",
     "obj_after_nested_arr.txt"
   ]
 }

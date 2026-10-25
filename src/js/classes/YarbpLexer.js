@@ -545,8 +545,18 @@ export class YarbpLexer {
       case S.IN_COMMENT:
       case S.IN_ARRAY:
       case S.IN_VALUE:
-      case S.IN_QUOTED_VALUE:
       case S.IN_SHORTHAND:
+        this.addCharToToken(char);
+        return;
+
+      case S.IN_QUOTED_VALUE:
+        if (this.previousState !== S.IN_QUOTED_VALUE) {
+          // После комментария currentMatchPosition может указывать на `--`.
+          // Для кавычки начинаем токен с её реальной позиции, иначе
+          // диапазоны VALUE и COMMENT пересекаются.
+          this.currentToken = '';
+          this.currentMatchPosition = pos;
+        }
         this.addCharToToken(char);
         return;
 

@@ -1,0 +1,25 @@
+! as lexer
+..arr
+  'one' --? todo
+  'two' --! important
+  'three' --/ deleted
+
+render
++-----------+---------------+--------+-------+-----+-------+
+| type      | value         | prefix | start | end | error |
++-----------+---------------+--------+-------+-----+-------+
+| START     |               |        | 0     | 0   |       |
+| PREFIX    | !             |        | 0     | 1   |       |
+| DIRECTIVE | as lexer      | !      | 0     | 10  |       |
+| SCOPE_IN  |               |        | 11    | 11  |       |
+| PREFIX    | ..            |        | 11    | 13  |       |
+| KEY(ARR)  | arr           | ..     | 11    | 16  |       |
+| VALUE     | 'one'         |        | 19    | 25  |       |
+| TODO      | --? todo      |        | 25    | 33  |       |
+| VALUE     | 'two'         |        | 36    | 42  |       |
+| IMPORTANT | --! important |        | 42    | 55  |       |
+| VALUE     | 'three'       |        | 58    | 66  |       |
+| DELETED   | --/ deleted   |        | 66    | 77  |       |
+| SCOPE_OUT |               |        | 77    | 77  |       |
+| END       |               |        | 77    | 77  |       |
++-----------+---------------+--------+-------+-----+-------+
