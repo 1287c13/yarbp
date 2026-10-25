@@ -102,6 +102,7 @@ try {
   const screenBox = container && container.querySelector('.ff-phone-screen');
   const exportButtons = container ? container.querySelectorAll('.ff-export-btn') : [];
   const configBtn = container && container.querySelector('.ff-export-btn--config');
+  const htmlBtn = container && container.querySelector('.ff-export-btn--html');
 
   expect('корпус ТСД (SVG getSVG) на месте', !!svg,
     svg ? svg.getAttribute('viewBox') : 'нет');
@@ -145,18 +146,24 @@ try {
     Math.abs(iframe.getBoundingClientRect().width - 356) <= 0.5,
     phone ? phone.style.transform + ', форма ' +
       (iframe ? iframe.getBoundingClientRect().width.toFixed(1) : 'нет') : 'нет');
-  /* Выгрузка одна — конфиг JSON. Кнопка подписана текстом, а не иконкой:
-     прежняя `download-*.svg` объявлена как 800x800 и без ограничения
-     растягивалась на всю панель и накрывала макет. */
-  expect('кнопка выгрузки одна и подписана «JSON»',
-    exportButtons.length === 1 && !!configBtn &&
-    configBtn.textContent.trim() === 'JSON' && !configBtn.querySelector('img'),
+  /* Две выгрузки: JSON-конфиг для 1С и готовая HTML-страница. Подписи
+     текстовые, без иконок: одинаковые download-*.svg ничего не объясняли. */
+  expect('кнопки выгрузки: JSON и Скачать',
+    exportButtons.length === 2 && !!configBtn && !!htmlBtn &&
+    configBtn.textContent.trim() === 'JSON' &&
+    htmlBtn.textContent.trim() === 'Скачать' &&
+    !configBtn.querySelector('img') && !htmlBtn.querySelector('img'),
     exportButtons.length + ' кнопок, текст=' +
-      (configBtn ? configBtn.textContent.trim() : 'нет'));
-  expect('кнопка выгрузки не растягивается на панель',
-    !!configBtn && configBtn.offsetWidth > 0 && configBtn.offsetWidth < 60 &&
-    configBtn.offsetHeight < 60,
-    configBtn ? configBtn.offsetWidth + 'x' + configBtn.offsetHeight : 'нет');
+      (configBtn ? configBtn.textContent.trim() : 'нет') + ' / ' +
+      (htmlBtn ? htmlBtn.textContent.trim() : 'нет'));
+  expect('кнопки выгрузки не растягиваются на панель',
+    !!configBtn && !!htmlBtn &&
+    configBtn.offsetWidth > 0 && configBtn.offsetWidth < 70 &&
+    configBtn.offsetHeight < 60 &&
+    htmlBtn.offsetWidth > 0 && htmlBtn.offsetWidth < 70 &&
+    htmlBtn.offsetHeight < 60,
+    (configBtn ? configBtn.offsetWidth + 'x' + configBtn.offsetHeight : 'нет') +
+      ' / ' + (htmlBtn ? htmlBtn.offsetWidth + 'x' + htmlBtn.offsetHeight : 'нет'));
 
   const srcdoc = iframe ? iframe.srcdoc : '';
   expect('iframe получил страницу формы', srcdoc.length > 100000, String(srcdoc.length));
@@ -351,9 +358,30 @@ try {
   expect('конфиг — объект формы с детьми',
     /^\{\s*"type": "форма"/.test(savedText) && savedText.indexOf('"children"') !== -1,
     savedText.slice(0, 40));
-  expect('выгрузки HTML больше нет (кнопка одна — JSON)',
-    exportButtons.length === 1 && !/^\s*<!DOCTYPE/i.test(savedText),
-    exportButtons.length + ' кнопок, файл начинается с ' + JSON.stringify(savedText.slice(0, 12)));
+
+  /* 3e. Кнопка «Скачать»: та же страница, но без preview-заглушек. */
+  saved = null;
+  URL.createObjectURL = function (blob) { saved = { blob: blob }; return 'blob:smoke'; };
+  HTMLAnchorElement.prototype.click = function () { if (saved) saved.fileName = this.download; };
+  try {
+    if (htmlBtn) htmlBtn.click();
+  } finally {
+    URL.createObjectURL = realCreate;
+    HTMLAnchorElement.prototype.click = realClick;
+  }
+
+  const pageText = saved && saved.blob ? await saved.blob.text() : '';
+  expect('кнопка «Скачать» скачивает файл .html',
+    !!saved && /\.html$/.test(saved.fileName || ''),
+    saved ? String(saved.fileName) : 'скачивания не было');
+  expect('HTML — самостоятельная страница формы',
+    /^\s*<!DOCTYPE html>/i.test(pageText) &&
+    pageText.indexOf('data id="form-params"') !== -1 &&
+    pageText.indexOf('"заголовокФормы"') !== -1,
+    pageText ? String(pageText.length) + ' символов' : 'файла нет');
+  expect('в HTML нет preview-заглушки localStorage',
+    pageText.indexOf("localStorage.getItem('tsd-form-state')") === -1,
+    'страница должна быть без редакторских правок');
 
   expect('подсказки: виды полей на месте',
     flexFormsSuggestions.nodes['группа'].variants.some(v => v.label === 'поле:штрихкод'));

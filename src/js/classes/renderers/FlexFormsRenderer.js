@@ -27,9 +27,9 @@ const EMPTY_IR_HINT = '<!DOCTYPE html><meta charset="utf-8">' +
  * собранная дословно из редизайна ТСД (FlexFormsPage) → предпросмотр в рамке
  * корпуса ТСД внутри iframe.
  *
- * Наружу рендерер отдаёт **конфиг JSON** (кнопка «JSON»): самодостаточную
- * страницу для ТСД собирает расширение 1С, подставляя конфиг в оболочку
- * редизайна; HTML редактор не выгружает.
+ * Наружу рендерер отдаёт **конфиг JSON** (кнопка «JSON») и **готовую
+ * HTML-страницу** (кнопка «Скачать»). JSON нужен расширению 1С, HTML можно
+ * открыть как обычную страницу: CSS, движок и IR уже внутри.
  *
  * Почему iframe: страница формы — самостоятельное приложение (свой `data-theme`,
  * localStorage, beforeunload, `100dvh`). В iframe она живёт ровно тем же кодом,
@@ -41,7 +41,6 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     super(...args);
     this.container = null;
     this.iframe = null;
-    this.configButton = null;
     this.lastIR = '';          // IR, уже отданный в iframe (как строка)
     this.timer = null;         // таймер отложенной перерисовки
     this.errorTimer = null;    // плашка ошибки выгрузки
@@ -120,7 +119,7 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     this.container = container;
     this.iframe = iframe;
     this.lastIR = '';
-    this.configButton = this.createConfigButton(container);
+    this.createExportButtons(container);
     this.observeResize(container);
 
     return container;
@@ -133,11 +132,10 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
   }
 
   /**
-   * Выгрузка одна — конфиг формы для расширения 1С: `СтрЗаменить(Оболочка,
-   * "__FF_IR__", Конфиг)`. Подпись «JSON» вместо иконки: одинаковые иконки
-   * ничего не объясняли бы, а скачивается именно JSON.
+   * Две выгрузки: JSON-конфиг для расширения 1С и готовая HTML-страница.
+   * Подписи текстовые: одинаковые иконки не объясняли бы, что скачивается.
    */
-  createConfigButton(container) {
+  createExportButtons(container) {
     const group = document.createElement('div');
     group.className = 'ff-export-buttons';
 
@@ -149,7 +147,16 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     config.setAttribute('aria-label', 'Скачать конфиг формы в JSON');
     config.addEventListener('click', () => this.downloadConfig());
 
+    const page = document.createElement('button');
+    page.type = 'button';
+    page.className = 'ff-export-btn ff-export-btn--html';
+    page.textContent = 'Скачать';
+    page.title = 'Скачать готовую HTML-страницу формы';
+    page.setAttribute('aria-label', 'Скачать HTML-страницу формы');
+    page.addEventListener('click', () => this.downloadPage());
+
     group.appendChild(config);
+    group.appendChild(page);
     container.appendChild(group);
 
     return config;
@@ -172,6 +179,24 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     }
 
     this.saveFile(buildFormConfig(IR), formFileName(IR, 'json'), 'application/json;charset=utf-8');
+  }
+
+  /**
+   * IR текущей разметки → самостоятельная HTML-страница.
+   *
+   * Без `{ preview: true }`: в файле не должно быть редакторских заглушек,
+   * отключающих автофокус и сбрасывающих сохранённый IR. Страница содержит
+   * CSS, движок и данные формы, поэтому открывается без сборки и сети.
+   */
+  downloadPage() {
+    const IR = this.convertToIR();
+    const error = formConfigError(IR);
+    if (error) {
+      this.showExportError(error);
+      return;
+    }
+
+    this.saveFile(buildFormPage(IR), formFileName(IR, 'html'), 'text/html;charset=utf-8');
   }
 
   /** Текст → файл. */
