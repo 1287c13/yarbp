@@ -96,35 +96,47 @@ overflow-x: auto; overflow-y: auto; z-index: 2; white-space: pre; word-wrap: nor
 .theme-btn { position: fixed; top: 10px; right: 20px; padding: 3px 3px 3px 3px;
   cursor: pointer; z-index: 10000; background: #ffffff; border: 1px solid #ccc; border-radius: 4px; display: flex; }
 .layout-switch {
+  /* Активное положение отличается только цветом текста — без заливки,
+     как у переключателя день/ночь. */
+  --layout-border: #d5d9e0;
+  --layout-muted: #9aa0a6;
+  --layout-active: #1f2328;
   display: flex;
   align-items: stretch;
   flex: 0 0 auto;
   height: 32px;
   background: #ffffff;
-  border: 1px solid #ccc;
+  border: 1px solid var(--layout-border);
   border-radius: 4px;
   overflow: hidden;
   box-sizing: border-box;
 }
 .layout-switch-btn {
-  min-width: 38px;
+  min-width: 32px;
   padding: 0 7px;
   border: 0;
-  border-right: 1px solid #ccc;
+  border-right: 1px solid var(--layout-border);
   background: transparent;
-  color: #111111;
+  color: var(--layout-muted);
   cursor: pointer;
-  font: 600 10px/1 'JetBrains Mono', monospace;
+  font: 400 12px/1 'JetBrains Mono', monospace;
+  letter-spacing: 0.02em;
   white-space: nowrap;
+  transition: color 0.16s ease;
 }
 .layout-switch-btn:last-child { border-right: 0; }
-.layout-switch-btn:hover { background: #e0e0e0; }
-.layout-switch-btn[aria-pressed="true"] { background: #007acc; color: #ffffff; }
+.layout-switch-btn:hover,
+.layout-switch-btn:focus-visible { color: var(--layout-active); }
+.layout-switch-btn:focus-visible { outline: 1px solid var(--layout-active); outline-offset: -2px; }
+.layout-switch-btn[aria-pressed="true"] { background: transparent; color: var(--layout-active); }
 body.dark { background-color: #2d2d2d !important; color: #e0e0e0 !important; }
-body.dark .layout-switch { background: #3d3d3d; border-color: #555; }
-body.dark .layout-switch-btn { color: #e0e0e0; border-right-color: #555; }
-body.dark .layout-switch-btn:hover { background: #555; }
-body.dark .layout-switch-btn[aria-pressed="true"] { background: #007acc; color: #ffffff; }
+body.dark .layout-switch {
+  --layout-border: #4a4d55;
+  --layout-muted: #8b93a7;
+  --layout-active: #f0f2f5;
+  background: #2d2d2d;
+}
+body.dark .layout-switch-btn { background: transparent; }
 body.dark .theme-btn,
 body.dark #render-pane,
 body.dark #pane-resizer,
@@ -166,6 +178,15 @@ body.dark .xml-attribute { color: #bcd9fc; text-decoration: none; }
 /* Менеджер файлов */
 #sidebar { display: flex; flex-direction: column; overflow: hidden; padding: 10px !important; }
 #file-manager-container { flex: 1; overflow-y: auto; min-height: 0; background: transparent; }
+
+/* Панель навигации прокручивается, но системный скроллбар не показываем:
+   он перекрывает названия файлов и торчит поверх узкой колонки. */
+#sidebar,
+#file-manager-container,
+.file-list { scrollbar-width: none; -ms-overflow-style: none; }
+#sidebar::-webkit-scrollbar,
+#file-manager-container::-webkit-scrollbar,
+.file-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .file-manager { height: 100%; display: flex; flex-direction: column; font-size: 11px; }
 .file-manager-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
   padding: 0 4px; }
@@ -220,7 +241,7 @@ body.dark .folder-content .file-item.active { background: #1e5a7a; }
   color: #8b93a7;
   cursor: pointer;
   line-height: 1;
-  font: 600 10px/1 'JetBrains Mono', monospace;
+  font: 400 10px/1 'JetBrains Mono', monospace;
 }
 .bpmn-download-btn:hover { background: rgba(128, 128, 128, 0.18); }
 body.dark .bpmn-download-btn {
