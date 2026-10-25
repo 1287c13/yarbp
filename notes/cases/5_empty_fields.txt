@@ -2,3 +2,12 @@
 order
   .order_number:string
   .created_at:string
+
+
+
+render
+
+message order {
+  string order_number = 1;
+  string created_at = 2;
+}

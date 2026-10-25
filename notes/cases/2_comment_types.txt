@@ -1,7 +1,184 @@
 ! as ast   --- k
 :          --/ l
   .a b     --- m
-  :c:d     --! n
-    .e:f g --- o
-    --/.h
-  .i g     --? p
+  :c:d     --? n
+--- p
+--? q
+    .e:f g --! r
+    --/.s
+  .i g     --? t
+
+
+render
+{
+  "nodeType": "ROOT",
+  "directives": [
+    {
+      "nodeType": "DIRECTIVE",
+      "value": "as ast",
+      "prefix": "!",
+      "position": {
+        "start": 0,
+        "end": 11
+      }
+    }
+  ],
+  "comments": [
+    {
+      "nodeType": "COMMENT",
+      "value": "--- k",
+      "position": {
+        "start": 11,
+        "end": 16
+      }
+    }
+  ],
+  "children": [
+    {
+      "nodeType": "MEANING",
+      "key": "",
+      "valueType": "OBJECT",
+      "prefix": ":",
+      "position": {
+        "start": 18,
+        "end": 19
+      },
+      "comments": [
+        {
+          "nodeType": "DELETED",
+          "value": "--/ l",
+          "position": {
+            "start": 28,
+            "end": 33
+          }
+        }
+      ],
+      "children": [
+        {
+          "nodeType": "MEANING",
+          "key": "a",
+          "prefix": ".",
+          "position": {
+            "start": 36,
+            "end": 38
+          },
+          "valueType": "STRING",
+          "value": "b",
+          "comments": [
+            {
+              "nodeType": "COMMENT",
+              "value": "--- m",
+              "position": {
+                "start": 45,
+                "end": 50
+              }
+            }
+          ]
+        },
+        {
+          "nodeType": "MEANING",
+          "key": "c",
+          "valueType": "OBJECT",
+          "prefix": ":",
+          "position": {
+            "start": 53,
+            "end": 55
+          },
+          "type": "d",
+          "value": "",
+          "comments": [
+            {
+              "nodeType": "TODO",
+              "value": "--? n",
+              "position": {
+                "start": 62,
+                "end": 67
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "comments": [
+        {
+          "nodeType": "COMMENT",
+          "value": "--- p",
+          "position": {
+            "start": 68,
+            "end": 73
+          }
+        }
+      ]
+    },
+    {
+      "comments": [
+        {
+          "nodeType": "TODO",
+          "value": "--? q",
+          "position": {
+            "start": 74,
+            "end": 79
+          }
+        }
+      ],
+      "children": [
+        {
+          "nodeType": "MEANING",
+          "key": "e",
+          "prefix": ".",
+          "position": {
+            "start": 84,
+            "end": 86
+          },
+          "type": "f",
+          "valueType": "STRING",
+          "value": "g",
+          "comments": [
+            {
+              "nodeType": "IMPORTANT",
+              "value": "--! r",
+              "position": {
+                "start": 91,
+                "end": 96
+              }
+            }
+          ]
+        },
+        {
+          "comments": [
+            {
+              "nodeType": "DELETED",
+              "value": "--/.s",
+              "position": {
+                "start": 101,
+                "end": 106
+              }
+            }
+          ]
+        },
+        {
+          "nodeType": "MEANING",
+          "key": "i",
+          "prefix": ".",
+          "position": {
+            "start": 109,
+            "end": 111
+          },
+          "valueType": "STRING",
+          "value": "g",
+          "comments": [
+            {
+              "nodeType": "TODO",
+              "value": "--? t",
+              "position": {
+                "start": 118,
+                "end": 123
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

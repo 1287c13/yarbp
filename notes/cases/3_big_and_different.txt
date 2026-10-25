@@ -1,4 +1,4 @@
-! as lexer --- this defines the render type
+! as ast --- this defines the render type
 :          --- anon root obj
 .status ok
   :payload
@@ -27,4 +27,570 @@
   .foo 2
 :obj:type .some_prop test
 trailing-implicit-obj:type           --- comment for obj name
- .key val
+  .key val
+
+
+render
+{
+  "nodeType": "ROOT",
+  "directives": [
+    {
+      "nodeType": "DIRECTIVE",
+      "value": "as ast",
+      "prefix": "!",
+      "position": {
+        "start": 0,
+        "end": 9
+      }
+    }
+  ],
+  "comments": [
+    {
+      "nodeType": "COMMENT",
+      "value": "--- this defines the render type",
+      "position": {
+        "start": 9,
+        "end": 41
+      }
+    }
+  ],
+  "children": [
+    {
+      "nodeType": "MEANING",
+      "key": "",
+      "valueType": "OBJECT",
+      "prefix": ":",
+      "position": {
+        "start": 43,
+        "end": 44
+      },
+      "comments": [
+        {
+          "nodeType": "COMMENT",
+          "value": "--- anon root obj",
+          "position": {
+            "start": 53,
+            "end": 70
+          }
+        }
+      ],
+      "children": [
+        {
+          "nodeType": "MEANING",
+          "key": "status",
+          "prefix": ".",
+          "position": {
+            "start": 71,
+            "end": 78
+          },
+          "valueType": "STRING",
+          "value": "ok"
+        },
+        {
+          "nodeType": "MEANING",
+          "key": "payload",
+          "valueType": "OBJECT",
+          "prefix": ":",
+          "position": {
+            "start": 84,
+            "end": 92
+          },
+          "directives": [
+            {
+              "nodeType": "DIRECTIVE",
+              "value": "elem-associated directive",
+              "prefix": "!",
+              "position": {
+                "start": 97,
+                "end": 123
+              }
+            }
+          ],
+          "children": [
+            {
+              "nodeType": "MEANING",
+              "key": "some_key",
+              "prefix": ".",
+              "position": {
+                "start": 128,
+                "end": 137
+              },
+              "valueType": "STRING",
+              "value": "some string value",
+              "comments": [
+                {
+                  "nodeType": "COMMENT",
+                  "value": "--- comment for field",
+                  "position": {
+                    "start": 161,
+                    "end": 182
+                  }
+                }
+              ]
+            },
+            {
+              "nodeType": "MEANING",
+              "key": "some_array_data",
+              "valueType": "ARRAY",
+              "prefix": "..",
+              "position": {
+                "start": 188,
+                "end": 205
+              },
+              "children": [
+                {
+                  "nodeType": "MEANING",
+                  "key": "object",
+                  "valueType": "OBJECT",
+                  "prefix": "",
+                  "position": {
+                    "start": 212,
+                    "end": 218
+                  },
+                  "children": [
+                    {
+                      "nodeType": "MEANING",
+                      "key": "id",
+                      "prefix": ".",
+                      "position": {
+                        "start": 219,
+                        "end": 222
+                      },
+                      "type": "uuid4",
+                      "valueType": "STRING",
+                      "value": "value"
+                    },
+                    {
+                      "nodeType": "MEANING",
+                      "key": "key_1",
+                      "prefix": ".",
+                      "position": {
+                        "start": 235,
+                        "end": 241
+                      },
+                      "valueType": "STRING",
+                      "value": "value"
+                    },
+                    {
+                      "nodeType": "MEANING",
+                      "key": "key_2",
+                      "prefix": ".",
+                      "position": {
+                        "start": 248,
+                        "end": 254
+                      },
+                      "valueType": "STRING",
+                      "value": "value"
+                    }
+                  ]
+                },
+                {
+                  "nodeType": "MEANING",
+                  "key": "object",
+                  "valueType": "OBJECT",
+                  "prefix": "",
+                  "position": {
+                    "start": 267,
+                    "end": 273
+                  },
+                  "children": [
+                    {
+                      "nodeType": "MEANING",
+                      "key": "id",
+                      "prefix": ".",
+                      "position": {
+                        "start": 274,
+                        "end": 277
+                      },
+                      "type": "uuid4",
+                      "valueType": "STRING",
+                      "value": "value"
+                    },
+                    {
+                      "nodeType": "MEANING",
+                      "key": "key_1",
+                      "prefix": ".",
+                      "position": {
+                        "start": 290,
+                        "end": 296
+                      },
+                      "valueType": "STRING",
+                      "value": "value"
+                    },
+                    {
+                      "nodeType": "MEANING",
+                      "key": "key_2",
+                      "prefix": ".",
+                      "position": {
+                        "start": 303,
+                        "end": 309
+                      },
+                      "valueType": "STRING",
+                      "value": "value"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "nodeType": "MEANING",
+              "key": "some_nested_obj",
+              "valueType": "OBJECT",
+              "prefix": ":",
+              "position": {
+                "start": 320,
+                "end": 336
+              },
+              "children": [
+                {
+                  "nodeType": "MEANING",
+                  "key": "key_1",
+                  "prefix": ".",
+                  "position": {
+                    "start": 337,
+                    "end": 343
+                  },
+                  "valueType": "STRING",
+                  "value": "val"
+                },
+                {
+                  "nodeType": "MEANING",
+                  "key": "key_2",
+                  "prefix": ".",
+                  "position": {
+                    "start": 348,
+                    "end": 354
+                  },
+                  "valueType": "STRING",
+                  "value": "val"
+                }
+              ]
+            },
+            {
+              "nodeType": "MEANING",
+              "key": "primitives",
+              "valueType": "ARRAY",
+              "prefix": "..",
+              "position": {
+                "start": 363,
+                "end": 375
+              },
+              "children": [
+                {
+                  "value": "one",
+                  "valueType": "STRING",
+                  "nodeType": "MEANING",
+                  "position": {
+                    "start": 376,
+                    "end": 401
+                  }
+                },
+                {
+                  "value": 2,
+                  "valueType": "NUMBER",
+                  "nodeType": "MEANING",
+                  "position": {
+                    "start": 376,
+                    "end": 401
+                  }
+                },
+                {
+                  "value": false,
+                  "valueType": "BOOL",
+                  "nodeType": "MEANING",
+                  "position": {
+                    "start": 376,
+                    "end": 401
+                  }
+                },
+                {
+                  "value": "no",
+                  "valueType": "STRING",
+                  "nodeType": "MEANING",
+                  "position": {
+                    "start": 376,
+                    "end": 401
+                  }
+                },
+                {
+                  "value": "\"no\"",
+                  "valueType": "STRING",
+                  "nodeType": "MEANING",
+                  "position": {
+                    "start": 376,
+                    "end": 401
+                  }
+                },
+                {
+                  "value": null,
+                  "valueType": "NULL",
+                  "nodeType": "MEANING",
+                  "position": {
+                    "start": 376,
+                    "end": 401
+                  }
+                }
+              ]
+            },
+            {
+              "nodeType": "MEANING",
+              "key": "vertical",
+              "valueType": "ARRAY",
+              "prefix": "..",
+              "position": {
+                "start": 406,
+                "end": 416
+              },
+              "children": [
+                {
+                  "value": "string-1",
+                  "valueType": "STRING",
+                  "nodeType": "MEANING",
+                  "position": {
+                    "start": 423,
+                    "end": 438
+                  }
+                },
+                {
+                  "nodeType": "MEANING",
+                  "key": "obj-in-array",
+                  "valueType": "OBJECT",
+                  "prefix": "",
+                  "position": {
+                    "start": 438,
+                    "end": 450
+                  },
+                  "children": [
+                    {
+                      "nodeType": "MEANING",
+                      "key": "prop",
+                      "prefix": ".",
+                      "position": {
+                        "start": 451,
+                        "end": 456
+                      },
+                      "valueType": "STRING",
+                      "value": "val"
+                    }
+                  ]
+                },
+                {
+                  "nodeType": "MEANING",
+                  "key": "mixed-arr-in-arr",
+                  "valueType": "ARRAY",
+                  "prefix": "..",
+                  "position": {
+                    "start": 467,
+                    "end": 485
+                  },
+                  "children": [
+                    {
+                      "value": "str-1",
+                      "valueType": "STRING",
+                      "nodeType": "MEANING",
+                      "position": {
+                        "start": 486,
+                        "end": 498
+                      }
+                    },
+                    {
+                      "value": "str-2",
+                      "valueType": "STRING",
+                      "nodeType": "MEANING",
+                      "position": {
+                        "start": 486,
+                        "end": 498
+                      },
+                      "comments": [
+                        {
+                          "nodeType": "COMMENT",
+                          "value": "--- comment for arr",
+                          "position": {
+                            "start": 498,
+                            "end": 517
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "value": "str-3",
+                      "valueType": "STRING",
+                      "nodeType": "MEANING",
+                      "position": {
+                        "start": 526,
+                        "end": 531
+                      },
+                      "comments": [
+                        {
+                          "nodeType": "COMMENT",
+                          "value": "--- comment for arr value",
+                          "position": {
+                            "start": 555,
+                            "end": 580
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "nodeType": "MEANING",
+                      "key": "obj",
+                      "valueType": "OBJECT",
+                      "prefix": ":",
+                      "position": {
+                        "start": 589,
+                        "end": 593
+                      },
+                      "children": [
+                        {
+                          "nodeType": "MEANING",
+                          "key": "key",
+                          "prefix": ".",
+                          "position": {
+                            "start": 594,
+                            "end": 598
+                          },
+                          "valueType": "STRING",
+                          "value": "val"
+                        }
+                      ]
+                    },
+                    {
+                      "nodeType": "MEANING",
+                      "key": "empty-arr",
+                      "valueType": "ARRAY",
+                      "prefix": "..",
+                      "position": {
+                        "start": 611,
+                        "end": 622
+                      }
+                    },
+                    {
+                      "value": "str-4",
+                      "valueType": "STRING",
+                      "nodeType": "MEANING",
+                      "position": {
+                        "start": 632,
+                        "end": 644
+                      }
+                    }
+                  ]
+                },
+                {
+                  "value": "string-2",
+                  "valueType": "STRING",
+                  "nodeType": "MEANING",
+                  "position": {
+                    "start": 644,
+                    "end": 657
+                  }
+                }
+              ]
+            },
+            {
+              "nodeType": "MEANING",
+              "key": "multiline_string",
+              "prefix": ".",
+              "position": {
+                "start": 657,
+                "end": 674
+              },
+              "valueType": "STRING",
+              "value": "f\no\n  o",
+              "comments": [
+                {
+                  "nodeType": "COMMENT",
+                  "value": "--- comment for quoted val",
+                  "position": {
+                    "start": 740,
+                    "end": 766
+                  }
+                }
+              ]
+            },
+            {
+              "nodeType": "MEANING",
+              "key": "key",
+              "prefix": ".",
+              "position": {
+                "start": 771,
+                "end": 775
+              },
+              "valueType": "STRING",
+              "value": "val"
+            }
+          ]
+        },
+        {
+          "nodeType": "MEANING",
+          "key": "foo",
+          "prefix": ".",
+          "position": {
+            "start": 782,
+            "end": 786
+          },
+          "valueType": "NUMBER",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "nodeType": "MEANING",
+      "key": "obj",
+      "valueType": "OBJECT",
+      "prefix": ":",
+      "position": {
+        "start": 789,
+        "end": 793
+      },
+      "type": "type",
+      "children": [
+        {
+          "nodeType": "MEANING",
+          "key": "some_prop",
+          "prefix": ".",
+          "position": {
+            "start": 799,
+            "end": 809
+          },
+          "valueType": "STRING",
+          "value": "test"
+        }
+      ]
+    },
+    {
+      "nodeType": "MEANING",
+      "key": "trailing-implicit-obj",
+      "valueType": "OBJECT",
+      "prefix": "",
+      "position": {
+        "start": 815,
+        "end": 836
+      },
+      "type": "type",
+      "value": "",
+      "comments": [
+        {
+          "nodeType": "COMMENT",
+          "value": "--- comment for obj name",
+          "position": {
+            "start": 852,
+            "end": 876
+          }
+        }
+      ],
+      "children": [
+        {
+          "nodeType": "MEANING",
+          "key": "key",
+          "prefix": ".",
+          "position": {
+            "start": 879,
+            "end": 883
+          },
+          "valueType": "STRING",
+          "value": "val"
+        }
+      ]
+    }
+  ]
+}

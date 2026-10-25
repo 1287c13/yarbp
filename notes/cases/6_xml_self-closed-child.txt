@@ -1,3 +1,9 @@
 ! as xml
 a
-  :a
+  a
+
+
+render
+<a>
+  <a></a>
+</a>

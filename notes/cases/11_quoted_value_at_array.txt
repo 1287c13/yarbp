@@ -1,4 +1,24 @@
 ! as json
-..a 'b c' '1' d "e'" f
+..a 'b c' '1' yes "yes" d "e'" f
  g h
- '2'
+ 2
+ 2 ---fixme "2" instead of 2 here is breakin in two different ways
+ no
+
+
+render
+ {
+  "a": [
+    "b c",
+    "1",
+    true,
+    "yes",
+    "d",
+    "e'",
+    "f",
+    "g h",
+    2,
+    2,
+    false
+  ]
+}

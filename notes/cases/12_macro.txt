@@ -1,6 +1,6 @@
 ! as xml
 ! use macro
-@a(xx)
+@a(xx) --? macro name works strange, rethink requirements
   b .c #(( d )).e
     ab = ac (( ad ))
     ..f
@@ -23,3 +23,36 @@ s
         y .z aa
       .d u
       .ad af
+
+
+render
+<k>
+  <r>
+    <xx>
+      <b c="#k.e">
+        <ab></ab>
+        <f>
+          <l m="n"></l>
+          <o p="q"></o>
+          <h i="j"></h>
+          <string>ag</string>
+        </f>
+      </b>
+    </xx>
+  </r>
+</k>
+<s>
+  <t>
+    <xx>
+      <b c="#u.e">
+        <ab></ab>
+        <f>
+          <v w="x"></v>
+          <y z="aa"></y>
+          <h i="j"></h>
+          <string>ag</string>
+        </f>
+      </b>
+    </xx>
+  </t>
+</s>
