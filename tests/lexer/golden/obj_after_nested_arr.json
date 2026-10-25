@@ -1,0 +1,328 @@
+{
+  "file": "obj_after_nested_arr.txt",
+  "flavor": "lexer",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "a",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 4,
+      "end": 4,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "..",
+      "start": 4,
+      "end": 6,
+      "error": ""
+    },
+    {
+      "type": "KEY(ARR)",
+      "value": "b",
+      "prefix": "..",
+      "start": 4,
+      "end": 7,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "c",
+      "start": 12,
+      "end": 18,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 18,
+      "end": 18,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "..",
+      "start": 18,
+      "end": 20,
+      "error": ""
+    },
+    {
+      "type": "KEY(ARR)",
+      "value": "d",
+      "prefix": "..",
+      "start": 18,
+      "end": 21,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "e",
+      "start": 28,
+      "end": 34,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 34,
+      "end": 34,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "f",
+      "start": 34,
+      "end": 38,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 38,
+      "end": 38,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 38,
+      "end": 38,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "g",
+      "start": 38,
+      "end": 39,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 40,
+      "end": 40,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 40,
+      "end": 40,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 40,
+      "end": 40,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "h",
+      "start": 40,
+      "end": 41,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 44,
+      "end": 44,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "..",
+      "start": 44,
+      "end": 46,
+      "error": ""
+    },
+    {
+      "type": "KEY(ARR)",
+      "value": "i",
+      "prefix": "..",
+      "start": 44,
+      "end": 47,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 48,
+      "end": 48,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 48,
+      "end": 48,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 48,
+      "end": 48,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "j",
+      "start": 48,
+      "end": 49,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 49,
+      "end": 49,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 49,
+      "end": 49,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "a",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 0,
+          "end": 1
+        },
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "b",
+            "valueType": "ARRAY",
+            "prefix": "..",
+            "position": {
+              "start": 4,
+              "end": 7
+            },
+            "children": [
+              {
+                "value": "c",
+                "valueType": "STRING",
+                "nodeType": "MEANING",
+                "position": {
+                  "start": 12,
+                  "end": 18
+                }
+              },
+              {
+                "nodeType": "MEANING",
+                "key": "d",
+                "valueType": "ARRAY",
+                "prefix": "..",
+                "position": {
+                  "start": 18,
+                  "end": 21
+                },
+                "children": [
+                  {
+                    "value": "e",
+                    "valueType": "STRING",
+                    "nodeType": "MEANING",
+                    "position": {
+                      "start": 28,
+                      "end": 34
+                    }
+                  }
+                ]
+              },
+              {
+                "value": "f",
+                "valueType": "STRING",
+                "nodeType": "MEANING",
+                "position": {
+                  "start": 34,
+                  "end": 38
+                }
+              }
+            ]
+          },
+          {
+            "nodeType": "MEANING",
+            "key": "g",
+            "valueType": "OBJECT",
+            "prefix": "",
+            "position": {
+              "start": 38,
+              "end": 39
+            }
+          }
+        ]
+      },
+      {
+        "nodeType": "MEANING",
+        "key": "h",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 40,
+          "end": 41
+        },
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "i",
+            "valueType": "ARRAY",
+            "prefix": "..",
+            "position": {
+              "start": 44,
+              "end": 47
+            }
+          }
+        ]
+      },
+      {
+        "nodeType": "MEANING",
+        "key": "j",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 48,
+          "end": 49
+        }
+      }
+    ]
+  },
+  "render": {
+    "kind": "lexer",
+    "text": "+-----------+-------+--------+-------+-----+-------+\n| type      | value | prefix | start | end | error |\n+-----------+-------+--------+-------+-----+-------+\n| START     |       |        | 0     | 0   |       |\n| SCOPE_IN  |       |        | 0     | 0   |       |\n| KEY(OBJ)  | a     |        | 0     | 1   |       |\n| SCOPE_IN  |       |        | 4     | 4   |       |\n| PREFIX    | ..    |        | 4     | 6   |       |\n| KEY(ARR)  | b     | ..     | 4     | 7   |       |\n| VALUE     | c     |        | 12    | 18  |       |\n| SCOPE_IN  |       |        | 18    | 18  |       |\n| PREFIX    | ..    |        | 18    | 20  |       |\n| KEY(ARR)  | d     | ..     | 18    | 21  |       |\n| VALUE     | e     |        | 28    | 34  |       |\n| SCOPE_OUT |       |        | 34    | 34  |       |\n| VALUE     | f     |        | 34    | 38  |       |\n| SCOPE_OUT |       |        | 38    | 38  |       |\n| SCOPE_IN  |       |        | 38    | 38  |       |\n| KEY(OBJ)  | g     |        | 38    | 39  |       |\n| SCOPE_OUT |       |        | 40    | 40  |       |\n| SCOPE_OUT |       |        | 40    | 40  |       |\n| SCOPE_IN  |       |        | 40    | 40  |       |\n| KEY(OBJ)  | h     |        | 40    | 41  |       |\n| SCOPE_IN  |       |        | 44    | 44  |       |\n| PREFIX    | ..    |        | 44    | 46  |       |\n| KEY(ARR)  | i     | ..     | 44    | 47  |       |\n| SCOPE_OUT |       |        | 48    | 48  |       |\n| SCOPE_OUT |       |        | 48    | 48  |       |\n| SCOPE_IN  |       |        | 48    | 48  |       |\n| KEY(OBJ)  | j     |        | 48    | 49  |       |\n| SCOPE_OUT |       |        | 49    | 49  |       |\n| END       |       |        | 49    | 49  |       |\n+-----------+-------+--------+-------+-----+-------+\n"
+  }
+}

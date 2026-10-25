@@ -1,0 +1,121 @@
+{
+  "file": "6_xml_self-closed-child.txt",
+  "flavor": "xml",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as xml",
+      "prefix": "!",
+      "start": 0,
+      "end": 8,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 9,
+      "end": 9,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "a",
+      "start": 9,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 13,
+      "end": 13,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "a",
+      "start": 13,
+      "end": 14,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 14,
+      "end": 14,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 14,
+      "end": 14,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 14,
+      "end": 14,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as xml",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 8
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "a",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 9,
+          "end": 10
+        },
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "a",
+            "valueType": "OBJECT",
+            "prefix": "",
+            "position": {
+              "start": 13,
+              "end": 14
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "render": {
+    "kind": "xml",
+    "text": "<a>\n  <a></a>\n</a>"
+  }
+}

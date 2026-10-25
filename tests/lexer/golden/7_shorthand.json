@@ -1,0 +1,210 @@
+{
+  "file": "7_shorthand.txt",
+  "flavor": "lexer",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as lexer",
+      "prefix": "!",
+      "start": 0,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 11,
+      "end": 11,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "a",
+      "start": 11,
+      "end": 12,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "= b",
+      "start": 14,
+      "end": 17,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 18,
+      "end": 19,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "c",
+      "prefix": ".",
+      "start": 18,
+      "end": 20,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "",
+      "start": 20,
+      "end": 20,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 21,
+      "end": 21,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 21,
+      "end": 21,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "d",
+      "start": 21,
+      "end": 22,
+      "error": ""
+    },
+    {
+      "type": "TYPE",
+      "value": "e",
+      "prefix": "",
+      "start": 23,
+      "end": 24,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "= f",
+      "start": 26,
+      "end": 29,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 29,
+      "end": 29,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 29,
+      "end": 29,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "g",
+      "start": 29,
+      "end": 30,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 30,
+      "end": 30,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 30,
+      "end": 30,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as lexer",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 10
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "a",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 11,
+          "end": 12
+        },
+        "value": "b",
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "c",
+            "prefix": ".",
+            "position": {
+              "start": 18,
+              "end": 20
+            },
+            "valueType": "STRING",
+            "value": ""
+          }
+        ]
+      },
+      {
+        "nodeType": "MEANING",
+        "key": "d",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 21,
+          "end": 22
+        },
+        "type": "e",
+        "value": "f"
+      },
+      {
+        "nodeType": "MEANING",
+        "key": "g",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 29,
+          "end": 30
+        }
+      }
+    ]
+  },
+  "render": {
+    "kind": "lexer",
+    "text": "+-----------+----------+--------+-------+-----+-------+\n| type      | value    | prefix | start | end | error |\n+-----------+----------+--------+-------+-----+-------+\n| START     |          |        | 0     | 0   |       |\n| PREFIX    | !        |        | 0     | 1   |       |\n| DIRECTIVE | as lexer | !      | 0     | 10  |       |\n| SCOPE_IN  |          |        | 11    | 11  |       |\n| KEY(OBJ)  | a        |        | 11    | 12  |       |\n| VALUE     | = b      |        | 14    | 17  |       |\n| PREFIX    | .        |        | 18    | 19  |       |\n| KEY       | c        | .      | 18    | 20  |       |\n| VALUE     |          |        | 20    | 20  |       |\n| SCOPE_OUT |          |        | 21    | 21  |       |\n| SCOPE_IN  |          |        | 21    | 21  |       |\n| KEY(OBJ)  | d        |        | 21    | 22  |       |\n| TYPE      | e        |        | 23    | 24  |       |\n| VALUE     | = f      |        | 26    | 29  |       |\n| SCOPE_OUT |          |        | 29    | 29  |       |\n| SCOPE_IN  |          |        | 29    | 29  |       |\n| KEY(OBJ)  | g        |        | 29    | 30  |       |\n| SCOPE_OUT |          |        | 30    | 30  |       |\n| END       |          |        | 30    | 30  |       |\n+-----------+----------+--------+-------+-----+-------+\n"
+  }
+}

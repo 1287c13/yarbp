@@ -1,0 +1,19 @@
+{
+  "files": [
+    "1_simple_json-like_structure.txt",
+    "2_comment_types.txt",
+    "3_big_and_different.txt",
+    "4_inline_anonimous_object.txt",
+    "5_empty_fields.txt",
+    "6_xml_self-closed-child.txt",
+    "7_shorthand.txt",
+    "9_ui_order_form.txt",
+    "10_comment_after_non-primitive_type.txt",
+    "11_quoted_value_at_array.txt",
+    "12_macro.txt",
+    "13_spaces_before_value_highlight.txt",
+    "14_prop_after_sugar.txt",
+    "15_objects_hierarchy.txt",
+    "obj_after_nested_arr.txt"
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "file": "14_prop_after_sugar.txt",
+  "flavor": "lexer",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as lexer",
+      "prefix": "!",
+      "start": 0,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 11,
+      "end": 11,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "a",
+      "start": 11,
+      "end": 12,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "= b",
+      "start": 13,
+      "end": 16,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 17,
+      "end": 18,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "c",
+      "prefix": ".",
+      "start": 17,
+      "end": 19,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "d",
+      "start": 20,
+      "end": 21,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 21,
+      "end": 21,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 21,
+      "end": 21,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as lexer",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 10
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "a",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 11,
+          "end": 12
+        },
+        "value": "b",
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "c",
+            "prefix": ".",
+            "position": {
+              "start": 17,
+              "end": 19
+            },
+            "valueType": "STRING",
+            "value": "d"
+          }
+        ]
+      }
+    ]
+  },
+  "render": {
+    "kind": "lexer",
+    "text": "+-----------+----------+--------+-------+-----+-------+\n| type      | value    | prefix | start | end | error |\n+-----------+----------+--------+-------+-----+-------+\n| START     |          |        | 0     | 0   |       |\n| PREFIX    | !        |        | 0     | 1   |       |\n| DIRECTIVE | as lexer | !      | 0     | 10  |       |\n| SCOPE_IN  |          |        | 11    | 11  |       |\n| KEY(OBJ)  | a        |        | 11    | 12  |       |\n| VALUE     | = b      |        | 13    | 16  |       |\n| PREFIX    | .        |        | 17    | 18  |       |\n| KEY       | c        | .      | 17    | 19  |       |\n| VALUE     | d        |        | 20    | 21  |       |\n| SCOPE_OUT |          |        | 21    | 21  |       |\n| END       |          |        | 21    | 21  |       |\n+-----------+----------+--------+-------+-----+-------+\n"
+  }
+}

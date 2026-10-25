@@ -1,0 +1,465 @@
+{
+  "file": "2_comment_types.txt",
+  "flavor": "ast",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as ast",
+      "prefix": "!",
+      "start": 0,
+      "end": 11,
+      "error": ""
+    },
+    {
+      "type": "COMMENT",
+      "value": "--- k",
+      "start": 11,
+      "end": 16,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 17,
+      "end": 17,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ":",
+      "start": 17,
+      "end": 18,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "",
+      "prefix": ":",
+      "start": 18,
+      "end": 19,
+      "error": ""
+    },
+    {
+      "type": "DELETED",
+      "value": "--/ l",
+      "start": 28,
+      "end": 33,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 36,
+      "end": 37,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "a",
+      "prefix": ".",
+      "start": 36,
+      "end": 38,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "b",
+      "start": 39,
+      "end": 45,
+      "error": ""
+    },
+    {
+      "type": "COMMENT",
+      "value": "--- m",
+      "start": 45,
+      "end": 50,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 53,
+      "end": 53,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ":",
+      "start": 53,
+      "end": 54,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "c",
+      "prefix": ":",
+      "start": 53,
+      "end": 55,
+      "error": ""
+    },
+    {
+      "type": "TYPE",
+      "value": "d",
+      "prefix": "",
+      "start": 55,
+      "end": 57,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "",
+      "start": 61,
+      "end": 61,
+      "error": ""
+    },
+    {
+      "type": "TODO",
+      "value": "--? n",
+      "start": 62,
+      "end": 67,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 68,
+      "end": 68,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 68,
+      "end": 68,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 68,
+      "end": 68,
+      "error": ""
+    },
+    {
+      "type": "COMMENT",
+      "value": "--- p",
+      "start": 68,
+      "end": 73,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 74,
+      "end": 74,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 74,
+      "end": 74,
+      "error": ""
+    },
+    {
+      "type": "TODO",
+      "value": "--? q",
+      "start": 74,
+      "end": 79,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 84,
+      "end": 85,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "e",
+      "prefix": ".",
+      "start": 84,
+      "end": 86,
+      "error": ""
+    },
+    {
+      "type": "TYPE",
+      "value": "f",
+      "prefix": "",
+      "start": 87,
+      "end": 88,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "g",
+      "start": 89,
+      "end": 91,
+      "error": ""
+    },
+    {
+      "type": "IMPORTANT",
+      "value": "--! r",
+      "start": 91,
+      "end": 96,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 101,
+      "end": 101,
+      "error": ""
+    },
+    {
+      "type": "DELETED",
+      "value": "--/.s",
+      "start": 101,
+      "end": 106,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 109,
+      "end": 109,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 109,
+      "end": 110,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "i",
+      "prefix": ".",
+      "start": 109,
+      "end": 111,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "g",
+      "start": 112,
+      "end": 118,
+      "error": ""
+    },
+    {
+      "type": "TODO",
+      "value": "--? t",
+      "start": 118,
+      "end": 123,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 123,
+      "end": 123,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 123,
+      "end": 123,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as ast",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 11
+        }
+      }
+    ],
+    "comments": [
+      {
+        "nodeType": "COMMENT",
+        "value": "--- k",
+        "position": {
+          "start": 11,
+          "end": 16
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "",
+        "valueType": "OBJECT",
+        "prefix": ":",
+        "position": {
+          "start": 18,
+          "end": 19
+        },
+        "comments": [
+          {
+            "nodeType": "DELETED",
+            "value": "--/ l",
+            "position": {
+              "start": 28,
+              "end": 33
+            }
+          }
+        ],
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "a",
+            "prefix": ".",
+            "position": {
+              "start": 36,
+              "end": 38
+            },
+            "valueType": "STRING",
+            "value": "b",
+            "comments": [
+              {
+                "nodeType": "COMMENT",
+                "value": "--- m",
+                "position": {
+                  "start": 45,
+                  "end": 50
+                }
+              }
+            ]
+          },
+          {
+            "nodeType": "MEANING",
+            "key": "c",
+            "valueType": "OBJECT",
+            "prefix": ":",
+            "position": {
+              "start": 53,
+              "end": 55
+            },
+            "type": "d",
+            "value": "",
+            "comments": [
+              {
+                "nodeType": "TODO",
+                "value": "--? n",
+                "position": {
+                  "start": 62,
+                  "end": 67
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "comments": [
+          {
+            "nodeType": "COMMENT",
+            "value": "--- p",
+            "position": {
+              "start": 68,
+              "end": 73
+            }
+          }
+        ]
+      },
+      {
+        "comments": [
+          {
+            "nodeType": "TODO",
+            "value": "--? q",
+            "position": {
+              "start": 74,
+              "end": 79
+            }
+          }
+        ],
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "e",
+            "prefix": ".",
+            "position": {
+              "start": 84,
+              "end": 86
+            },
+            "type": "f",
+            "valueType": "STRING",
+            "value": "g",
+            "comments": [
+              {
+                "nodeType": "IMPORTANT",
+                "value": "--! r",
+                "position": {
+                  "start": 91,
+                  "end": 96
+                }
+              }
+            ]
+          },
+          {
+            "comments": [
+              {
+                "nodeType": "DELETED",
+                "value": "--/.s",
+                "position": {
+                  "start": 101,
+                  "end": 106
+                }
+              }
+            ]
+          },
+          {
+            "nodeType": "MEANING",
+            "key": "i",
+            "prefix": ".",
+            "position": {
+              "start": 109,
+              "end": 111
+            },
+            "valueType": "STRING",
+            "value": "g",
+            "comments": [
+              {
+                "nodeType": "TODO",
+                "value": "--? t",
+                "position": {
+                  "start": 118,
+                  "end": 123
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "render": {
+    "kind": "ast",
+    "text": "{\n  \"nodeType\": \"ROOT\",\n  \"directives\": [\n    {\n      \"nodeType\": \"DIRECTIVE\",\n      \"value\": \"as ast\",\n      \"prefix\": \"!\",\n      \"position\": {\n        \"start\": 0,\n        \"end\": 11\n      }\n    }\n  ],\n  \"comments\": [\n    {\n      \"nodeType\": \"COMMENT\",\n      \"value\": \"--- k\",\n      \"position\": {\n        \"start\": 11,\n        \"end\": 16\n      }\n    }\n  ],\n  \"children\": [\n    {\n      \"nodeType\": \"MEANING\",\n      \"key\": \"\",\n      \"valueType\": \"OBJECT\",\n      \"prefix\": \":\",\n      \"position\": {\n        \"start\": 18,\n        \"end\": 19\n      },\n      \"comments\": [\n        {\n          \"nodeType\": \"DELETED\",\n          \"value\": \"--/ l\",\n          \"position\": {\n            \"start\": 28,\n            \"end\": 33\n          }\n        }\n      ],\n      \"children\": [\n        {\n          \"nodeType\": \"MEANING\",\n          \"key\": \"a\",\n          \"prefix\": \".\",\n          \"position\": {\n            \"start\": 36,\n            \"end\": 38\n          },\n          \"valueType\": \"STRING\",\n          \"value\": \"b\",\n          \"comments\": [\n            {\n              \"nodeType\": \"COMMENT\",\n              \"value\": \"--- m\",\n              \"position\": {\n                \"start\": 45,\n                \"end\": 50\n              }\n            }\n          ]\n        },\n        {\n          \"nodeType\": \"MEANING\",\n          \"key\": \"c\",\n          \"valueType\": \"OBJECT\",\n          \"prefix\": \":\",\n          \"position\": {\n            \"start\": 53,\n            \"end\": 55\n          },\n          \"type\": \"d\",\n          \"value\": \"\",\n          \"comments\": [\n            {\n              \"nodeType\": \"TODO\",\n              \"value\": \"--? n\",\n              \"position\": {\n                \"start\": 62,\n                \"end\": 67\n              }\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"comments\": [\n        {\n          \"nodeType\": \"COMMENT\",\n          \"value\": \"--- p\",\n          \"position\": {\n            \"start\": 68,\n            \"end\": 73\n          }\n        }\n      ]\n    },\n    {\n      \"comments\": [\n        {\n          \"nodeType\": \"TODO\",\n          \"value\": \"--? q\",\n          \"position\": {\n            \"start\": 74,\n            \"end\": 79\n          }\n        }\n      ],\n      \"children\": [\n        {\n          \"nodeType\": \"MEANING\",\n          \"key\": \"e\",\n          \"prefix\": \".\",\n          \"position\": {\n            \"start\": 84,\n            \"end\": 86\n          },\n          \"type\": \"f\",\n          \"valueType\": \"STRING\",\n          \"value\": \"g\",\n          \"comments\": [\n            {\n              \"nodeType\": \"IMPORTANT\",\n              \"value\": \"--! r\",\n              \"position\": {\n                \"start\": 91,\n                \"end\": 96\n              }\n            }\n          ]\n        },\n        {\n          \"comments\": [\n            {\n              \"nodeType\": \"DELETED\",\n              \"value\": \"--/.s\",\n              \"position\": {\n                \"start\": 101,\n                \"end\": 106\n              }\n            }\n          ]\n        },\n        {\n          \"nodeType\": \"MEANING\",\n          \"key\": \"i\",\n          \"prefix\": \".\",\n          \"position\": {\n            \"start\": 109,\n            \"end\": 111\n          },\n          \"valueType\": \"STRING\",\n          \"value\": \"g\",\n          \"comments\": [\n            {\n              \"nodeType\": \"TODO\",\n              \"value\": \"--? t\",\n              \"position\": {\n                \"start\": 118,\n                \"end\": 123\n              }\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+  }
+}

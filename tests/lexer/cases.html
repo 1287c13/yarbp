@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>lexer cases</title>
+  <style>
+    body { margin: 0; padding: 16px; background: #ffffff; color: #111111;
+      font: 12px/1.5 'JetBrains Mono', Consolas, monospace; }
+    #result { margin: 0; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<pre id="result">running...</pre>
+
+<script type="module">
+  import { YarbpLexer, TokenTypes } from '../../src/js/classes/YarbpLexer.js';
+  import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
+  import { YarbpJSONConverter } from '../../src/js/classes/ast-converters/JSONConvertor.js';
+  import { YarbpXMLConverter } from '../../src/js/classes/ast-converters/XMLConvertor.js';
+  import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
+
+  const UPDATE = new URLSearchParams(location.search).has('update');
+  const resultBox = document.getElementById('result');
+
+  const errorText = (error) => String(error?.message || error);
+
+  const short = (value) => {
+    let text;
+    try { text = JSON.stringify(value); } catch (e) { text = String(value); }
+    if (text === undefined) text = String(value);
+    return text.length > 140 ? text.slice(0, 137) + '...' : text;
+  };
+
+  /** Стабильное представление: порядок ключей не влияет на сравнение. */
+  const stable = (value) => {
+    if (Array.isArray(value)) return value.map(stable);
+    if (value && typeof value === 'object') {
+      const sorted = {};
+      Object.keys(value).sort().forEach(key => {
+        const item = stable(value[key]);
+        if (item !== undefined) sorted[key] = item;
+      });
+      return sorted;
+    }
+    return value;
+  };
+
+  const stableStringify = (value) => JSON.stringify(stable(value));
+
+  function firstDifference(expected, actual, path = '') {
+    if (Object.is(expected, actual)) return '';
+
+    if (typeof expected !== typeof actual || expected === null || actual === null) {
+      return `${path || '<root>'}: ожидалось ${short(expected)}, получено ${short(actual)}`;
+    }
+
+    if (typeof expected !== 'object') {
+      return `${path || '<root>'}: ожидалось ${short(expected)}, получено ${short(actual)}`;
+    }
+
+    const expectedIsArray = Array.isArray(expected);
+    const actualIsArray = Array.isArray(actual);
+    if (expectedIsArray !== actualIsArray) {
+      return `${path || '<root>'}: ожидался ${expectedIsArray ? 'массив' : 'объект'}`;
+    }
+
+    if (expectedIsArray) {
+      if (expected.length !== actual.length) {
+        return `${path}.length: ожидалось ${expected.length}, получено ${actual.length}`;
+      }
+      for (let i = 0; i < expected.length; i++) {
+        const difference = firstDifference(expected[i], actual[i], `${path}[${i}]`);
+        if (difference) return difference;
+      }
+      return '';
+    }
+
+    const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+    for (const key of keys) {
+      const keyPath = path ? `${path}.${key}` : key;
+      const hasExpected = key in expected && expected[key] !== undefined;
+      const hasActual = key in actual && actual[key] !== undefined;
+
+      if (!hasExpected && !hasActual) continue;
+      if (!hasExpected) return `${keyPath}: лишнее поле`;
+      if (!hasActual) return `${keyPath}: поле пропало`;
+
+      const difference = firstDifference(expected[key], actual[key], keyPath);
+      if (difference) return difference;
+    }
+
+    return '';
+  }
+
+  async function fetchText(url) {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${url}`);
+    return (await response.text())
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n?/g, '\n');
+  }
+
+  /**
+   * Кейс — это разметка до строки `render` или до первой таблицы.
+   * Таблица в кейсах 4/7/9/10/13/14/15/obj_after_nested_arr — это
+   * человекочитаемый рендер, в тестах он не используется: снимки
+   * фиксируют текущий вывод, а не желаемый.
+   */
+  function splitCase(raw) {
+    const lines = raw.split('\n');
+    let separator = lines.findIndex(line => {
+      const trimmed = line.trim();
+      return /^render:?$/i.test(trimmed) || /^\+[-+]+\+$/.test(trimmed);
+    });
+
+    if (separator < 0) separator = lines.length;
+
+    const inputLines = lines.slice(0, separator);
+    while (inputLines.length && inputLines[inputLines.length - 1].trim() === '') {
+      inputLines.pop();
+    }
+
+    return { input: inputLines.join('\n') };
+  }
+
+  function detectFlavor(tokens) {
+    const directive = tokens.find(token => token.type === TokenTypes.DIRECTIVE);
+    // Как в app.js: без директивы редактор показывает lexer.
+    if (!directive) return 'lexer';
+
+    const value = String(directive.value || '').trim();
+    const match = value.match(/^(?:as|как)\s+(.+)$/i);
+    const name = (match ? match[1] : value)
+      .replace(/[-_ ()]/g, '')
+      .toLowerCase();
+
+    const aliases = {
+      lexer: 'lexer',
+      'лексер': 'lexer',
+      ast: 'ast',
+      'аст': 'ast',
+      json: 'json',
+      'джейсон': 'json',
+      xml: 'xml',
+      'хмл': 'xml',
+      proto: 'proto',
+      protobuf: 'proto'
+    };
+
+    return aliases[name] || name;
+  }
+
+  function buildRender(flavor, lexer, ast, astError) {
+    if (!flavor) return null;
+
+    if (flavor === 'lexer') {
+      try {
+        return { kind: 'lexer', text: lexer.getPrettyView() };
+      } catch (error) {
+        return { kind: 'lexer', error: errorText(error) };
+      }
+    }
+
+    if (flavor === 'ast') {
+      if (astError) return { kind: 'ast', error: astError };
+      try {
+        return { kind: 'ast', text: JSON.stringify(ast, null, 2) };
+      } catch (error) {
+        return { kind: 'ast', error: errorText(error) };
+      }
+    }
+
+    if (flavor === 'json' || flavor === 'xml' || flavor === 'proto') {
+      if (astError) return { kind: flavor, error: astError };
+
+      try {
+        const converter = flavor === 'json'
+          ? new YarbpJSONConverter(ast)
+          : flavor === 'xml'
+            ? new YarbpXMLConverter(ast)
+            : new YarbpProtoConverter(ast);
+
+        const output = converter.convert();
+        const text = flavor === 'json'
+          ? JSON.stringify(output, null, 2)
+          : String(output);
+
+        return { kind: flavor, text };
+      } catch (error) {
+        return { kind: flavor, error: errorText(error) };
+      }
+    }
+
+    return { kind: flavor, skipped: true };
+  }
+
+  /**
+   * Снимок текущего поведения: токены, AST и рендер выбранного флейвора.
+   * Ошибки не проглатываются, а тоже попадают в снимок.
+   */
+  function buildSnapshot(file, input) {
+    const lexer = new YarbpLexer();
+    let tokenizeError = null;
+
+    try {
+      lexer.setInitialState(input);
+      lexer.tokenize();
+    } catch (error) {
+      tokenizeError = errorText(error);
+    }
+
+    const tokens = Array.isArray(lexer.tokens)
+      ? lexer.tokens.map(token => ({
+          type: token.type,
+          value: token.value,
+          prefix: token.prefix,
+          start: token.start,
+          end: token.end,
+          error: token.error
+        }))
+      : [];
+
+    const flavor = detectFlavor(tokens);
+    let ast = null;
+    let astError = tokenizeError ? `tokenize: ${tokenizeError}` : null;
+
+    if (!tokenizeError) {
+      try {
+        ast = new YarbpParser(lexer).getAST();
+        if (ast === undefined) ast = null;
+      } catch (error) {
+        astError = errorText(error);
+      }
+    }
+
+    return {
+      file,
+      flavor,
+      tokenizeError,
+      tokens,
+      astError,
+      ast,
+      render: buildRender(flavor, lexer, ast, astError)
+    };
+  }
+
+  async function loadCases() {
+    const manifest = JSON.parse(await fetchText('cases.json'));
+    const cases = [];
+
+    for (const file of manifest.files) {
+      const raw = await fetchText(`../../notes/cases/${encodeURIComponent(file)}`);
+      cases.push({
+        file,
+        id: file.replace(/\.txt$/, ''),
+        input: splitCase(raw).input
+      });
+    }
+
+    return cases;
+  }
+
+  async function run() {
+    const cases = await loadCases();
+    const lines = [];
+    const snapshots = {};
+
+    for (const item of cases) {
+      try {
+        const actual = buildSnapshot(item.file, item.input);
+
+        if (UPDATE) {
+          snapshots[item.id] = actual;
+          lines.push(`UPDATE ${item.id}`);
+          continue;
+        }
+
+        const expected = JSON.parse(await fetchText(`golden/${item.id}.json`));
+        if (stableStringify(expected) === stableStringify(actual)) {
+          lines.push(`OK   ${item.id}`);
+        } else {
+          lines.push(`FAIL ${item.id} — ${firstDifference(expected, actual)}`);
+        }
+      } catch (error) {
+        lines.push(`FAIL ${item.id} — ${errorText(error)}`);
+      }
+    }
+
+    resultBox.textContent = lines.join('\n');
+
+    if (UPDATE) {
+      const golden = document.createElement('pre');
+      golden.id = 'golden';
+      golden.hidden = true;
+      golden.textContent = JSON.stringify(snapshots, null, 2);
+      document.body.appendChild(golden);
+      document.title = lines.some(line => line.startsWith('FAIL'))
+        ? 'LEXER UPDATE FAIL'
+        : 'LEXER UPDATE';
+      return;
+    }
+
+    document.title = lines.some(line => line.startsWith('FAIL'))
+      ? 'LEXER FAIL'
+      : 'LEXER PASS';
+  }
+
+  try {
+    await run();
+  } catch (error) {
+    resultBox.textContent = `FAIL manifest — ${errorText(error)}`;
+    document.title = UPDATE ? 'LEXER UPDATE ERROR' : 'LEXER ERROR';
+  }
+</script>
+</body>
+</html>

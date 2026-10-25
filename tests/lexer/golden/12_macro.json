@@ -1,0 +1,1052 @@
+{
+  "file": "12_macro.txt",
+  "flavor": "xml",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as xml",
+      "prefix": "!",
+      "start": 0,
+      "end": 8,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 9,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "use macro",
+      "prefix": "!",
+      "start": 9,
+      "end": 20,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 21,
+      "end": 21,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "@a(xx)",
+      "start": 21,
+      "end": 27,
+      "error": ""
+    },
+    {
+      "type": "TODO",
+      "value": "--? macro name works strange, rethink requirements",
+      "start": 28,
+      "end": 78,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 81,
+      "end": 81,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "b",
+      "start": 81,
+      "end": 82,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 83,
+      "end": 84,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "c",
+      "prefix": ".",
+      "start": 83,
+      "end": 85,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "#(( d )).e",
+      "start": 86,
+      "end": 96,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 101,
+      "end": 101,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "ab",
+      "start": 101,
+      "end": 103,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "= ac (( ad ))",
+      "start": 105,
+      "end": 118,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 122,
+      "end": 122,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 122,
+      "end": 122,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "..",
+      "start": 122,
+      "end": 124,
+      "error": ""
+    },
+    {
+      "type": "KEY(ARR)",
+      "value": "f",
+      "prefix": "..",
+      "start": 122,
+      "end": 125,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "(( g ))",
+      "start": 126,
+      "end": 139,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 146,
+      "end": 146,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "h",
+      "start": 146,
+      "end": 147,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 148,
+      "end": 149,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "i",
+      "prefix": ".",
+      "start": 148,
+      "end": 150,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "j",
+      "start": 151,
+      "end": 152,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 159,
+      "end": 159,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "ag",
+      "start": 159,
+      "end": 162,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 162,
+      "end": 162,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 162,
+      "end": 162,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 162,
+      "end": 162,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 162,
+      "end": 162,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "k",
+      "start": 162,
+      "end": 163,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 166,
+      "end": 166,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "r",
+      "start": 166,
+      "end": 167,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 172,
+      "end": 172,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "a",
+      "start": 172,
+      "end": 173,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 180,
+      "end": 181,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "ad",
+      "prefix": ".",
+      "start": 180,
+      "end": 183,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "ae",
+      "start": 184,
+      "end": 186,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 193,
+      "end": 194,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "d",
+      "prefix": ".",
+      "start": 193,
+      "end": 195,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "k",
+      "start": 196,
+      "end": 197,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 204,
+      "end": 204,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "..",
+      "start": 204,
+      "end": 206,
+      "error": ""
+    },
+    {
+      "type": "KEY(ARR)",
+      "value": "g",
+      "prefix": "..",
+      "start": 204,
+      "end": 207,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 216,
+      "end": 216,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "l",
+      "start": 216,
+      "end": 217,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 218,
+      "end": 219,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "m",
+      "prefix": ".",
+      "start": 218,
+      "end": 220,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "n",
+      "start": 221,
+      "end": 222,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 231,
+      "end": 231,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 231,
+      "end": 231,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "o",
+      "start": 231,
+      "end": 232,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 233,
+      "end": 234,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "p",
+      "prefix": ".",
+      "start": 233,
+      "end": 235,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "q",
+      "start": 236,
+      "end": 237,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 238,
+      "end": 238,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 238,
+      "end": 238,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 238,
+      "end": 238,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 238,
+      "end": 238,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 238,
+      "end": 238,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 238,
+      "end": 238,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "s",
+      "start": 238,
+      "end": 239,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 242,
+      "end": 242,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "t",
+      "start": 242,
+      "end": 243,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 248,
+      "end": 248,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "a",
+      "start": 248,
+      "end": 249,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 256,
+      "end": 256,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "..",
+      "start": 256,
+      "end": 258,
+      "error": ""
+    },
+    {
+      "type": "KEY(ARR)",
+      "value": "g",
+      "prefix": "..",
+      "start": 256,
+      "end": 259,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 268,
+      "end": 268,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "v",
+      "start": 268,
+      "end": 269,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 270,
+      "end": 271,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "w",
+      "prefix": ".",
+      "start": 270,
+      "end": 272,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "x",
+      "start": 273,
+      "end": 274,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 283,
+      "end": 283,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 283,
+      "end": 283,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "y",
+      "start": 283,
+      "end": 284,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 285,
+      "end": 286,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "z",
+      "prefix": ".",
+      "start": 285,
+      "end": 287,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "aa",
+      "start": 288,
+      "end": 290,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 297,
+      "end": 297,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 297,
+      "end": 297,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 297,
+      "end": 298,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "d",
+      "prefix": ".",
+      "start": 297,
+      "end": 299,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "u",
+      "start": 300,
+      "end": 301,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 308,
+      "end": 309,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "ad",
+      "prefix": ".",
+      "start": 308,
+      "end": 311,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "af",
+      "start": 312,
+      "end": 314,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 314,
+      "end": 314,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 314,
+      "end": 314,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 314,
+      "end": 314,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 314,
+      "end": 314,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as xml",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 8
+        }
+      },
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "use macro",
+        "prefix": "!",
+        "position": {
+          "start": 9,
+          "end": 20
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "k",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 162,
+          "end": 163
+        },
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "r",
+            "valueType": "OBJECT",
+            "prefix": "",
+            "position": {
+              "start": 166,
+              "end": 167
+            },
+            "children": [
+              {
+                "nodeType": "MEANING",
+                "key": "xx",
+                "valueType": "OBJECT",
+                "prefix": "",
+                "position": {
+                  "start": 21,
+                  "end": 27
+                },
+                "comments": [
+                  {
+                    "nodeType": "TODO",
+                    "value": "--? macro name works strange, rethink requirements",
+                    "position": {
+                      "start": 28,
+                      "end": 78
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "nodeType": "MEANING",
+                    "key": "b",
+                    "valueType": "OBJECT",
+                    "prefix": "",
+                    "position": {
+                      "start": 81,
+                      "end": 82
+                    },
+                    "children": [
+                      {
+                        "nodeType": "MEANING",
+                        "key": "c",
+                        "prefix": ".",
+                        "position": {
+                          "start": 83,
+                          "end": 85
+                        },
+                        "valueType": "STRING",
+                        "value": "#k.e"
+                      },
+                      {
+                        "nodeType": "MEANING",
+                        "key": "ab",
+                        "valueType": "OBJECT",
+                        "prefix": "",
+                        "position": {
+                          "start": 101,
+                          "end": 103
+                        },
+                        "value": "ac (( ad ))"
+                      },
+                      {
+                        "nodeType": "MEANING",
+                        "key": "f",
+                        "valueType": "ARRAY",
+                        "prefix": "..",
+                        "position": {
+                          "start": 122,
+                          "end": 125
+                        },
+                        "children": [
+                          {
+                            "nodeType": "MEANING",
+                            "key": "l",
+                            "valueType": "OBJECT",
+                            "prefix": "",
+                            "position": {
+                              "start": 216,
+                              "end": 217
+                            },
+                            "children": [
+                              {
+                                "nodeType": "MEANING",
+                                "key": "m",
+                                "prefix": ".",
+                                "position": {
+                                  "start": 218,
+                                  "end": 220
+                                },
+                                "valueType": "STRING",
+                                "value": "n"
+                              }
+                            ]
+                          },
+                          {
+                            "nodeType": "MEANING",
+                            "key": "o",
+                            "valueType": "OBJECT",
+                            "prefix": "",
+                            "position": {
+                              "start": 231,
+                              "end": 232
+                            },
+                            "children": [
+                              {
+                                "nodeType": "MEANING",
+                                "key": "p",
+                                "prefix": ".",
+                                "position": {
+                                  "start": 233,
+                                  "end": 235
+                                },
+                                "valueType": "STRING",
+                                "value": "q"
+                              }
+                            ]
+                          },
+                          {
+                            "nodeType": "MEANING",
+                            "key": "h",
+                            "valueType": "OBJECT",
+                            "prefix": "",
+                            "position": {
+                              "start": 146,
+                              "end": 147
+                            },
+                            "children": [
+                              {
+                                "nodeType": "MEANING",
+                                "key": "i",
+                                "prefix": ".",
+                                "position": {
+                                  "start": 148,
+                                  "end": 150
+                                },
+                                "valueType": "STRING",
+                                "value": "j"
+                              }
+                            ]
+                          },
+                          {
+                            "value": "ag",
+                            "valueType": "STRING",
+                            "nodeType": "MEANING",
+                            "position": {
+                              "start": 159,
+                              "end": 162
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "__macroExpanded": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "nodeType": "MEANING",
+        "key": "s",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 238,
+          "end": 239
+        },
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "t",
+            "valueType": "OBJECT",
+            "prefix": "",
+            "position": {
+              "start": 242,
+              "end": 243
+            },
+            "children": [
+              {
+                "nodeType": "MEANING",
+                "key": "xx",
+                "valueType": "OBJECT",
+                "prefix": "",
+                "position": {
+                  "start": 21,
+                  "end": 27
+                },
+                "comments": [
+                  {
+                    "nodeType": "TODO",
+                    "value": "--? macro name works strange, rethink requirements",
+                    "position": {
+                      "start": 28,
+                      "end": 78
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "nodeType": "MEANING",
+                    "key": "b",
+                    "valueType": "OBJECT",
+                    "prefix": "",
+                    "position": {
+                      "start": 81,
+                      "end": 82
+                    },
+                    "children": [
+                      {
+                        "nodeType": "MEANING",
+                        "key": "c",
+                        "prefix": ".",
+                        "position": {
+                          "start": 83,
+                          "end": 85
+                        },
+                        "valueType": "STRING",
+                        "value": "#u.e"
+                      },
+                      {
+                        "nodeType": "MEANING",
+                        "key": "ab",
+                        "valueType": "OBJECT",
+                        "prefix": "",
+                        "position": {
+                          "start": 101,
+                          "end": 103
+                        },
+                        "value": "ac (( ad ))"
+                      },
+                      {
+                        "nodeType": "MEANING",
+                        "key": "f",
+                        "valueType": "ARRAY",
+                        "prefix": "..",
+                        "position": {
+                          "start": 122,
+                          "end": 125
+                        },
+                        "children": [
+                          {
+                            "nodeType": "MEANING",
+                            "key": "v",
+                            "valueType": "OBJECT",
+                            "prefix": "",
+                            "position": {
+                              "start": 268,
+                              "end": 269
+                            },
+                            "children": [
+                              {
+                                "nodeType": "MEANING",
+                                "key": "w",
+                                "prefix": ".",
+                                "position": {
+                                  "start": 270,
+                                  "end": 272
+                                },
+                                "valueType": "STRING",
+                                "value": "x"
+                              }
+                            ]
+                          },
+                          {
+                            "nodeType": "MEANING",
+                            "key": "y",
+                            "valueType": "OBJECT",
+                            "prefix": "",
+                            "position": {
+                              "start": 283,
+                              "end": 284
+                            },
+                            "children": [
+                              {
+                                "nodeType": "MEANING",
+                                "key": "z",
+                                "prefix": ".",
+                                "position": {
+                                  "start": 285,
+                                  "end": 287
+                                },
+                                "valueType": "STRING",
+                                "value": "aa"
+                              }
+                            ]
+                          },
+                          {
+                            "nodeType": "MEANING",
+                            "key": "h",
+                            "valueType": "OBJECT",
+                            "prefix": "",
+                            "position": {
+                              "start": 146,
+                              "end": 147
+                            },
+                            "children": [
+                              {
+                                "nodeType": "MEANING",
+                                "key": "i",
+                                "prefix": ".",
+                                "position": {
+                                  "start": 148,
+                                  "end": 150
+                                },
+                                "valueType": "STRING",
+                                "value": "j"
+                              }
+                            ]
+                          },
+                          {
+                            "value": "ag",
+                            "valueType": "STRING",
+                            "nodeType": "MEANING",
+                            "position": {
+                              "start": 159,
+                              "end": 162
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "__macroExpanded": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "render": {
+    "kind": "xml",
+    "text": "<k>\n  <r>\n    <xx>\n      <b c=\"#k.e\">\n        <ab></ab>\n        <f>\n          <l m=\"n\"></l>\n          <o p=\"q\"></o>\n          <h i=\"j\"></h>\n          <string>ag</string>\n        </f>\n      </b>\n    </xx>\n  </r>\n</k>\n<s>\n  <t>\n    <xx>\n      <b c=\"#u.e\">\n        <ab></ab>\n        <f>\n          <v w=\"x\"></v>\n          <y z=\"aa\"></y>\n          <h i=\"j\"></h>\n          <string>ag</string>\n        </f>\n      </b>\n    </xx>\n  </t>\n</s>"
+  }
+}

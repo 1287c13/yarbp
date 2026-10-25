@@ -1,0 +1,249 @@
+{
+  "file": "11_quoted_value_at_array.txt",
+  "flavor": "json",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as json",
+      "prefix": "!",
+      "start": 0,
+      "end": 9,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 10,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "..",
+      "start": 10,
+      "end": 12,
+      "error": ""
+    },
+    {
+      "type": "KEY(ARR)",
+      "value": "a",
+      "prefix": "..",
+      "start": 10,
+      "end": 13,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "'b c' '1' yes \"yes\" d \"e'\" f",
+      "start": 14,
+      "end": 42,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "g h",
+      "start": 44,
+      "end": 49,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "2",
+      "start": 49,
+      "end": 52,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "2",
+      "start": 52,
+      "end": 53,
+      "error": ""
+    },
+    {
+      "type": "COMMENT",
+      "value": "---fixme \"2\" instead of 2 here is breakin in two different ways",
+      "start": 54,
+      "end": 117,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "no",
+      "start": 119,
+      "end": 121,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 121,
+      "end": 121,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 121,
+      "end": 121,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as json",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 9
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "a",
+        "valueType": "ARRAY",
+        "prefix": "..",
+        "position": {
+          "start": 10,
+          "end": 13
+        },
+        "children": [
+          {
+            "value": "b c",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "1",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": true,
+            "valueType": "BOOL",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "yes",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "d",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "e'",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "f",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 14,
+              "end": 42
+            }
+          },
+          {
+            "value": "g h",
+            "valueType": "STRING",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 44,
+              "end": 49
+            }
+          },
+          {
+            "value": 2,
+            "valueType": "NUMBER",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 49,
+              "end": 52
+            }
+          },
+          {
+            "value": 2,
+            "valueType": "NUMBER",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 52,
+              "end": 53
+            },
+            "comments": [
+              {
+                "nodeType": "COMMENT",
+                "value": "---fixme \"2\" instead of 2 here is breakin in two different ways",
+                "position": {
+                  "start": 54,
+                  "end": 117
+                }
+              }
+            ]
+          },
+          {
+            "value": false,
+            "valueType": "BOOL",
+            "nodeType": "MEANING",
+            "position": {
+              "start": 119,
+              "end": 121
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "render": {
+    "kind": "json",
+    "text": "{\n  \"a\": [\n    \"b c\",\n    \"1\",\n    true,\n    \"yes\",\n    \"d\",\n    \"e'\",\n    \"f\",\n    \"g h\",\n    2,\n    2,\n    false\n  ]\n}"
+  }
+}
