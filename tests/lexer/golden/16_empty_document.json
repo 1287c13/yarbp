@@ -1,0 +1,30 @@
+{
+  "file": "16_empty_document.txt",
+  "flavor": "lexer",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "children": []
+  },
+  "render": {
+    "kind": "lexer",
+    "text": "+-------+-------+--------+-------+-----+-------+\n| type  | value | prefix | start | end | error |\n+-------+-------+--------+-------+-----+-------+\n| START |       |        | 0     | 0   |       |\n| END   |       |        | 0     | 0   |       |\n+-------+-------+--------+-------+-----+-------+\n"
+  }
+}

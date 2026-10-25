@@ -41,9 +41,12 @@ class Token {
   });
 
   constructor(props) {
-    Object.keys(Token.attrs).forEach(key => {
-      this[key] = props[key];
-    });
+    this.type = props.type;
+    this.value = props.value;
+    this.prefix = props.prefix;
+    this.start = props.start;
+    this.end = props.end;
+    this.error = props.error;
   }
 }
 
@@ -51,6 +54,13 @@ class Scope {
   constructor(indent, type) {
     this.indent = indent;
     this.type = type;
+
+    /* Неявный объект внутри массива: решение принимается при закрытии scope. */
+    this.deferred = false;
+    this.scopeInPos = undefined;
+    this.scopeStartIndex = undefined;
+    this.objectToken = undefined;
+    this.objectIndex = undefined;
   };
 }
 
@@ -134,9 +144,13 @@ export class YarbpLexer {
   });
 
   static prefixSymbols = ['!', '.', ':'];
-  static spaceSymbols = [' ', '\n'];
+  static spaceSymbols = [' ', '\n', '\t'];
   static tokenValidationRegexp = /^[^"'<>&=\[\]{}/\\\x00-\x1F]*$/;
   static valueValidationRegexp = /^[^\x00-\x09\x0B-\x0C\x0E-\x1F]*$/;
+  static isSpaceChar(char) { return char === ' ' || char === '\n' || char === '\t'; }
+  static isPrefixChar(char) { return char === '!' || char === '.' || char === ':'; }
+
+
 
   constructor(text=undefined) {
     this.text = undefined;
@@ -172,6 +186,7 @@ export class YarbpLexer {
     this.previousState = undefined;
     this.openedScopes = []; /* used as a stack to generate SCOPE_(IN/OUT) */
     this.prettyView = '';
+    this.onlyAllowedTokens = true;
 
     this.addControlToken(TokenTypes.START,0);
   }
@@ -183,11 +198,15 @@ export class YarbpLexer {
       this.handleState(char, pos);
     }
 
+    if (this.state === YarbpLexer.states.IN_QUOTED_VALUE && this.currentToken.trim()) {
+      this.error = 'unterminated quoted value';
+      this.addToken(TokenTypes.UNPARSED);
+    }
+
     const lastPosition = this.text.length - 1;
     this.currentIndent = -1;
     this.generateScopeTokens(lastPosition, TokenTypes.END);
     this.addControlToken(TokenTypes.END, lastPosition);
-    this.postprocessTokens();
     this.callRendererObserver()
   };
 
@@ -202,7 +221,13 @@ export class YarbpLexer {
 
   callRendererObserver() {
     if (!this.rendererObserver || !this.isObserved) return;
-    this.rendererObserver.call();
+
+    try {
+      this.rendererObserver.call();
+    } catch (error) {
+      // Ошибка рендера не должна ломать токенизацию и обновление редактора.
+      console.error('[lexer] renderer failed:', error);
+    }
   }
 
   specifyCommentType(value) {
@@ -223,7 +248,7 @@ export class YarbpLexer {
     start = start ?? this.currentMatchPosition;
     type = type || YarbpLexer.StateTypeMapping[this.state];
     type = this.error ? TokenTypes.UNPARSED : type;
-    const lastToken = this.tokens.at(-1);
+    const lastToken = this.tokens[this.tokens.length - 1];
     const prefix_value = lastToken && lastToken.type === TokenTypes.PREFIX
       ? lastToken.value : undefined;
 
@@ -265,8 +290,19 @@ export class YarbpLexer {
       }
     }
 
+    const activeScope = this.openedScopes[this.openedScopes.length - 1];
+    if (activeScope?.deferred && !activeScope.objectToken
+        && token.type === TokenTypes.OBJECT) {
+      activeScope.objectToken = token;
+      activeScope.objectIndex = this.tokens.length;
+    }
+
     this.tokens.push(token);
-    if (typeToken && typeToken.value) { this.tokens.push(typeToken); }
+    if (!YarbpLexer.allowedTypes.has(token.type)) this.onlyAllowedTokens = false;
+    if (typeToken && typeToken.value) {
+      this.tokens.push(typeToken);
+      if (!YarbpLexer.allowedTypes.has(typeToken.type)) this.onlyAllowedTokens = false;
+    }
 
     this.currentToken = '';
     this.error = '';
@@ -275,6 +311,7 @@ export class YarbpLexer {
   addControlToken(type, start=undefined) {
     this.tokens.push(new Token({
       type: type, value: '', start: start, end: start, error: ''}));
+    if (!YarbpLexer.allowedTypes.has(type)) this.onlyAllowedTokens = false;
   };
 
   splitType(str, delimiter = ':') {
@@ -303,98 +340,73 @@ export class YarbpLexer {
 
   /* endregion */
 
-  /* region postprocessing */
-
-  postprocessTokens() {
-    this.retypeEmptyObjectsArray();
-    this.reshapeInlineArrayValues();
-  };
-
-  retypeEmptyObjectsArray() {
-    const frameSize = 4;
-    const emptyObjectIndices = [];
-
-    const scopeStack = [];
-
-    for (let i = 0; i <= this.tokens.length - frameSize; i++) {
-      const scopeIn = this.tokens[i];
-      const object = this.tokens[i + 1];
-      const third = this.tokens[i + 2];
-      const fourth = this.tokens[i + 3];
-
-      // Обновляем стек скоупов
-      if (scopeIn.type === TokenTypes.SCOPE_IN) {
-        // Ищем первый значащий токен после SCOPE_IN, пропуская PREFIX
-        let j = i + 1;
-        while (j < this.tokens.length && this.tokens[j].type === TokenTypes.PREFIX) j++;
-
-        const owner = this.tokens[j];
-        if (!owner) scopeStack.push('unknown');
-        else if (owner.type === TokenTypes.OBJECT) scopeStack.push('object');
-        else if (owner.type === TokenTypes.ARRAY) scopeStack.push('array');
-        else if (owner.type === TokenTypes.SCOPE_OUT) scopeStack.push('empty');
-        else scopeStack.push('unknown');
-      }
-      if (scopeIn.type === TokenTypes.SCOPE_OUT) scopeStack.pop();
-
-      const isEmptyObject = scopeIn.type === TokenTypes.SCOPE_IN
-        && object.type === TokenTypes.OBJECT && !object.prefix
-        && third.type === TokenTypes.SCOPE_OUT;
-
-      const isEmptyObjectWithComment = scopeIn.type === TokenTypes.SCOPE_IN
-        && object.type === TokenTypes.OBJECT && !object.prefix
-        && third.type === TokenTypes.COMMENT
-        && fourth.type === TokenTypes.SCOPE_OUT;
-
-      const inArrayScope = scopeStack.includes('array');
-
-      if (isEmptyObject && inArrayScope) {
-        emptyObjectIndices.push(i);
-        emptyObjectIndices.push(i + 2);
-        object.type = TokenTypes.ANY_VALUE;
-
-        const unparsedTail = object.end < third.end ? this.text.slice(object.end, third.end) : '';
-        if (unparsedTail) {
-          object.value += unparsedTail;
-          object.value = object.value.replaceAll('\n', '').trim();
-          object.end += unparsedTail.length;
-        }
-      }
-
-      if (isEmptyObjectWithComment && inArrayScope) {
-        emptyObjectIndices.push(i);
-        emptyObjectIndices.push(i + 3);
-        object.type = TokenTypes.ANY_VALUE;
-      }
-    }
-
-    [...new Set(emptyObjectIndices)]
-      .sort((a, b) => b - a)
-      .forEach(index => this.tokens.splice(index, 1));
-  }
-
-  reshapeInlineArrayValues() {
-
-  }
-
-  /* endregion */
-
   /* region scope management */
 
   countCurrentIndent() {
     this.currentIndent = calcTrailingSpaces(this.currentToken);
   };
 
-  generateScopeTokens(pos, type) {
+  generateScopeTokens(pos, type, implicitObject = false) {
     while (this.openedScopes.length && this.currentIndent <= this.openedScopes.at(-1).indent) {
-      this.openedScopes.pop();
-      this.addControlToken(TokenTypes.SCOPE_OUT, pos);
+      this.closeScope(this.openedScopes[this.openedScopes.length - 1], pos);
     }
 
     if (type === TokenTypes.PRIMITIVE || type === TokenTypes.END) return;
 
-    this.openedScopes.push(new Scope(this.currentIndent, type));
-    this.addControlToken(TokenTypes.SCOPE_IN, pos);
+    const parent = this.openedScopes[this.openedScopes.length - 1];
+    const scope = new Scope(this.currentIndent, type);
+    scope.scopeInPos = pos;
+    scope.scopeStartIndex = this.tokens.length;
+    scope.deferred = implicitObject && parent?.type === TokenTypes.ARRAY;
+
+    this.openedScopes.push(scope);
+    if (!scope.deferred) this.addControlToken(TokenTypes.SCOPE_IN, pos);
+  };
+
+  closeScope(scope, pos) {
+    let promoted = false;
+    if (scope.deferred) promoted = this.finalizeDeferredScope(scope, pos);
+
+    this.openedScopes.pop();
+    if (!promoted) this.addControlToken(TokenTypes.SCOPE_OUT, pos);
+  };
+
+  /**
+   * Неявный объект внутри массива: пустой объект — это значение массива,
+   * объект с детьми — обычный объект. Решение принимается при закрытии scope,
+   * без отдельного прохода по токенам.
+   */
+  finalizeDeferredScope(scope, pos) {
+    const object = scope.objectToken;
+    const after = object ? this.tokens.slice(scope.objectIndex + 1) : [];
+    const onlyComment = after.length === 1 && after[0].type === TokenTypes.COMMENT;
+    const promotes = Boolean(object) && !object.prefix
+      && (after.length === 0 || onlyComment);
+
+    if (promotes) {
+      object.type = TokenTypes.ANY_VALUE;
+
+      if (!onlyComment && object.end < pos) {
+        const tail = this.text.slice(object.end, pos);
+        if (tail) {
+          object.value += tail;
+          object.value = object.value.replaceAll('\n', '').trim();
+          object.end += tail.length;
+        }
+      }
+
+      return true;
+    }
+
+    const scopeIn = new Token({
+      type: TokenTypes.SCOPE_IN,
+      value: '',
+      start: scope.scopeInPos,
+      end: scope.scopeInPos,
+      error: ''
+    });
+    this.tokens.splice(scope.objectIndex ?? scope.scopeStartIndex, 0, scopeIn);
+    return false;
   };
 
   /* endregion */
@@ -405,28 +417,32 @@ export class YarbpLexer {
 
     this.previousState = this.state;
 
-    if (this.currentToken === ':' && char === '\n'
-        && this.tokens.every(token => YarbpLexer.allowedTypes.has(token.type)))
+    if (this.currentToken === ':' && char === '\n' && this.onlyAllowedTokens)
       return YarbpLexer.states.OBJECT_ENDED;
 
-    if (this.currentToken === '..' && char === '\n'
-        && this.tokens.every(token => YarbpLexer.allowedTypes.has(token.type)))
+    if (this.currentToken === '..' && char === '\n' && this.onlyAllowedTokens)
       return YarbpLexer.states.ARRAY_ENDED;
 
-    if ([YarbpLexer.states.WAITING, YarbpLexer.states.WAITING_FOR_VALUE].includes(this.state)
+    // Невалидный мусор, накопленный в WAITING, иначе молча потеряется.
+    if (this.state === YarbpLexer.states.WAITING && char === '\n'
+        && !YarbpLexer.tokenValidationRegexp.test(this.currentToken))
+      return YarbpLexer.states.ERROR;
+
+    if ((this.state === YarbpLexer.states.WAITING
+        || this.state === YarbpLexer.states.WAITING_FOR_VALUE)
         && char === '\n')
       return YarbpLexer.states.WAITING_AFTER_NEWLINE;
 
-    if (this.state === YarbpLexer.states.WAITING && YarbpLexer.spaceSymbols.includes(char))
+    if (this.state === YarbpLexer.states.WAITING && YarbpLexer.isSpaceChar(char))
       return YarbpLexer.states.WAITING;
 
-    if (this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE && YarbpLexer.spaceSymbols.includes(char))
+    if (this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE && YarbpLexer.isSpaceChar(char))
       return YarbpLexer.states.WAITING_AFTER_NEWLINE;
 
     if ((this.state === YarbpLexer.states.WAITING
         || this.state === YarbpLexer.states.WAITING_FOR_VALUE
         || this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE)
-        && YarbpLexer.prefixSymbols.includes(char))
+        && YarbpLexer.isPrefixChar(char))
       return YarbpLexer.states.PREFIX_ENCOUNTERED;
 
     if (this.state === YarbpLexer.states.WAITING && char === '=')
@@ -435,15 +451,17 @@ export class YarbpLexer {
     if (this.state === YarbpLexer.states.IN_SHORTHAND && char === '\n')
       return YarbpLexer.states.SHORTHAND_ENDED;
 
-    if ([YarbpLexer.states.IN_VALUE, YarbpLexer.states.IN_SHORTHAND].includes(this.state)
-        && !YarbpLexer.spaceSymbols.includes(char) && this.currentToken.slice(-2) === ' .')
+    if ((this.state === YarbpLexer.states.IN_VALUE
+        || this.state === YarbpLexer.states.IN_SHORTHAND)
+        && !YarbpLexer.isSpaceChar(char) && this.currentToken.slice(-2) === ' .')
       return YarbpLexer.states.NEXT_KEY_ENCOUNTERED;
 
     if (this.state === YarbpLexer.states.WAITING_FOR_VALUE
-        && char !== '"' && char !== "'" && !YarbpLexer.spaceSymbols.includes(char))
+        && char !== '"' && char !== "'" && !YarbpLexer.isSpaceChar(char))
       return YarbpLexer.states.IN_VALUE;
 
-    if ([YarbpLexer.states.WAITING_FOR_VALUE, YarbpLexer.states.WAITING_AFTER_NEWLINE].includes(this.state)
+    if ((this.state === YarbpLexer.states.WAITING_FOR_VALUE
+        || this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE)
         && (char === '"' || char === "'"|| char === '('))
       return YarbpLexer.states.IN_QUOTED_VALUE;
 
@@ -456,46 +474,48 @@ export class YarbpLexer {
     if (this.state === YarbpLexer.states.IN_QUOTED_VALUE
         && ((this.currentToken.trim())[0] === this.currentToken.at(-1) && this.currentToken.at(-1) !== '('
             || (this.currentToken.trim()[0] === '(' && this.currentToken.at(-1) === ')'))
-        &&  YarbpLexer.spaceSymbols.includes(char))
+        &&  YarbpLexer.isSpaceChar(char))
       return YarbpLexer.states.IN_VALUE;
 
     if (this.state === YarbpLexer.states.IN_VALUE && char === '\n')
       return YarbpLexer.states.VALUE_ENDED;
 
     if (this.state !== YarbpLexer.states.IN_QUOTED_VALUE
-         && ['-', '!', '/', '?'].includes(char) && this.currentToken.slice(-2) === '--')
+         && (char === '-' || char === '!' || char === '/' || char === '?')
+         && this.currentToken.slice(-2) === '--')
       return YarbpLexer.states.COMMENT_ENCOUNTERED;
 
     if (this.state === YarbpLexer.states.IN_COMMENT
         && char === '\n') return YarbpLexer.states.COMMENT_ENDED;
 
-    if (this.state === YarbpLexer.states.IN_OBJECT && !YarbpLexer.spaceSymbols.includes(char))
+    if (this.state === YarbpLexer.states.IN_OBJECT && !YarbpLexer.isSpaceChar(char))
       return YarbpLexer.states.IN_OBJECT;
 
-    if (this.state === YarbpLexer.states.IN_PRIMITIVE && !YarbpLexer.spaceSymbols.includes(char))
+    if (this.state === YarbpLexer.states.IN_PRIMITIVE && !YarbpLexer.isSpaceChar(char))
       return YarbpLexer.states.IN_PRIMITIVE;
 
-    if (this.state === YarbpLexer.states.IN_PRIMITIVE && char === ' ')
+    if (this.state === YarbpLexer.states.IN_PRIMITIVE
+        && (char === ' ' || char === '\t'))
       return YarbpLexer.states.PRIMITIVE_ENDED;
 
-    if (this.state === YarbpLexer.states.IN_ARRAY &&  YarbpLexer.spaceSymbols.includes(char))
+    if (this.state === YarbpLexer.states.IN_ARRAY &&  YarbpLexer.isSpaceChar(char))
       return YarbpLexer.states.ARRAY_ENDED;
 
-    if (this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE && !YarbpLexer.spaceSymbols.includes(char)
-        && !YarbpLexer.prefixSymbols.includes(char))
+    if (this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE && !YarbpLexer.isSpaceChar(char)
+        && !YarbpLexer.isPrefixChar(char))
       return YarbpLexer.states.IMPLICIT_OBJECT_ENCOUNTERED;
 
     if (this.state === YarbpLexer.states.WAITING
         && this.tokens.at(-1).type === TokenTypes.START)
       return YarbpLexer.states.IMPLICIT_OBJECT_ENCOUNTERED;
 
-    if (this.state === YarbpLexer.states.IN_OBJECT && YarbpLexer.spaceSymbols.includes(char))
+    if (this.state === YarbpLexer.states.IN_OBJECT && YarbpLexer.isSpaceChar(char))
       return YarbpLexer.states.OBJECT_ENDED;
 
-    if (this.state === YarbpLexer.states.IN_PREFIX && YarbpLexer.prefixSymbols.includes(char))
+    if (this.state === YarbpLexer.states.IN_PREFIX && YarbpLexer.isPrefixChar(char))
       return YarbpLexer.states.IN_PREFIX;
 
-    if (this.state === YarbpLexer.states.IN_PREFIX && !YarbpLexer.prefixSymbols.includes(char))
+    if (this.state === YarbpLexer.states.IN_PREFIX && !YarbpLexer.isPrefixChar(char))
       return YarbpLexer.states.IDENTIFIER_ENCOUNTERED;
 
     if (this.state === YarbpLexer.states.IN_DIRECTIVE && char !== '\n')
@@ -511,42 +531,86 @@ export class YarbpLexer {
   };
 
   handleState(char, pos) {
-    const handlers = {
-      [YarbpLexer.states.WAITING_AFTER_NEWLINE]:  () => this.addCharToToken(char),
-      [YarbpLexer.states.WAITING]:                () => this.addCharToToken(char),
-      [YarbpLexer.states.IN_PREFIX]:              () => this.addCharToToken(char),
-      [YarbpLexer.states.IN_DIRECTIVE]:           () => this.addCharToToken(char),
-      [YarbpLexer.states.IN_OBJECT]:              () => this.addCharToToken(char),
-      [YarbpLexer.states.IN_PRIMITIVE]:           () => this.addCharToToken(char),
-      [YarbpLexer.states.IN_COMMENT]:             () => this.addCharToToken(char),
-      [YarbpLexer.states.IN_ARRAY]:               () => this.addCharToToken(char),
-      [YarbpLexer.states.IN_VALUE]:               () => this.addCharToToken(char),
-      [YarbpLexer.states.IN_QUOTED_VALUE]:        () => this.addCharToToken(char),
-      [YarbpLexer.states.IN_SHORTHAND]:           () => this.addCharToToken(char),
+    const S = YarbpLexer.states;
 
-      [YarbpLexer.states.PREFIX_ENCOUNTERED]:               () => this.handlePrefixEncountered(char, pos),
-      [YarbpLexer.states.IDENTIFIER_ENCOUNTERED]:           () => this.handleIdentifierEncountered(char, pos),
-      [YarbpLexer.states.DIRECTIVE_ENDED]:                  () => this.handleDirectiveEnded(char),
-      [YarbpLexer.states.IMPLICIT_OBJECT_ENCOUNTERED]:      () => this.handleImplicitObjectEncountered(char, pos),
-      [YarbpLexer.states.OBJECT_ENDED]:                     () => this.handleObjectEnded(char),
-      [YarbpLexer.states.PRIMITIVE_ENDED]:                  () => this.handlePrimitiveEnded(pos, char),
-      [YarbpLexer.states.PRIMITIVE_ENDED_WITH_EMPTY_VALUE]: () => this.handlePrimitiveEndedEmpty(pos, char),
-      [YarbpLexer.states.ARRAY_ENDED]:                      () => this.handleArrayEnded(pos, char),
-      [YarbpLexer.states.VALUE_ENDED]:                      () => this.handleValueEnded(char, pos),
-      [YarbpLexer.states.NEXT_KEY_ENCOUNTERED]:             () => this.handleNextKeyEncountered(char, pos),
-      [YarbpLexer.states.COMMENT_ENCOUNTERED]:              () => this.handleCommentEncountered(char, pos),
-      [YarbpLexer.states.COMMENT_ENDED]:                    () => this.handleCommentEnded(char),
-      [YarbpLexer.states.SHORTHAND_ENDED]:                  () => this.handleShorthandEnded(char, pos),
-      [YarbpLexer.states.ERROR]:                            () => this.handleUnparsed()
-    };
+    switch (this.state) {
+      case S.WAITING_AFTER_NEWLINE:
+      case S.WAITING:
+      case S.IN_PREFIX:
+      case S.IN_DIRECTIVE:
+      case S.IN_OBJECT:
+      case S.IN_PRIMITIVE:
+      case S.IN_COMMENT:
+      case S.IN_ARRAY:
+      case S.IN_VALUE:
+      case S.IN_QUOTED_VALUE:
+      case S.IN_SHORTHAND:
+        this.addCharToToken(char);
+        return;
 
-    const handler = handlers[this.state];
-    if (handler) {
-      handler();
+      case S.PREFIX_ENCOUNTERED:
+        this.handlePrefixEncountered(char, pos);
+        return;
+
+      case S.IDENTIFIER_ENCOUNTERED:
+        this.handleIdentifierEncountered(char, pos);
+        return;
+
+      case S.DIRECTIVE_ENDED:
+        this.handleDirectiveEnded(char);
+        return;
+
+      case S.IMPLICIT_OBJECT_ENCOUNTERED:
+        this.handleImplicitObjectEncountered(char, pos);
+        return;
+
+      case S.OBJECT_ENDED:
+        this.handleObjectEnded(char);
+        return;
+
+      case S.PRIMITIVE_ENDED:
+        this.handlePrimitiveEnded(pos, char);
+        return;
+
+      case S.PRIMITIVE_ENDED_WITH_EMPTY_VALUE:
+        this.handlePrimitiveEndedEmpty(pos, char);
+        return;
+
+      case S.ARRAY_ENDED:
+        this.handleArrayEnded(pos, char);
+        return;
+
+      case S.VALUE_ENDED:
+        this.handleValueEnded(char, pos);
+        return;
+
+      case S.NEXT_KEY_ENCOUNTERED:
+        this.handleNextKeyEncountered(char, pos);
+        return;
+
+      case S.COMMENT_ENCOUNTERED:
+        this.handleCommentEncountered(char, pos);
+        return;
+
+      case S.COMMENT_ENDED:
+        this.handleCommentEnded(char);
+        return;
+
+      case S.SHORTHAND_ENDED:
+        this.handleShorthandEnded(char, pos);
+        return;
+
+      case S.ERROR:
+        this.handleUnparsed(char);
+        return;
     }
   };
 
-  addCharToToken(char) { this.currentToken += char; };
+  addCharToToken(char) {
+    // Табы считаем пробелами: позиции сохраняются, но токен не ломается
+    // о tokenValidationRegexp и отступ учитывается.
+    this.currentToken += char === '\t' ? ' ' : char;
+  };
 
   handlePrefixEncountered(char, pos) {
     this.countCurrentIndent(char);
@@ -557,7 +621,7 @@ export class YarbpLexer {
 
   handleImplicitObjectEncountered(char, pos) {
     this.countCurrentIndent(char);
-    this.generateScopeTokens(pos, TokenTypes.OBJECT);
+    this.generateScopeTokens(pos, TokenTypes.OBJECT, true);
 
     this.state = YarbpLexer.states.IN_OBJECT;
     this.currentToken = char;
@@ -588,9 +652,19 @@ export class YarbpLexer {
     this.currentToken += char;
     this.currentMatchPosition = pos;
 
-    if (this.state !== YarbpLexer.states.IN_DIRECTIVE && YarbpLexer.spaceSymbols.includes(char)) {
-      this.state = YarbpLexer.endStatesForPrefixes[this.tokens.at(-1).value];
-      this.handleState(char, pos);
+    if (this.state !== YarbpLexer.states.IN_DIRECTIVE && YarbpLexer.isSpaceChar(char)) {
+      const endState = YarbpLexer.endStatesForPrefixes[this.tokens[this.tokens.length - 1].value];
+
+      if (endState) {
+        this.state = endState;
+        this.handleState(char, pos);
+      } else {
+        // Например `. ` или `.` + перевод строки: ключа нет.
+        // Помечаем ошибку, но не теряем остаток документа.
+        this.error = 'empty key';
+        this.state = YarbpLexer.states.ERROR;
+        this.handleUnparsed(char);
+      }
     }
   };
 
@@ -602,9 +676,13 @@ export class YarbpLexer {
       : YarbpLexer.states.WAITING;
   };
 
-  handleUnparsed() {
+  handleUnparsed(char) {
     this.addToken(TokenTypes.UNPARSED);
-    this.state = undefined;
+    this.currentToken = '';
+    this.currentMatchPosition = undefined;
+    // После ошибки начинаем следующий значимый фрагмент как новую строку:
+    // так остаток документа не теряется.
+    this.state = YarbpLexer.states.WAITING_AFTER_NEWLINE;
   };
 
   handleObjectEnded(char) {
@@ -653,7 +731,7 @@ export class YarbpLexer {
   }
 
   handlePrimitiveEndedEmpty(pos, char) {
-    this.handlePrimitiveEnded();
+    this.handlePrimitiveEnded(pos, char);
     this.addToken(TokenTypes.ANY_VALUE, pos, '');
 
     this.state = char === '\n'
@@ -726,7 +804,8 @@ export class YarbpLexer {
       this.addToken(expectedTypeWhenCommentMet);
     }
 
-    if ([TokenTypes.PRIMITIVE, TokenTypes.TYPE].includes(this.tokens.at(-1).type)) {
+    const previousTokenType = this.tokens[this.tokens.length - 1].type;
+    if (previousTokenType === TokenTypes.PRIMITIVE || previousTokenType === TokenTypes.TYPE) {
       this.addToken(TokenTypes.ANY_VALUE, pos - 3, '');
     }
 

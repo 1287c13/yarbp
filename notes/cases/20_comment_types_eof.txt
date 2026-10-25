@@ -1,0 +1,28 @@
+! as lexer
+.a b --- comment
+--? todo
+--! important
+--/ deleted
+
+render
++-----------+---------------+--------+-------+-----+-------+
+| type      | value         | prefix | start | end | error |
++-----------+---------------+--------+-------+-----+-------+
+| START     |               |        | 0     | 0   |       |
+| PREFIX    | !             |        | 0     | 1   |       |
+| DIRECTIVE | as lexer      | !      | 0     | 10  |       |
+| PREFIX    | .             |        | 11    | 12  |       |
+| KEY       | a             | .      | 11    | 13  |       |
+| VALUE     | b             |        | 14    | 16  |       |
+| COMMENT   | --- comment   |        | 16    | 27  |       |
+| SCOPE_IN  |               |        | 28    | 28  |       |
+| TODO      | --? todo      |        | 28    | 36  |       |
+| SCOPE_OUT |               |        | 37    | 37  |       |
+| SCOPE_IN  |               |        | 37    | 37  |       |
+| IMPORTANT | --! important |        | 37    | 50  |       |
+| SCOPE_OUT |               |        | 51    | 51  |       |
+| SCOPE_IN  |               |        | 51    | 51  |       |
+| DELETED   | --/ deleted   |        | 51    | 62  |       |
+| SCOPE_OUT |               |        | 62    | 62  |       |
+| END       |               |        | 62    | 62  |       |
++-----------+---------------+--------+-------+-----+-------+

@@ -14,6 +14,20 @@
     "13_spaces_before_value_highlight.txt",
     "14_prop_after_sugar.txt",
     "15_objects_hierarchy.txt",
+    "16_empty_document.txt",
+    "17_invalid_dot_space.txt",
+    "18_empty_primitive_eof.txt",
+    "19_unclosed_quote.txt",
+    "20_comment_types_eof.txt",
+    "21_tabs.txt",
+    "22_invalid_chars.txt",
+    "23_array_bare_value.txt",
+    "24_array_bare_values.txt",
+    "25_array_bare_comment.txt",
+    "26_array_bare_with_child.txt",
+    "27_array_bare_todo.txt",
+    "28_nested_array_bare.txt",
+    "29_array_bare_comment_types.txt",
     "obj_after_nested_arr.txt"
   ]
 }

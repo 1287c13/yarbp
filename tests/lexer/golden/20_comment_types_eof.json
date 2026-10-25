@@ -1,0 +1,206 @@
+{
+  "file": "20_comment_types_eof.txt",
+  "flavor": "lexer",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as lexer",
+      "prefix": "!",
+      "start": 0,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 11,
+      "end": 12,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "a",
+      "prefix": ".",
+      "start": 11,
+      "end": 13,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "b",
+      "start": 14,
+      "end": 16,
+      "error": ""
+    },
+    {
+      "type": "COMMENT",
+      "value": "--- comment",
+      "start": 16,
+      "end": 27,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 28,
+      "end": 28,
+      "error": ""
+    },
+    {
+      "type": "TODO",
+      "value": "--? todo",
+      "start": 28,
+      "end": 36,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 37,
+      "end": 37,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 37,
+      "end": 37,
+      "error": ""
+    },
+    {
+      "type": "IMPORTANT",
+      "value": "--! important",
+      "start": 37,
+      "end": 50,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 51,
+      "end": 51,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 51,
+      "end": 51,
+      "error": ""
+    },
+    {
+      "type": "DELETED",
+      "value": "--/ deleted",
+      "start": 51,
+      "end": 62,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 62,
+      "end": 62,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 62,
+      "end": 62,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as lexer",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 10
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "a",
+        "prefix": ".",
+        "position": {
+          "start": 11,
+          "end": 13
+        },
+        "valueType": "STRING",
+        "value": "b",
+        "comments": [
+          {
+            "nodeType": "COMMENT",
+            "value": "--- comment",
+            "position": {
+              "start": 16,
+              "end": 27
+            }
+          }
+        ]
+      },
+      {
+        "comments": [
+          {
+            "nodeType": "TODO",
+            "value": "--? todo",
+            "position": {
+              "start": 28,
+              "end": 36
+            }
+          }
+        ]
+      },
+      {
+        "comments": [
+          {
+            "nodeType": "IMPORTANT",
+            "value": "--! important",
+            "position": {
+              "start": 37,
+              "end": 50
+            }
+          }
+        ]
+      },
+      {
+        "comments": [
+          {
+            "nodeType": "DELETED",
+            "value": "--/ deleted",
+            "position": {
+              "start": 51,
+              "end": 62
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "render": {
+    "kind": "lexer",
+    "text": "+-----------+---------------+--------+-------+-----+-------+\n| type      | value         | prefix | start | end | error |\n+-----------+---------------+--------+-------+-----+-------+\n| START     |               |        | 0     | 0   |       |\n| PREFIX    | !             |        | 0     | 1   |       |\n| DIRECTIVE | as lexer      | !      | 0     | 10  |       |\n| PREFIX    | .             |        | 11    | 12  |       |\n| KEY       | a             | .      | 11    | 13  |       |\n| VALUE     | b             |        | 14    | 16  |       |\n| COMMENT   | --- comment   |        | 16    | 27  |       |\n| SCOPE_IN  |               |        | 28    | 28  |       |\n| TODO      | --? todo      |        | 28    | 36  |       |\n| SCOPE_OUT |               |        | 37    | 37  |       |\n| SCOPE_IN  |               |        | 37    | 37  |       |\n| IMPORTANT | --! important |        | 37    | 50  |       |\n| SCOPE_OUT |               |        | 51    | 51  |       |\n| SCOPE_IN  |               |        | 51    | 51  |       |\n| DELETED   | --/ deleted   |        | 51    | 62  |       |\n| SCOPE_OUT |               |        | 62    | 62  |       |\n| END       |               |        | 62    | 62  |       |\n+-----------+---------------+--------+-------+-----+-------+\n"
+  }
+}
