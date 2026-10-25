@@ -5,28 +5,27 @@
   three --/ deleted
 
 render
-+-----------+-------------+--------+-------+-----+-------+
-| type      | value       | prefix | start | end | error |
-+-----------+-------------+--------+-------+-----+-------+
-| START     |             |        | 0     | 0   |       |
-| PREFIX    | !           |        | 0     | 1   |       |
-| DIRECTIVE | as lexer    | !      | 0     | 10  |       |
-| SCOPE_IN  |             |        | 11    | 11  |       |
-| PREFIX    | ..          |        | 11    | 13  |       |
-| KEY(ARR)  | arr         | ..     | 11    | 16  |       |
-| SCOPE_IN  |             |        | 19    | 19  |       |
-| KEY(OBJ)  | one         |        | 19    | 22  |       |
-| TODO      | --? todo    |        | 23    | 31  |       |
-| SCOPE_OUT |             |        | 34    | 34  |       |
-| SCOPE_IN  |             |        | 34    | 34  |       |
-| KEY(OBJ)  | two         |        | 34    | 37  |       |
-| PREFIX    | !           |        | 40    | 41  |       |
-| DIRECTIVE | important   | !      | 40    | 51  |       |
-| SCOPE_OUT |             |        | 54    | 54  |       |
-| SCOPE_IN  |             |        | 54    | 54  |       |
-| KEY(OBJ)  | three       |        | 54    | 59  |       |
-| DELETED   | --/ deleted |        | 60    | 71  |       |
-| SCOPE_OUT |             |        | 71    | 71  |       |
-| SCOPE_OUT |             |        | 71    | 71  |       |
-| END       |             |        | 71    | 71  |       |
-+-----------+-------------+--------+-------+-----+-------+
++-----------+---------------+--------+-------+-----+-------+
+| type      | value         | prefix | start | end | error |
++-----------+---------------+--------+-------+-----+-------+
+| START     |               |        | 0     | 0   |       |
+| PREFIX    | !             |        | 0     | 1   |       |
+| DIRECTIVE | as lexer      | !      | 0     | 10  |       |
+| SCOPE_IN  |               |        | 11    | 11  |       |
+| PREFIX    | ..            |        | 11    | 13  |       |
+| KEY(ARR)  | arr           | ..     | 11    | 16  |       |
+| SCOPE_IN  |               |        | 19    | 19  |       |
+| KEY(OBJ)  | one           |        | 19    | 22  |       |
+| TODO      | --? todo      |        | 23    | 31  |       |
+| SCOPE_OUT |               |        | 34    | 34  |       |
+| SCOPE_IN  |               |        | 34    | 34  |       |
+| KEY(OBJ)  | two           |        | 34    | 37  |       |
+| IMPORTANT | --! important |        | 38    | 51  |       |
+| SCOPE_OUT |               |        | 54    | 54  |       |
+| SCOPE_IN  |               |        | 54    | 54  |       |
+| KEY(OBJ)  | three         |        | 54    | 59  |       |
+| DELETED   | --/ deleted   |        | 60    | 71  |       |
+| SCOPE_OUT |               |        | 71    | 71  |       |
+| SCOPE_OUT |               |        | 71    | 71  |       |
+| END       |               |        | 71    | 71  |       |
++-----------+---------------+--------+-------+-----+-------+

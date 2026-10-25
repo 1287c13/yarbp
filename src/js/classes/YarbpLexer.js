@@ -439,6 +439,13 @@ export class YarbpLexer {
     if (this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE && YarbpLexer.isSpaceChar(char))
       return YarbpLexer.states.WAITING_AFTER_NEWLINE;
 
+    // Комментарий вида `--!` должен проверяться до префикса `!`,
+    // иначе IMPORTANT превращается в директиву.
+    if (this.state !== YarbpLexer.states.IN_QUOTED_VALUE
+         && (char === '-' || char === '!' || char === '/' || char === '?')
+         && this.currentToken.slice(-2) === '--')
+      return YarbpLexer.states.COMMENT_ENCOUNTERED;
+
     if ((this.state === YarbpLexer.states.WAITING
         || this.state === YarbpLexer.states.WAITING_FOR_VALUE
         || this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE)
@@ -479,11 +486,6 @@ export class YarbpLexer {
 
     if (this.state === YarbpLexer.states.IN_VALUE && char === '\n')
       return YarbpLexer.states.VALUE_ENDED;
-
-    if (this.state !== YarbpLexer.states.IN_QUOTED_VALUE
-         && (char === '-' || char === '!' || char === '/' || char === '?')
-         && this.currentToken.slice(-2) === '--')
-      return YarbpLexer.states.COMMENT_ENCOUNTERED;
 
     if (this.state === YarbpLexer.states.IN_COMMENT
         && char === '\n') return YarbpLexer.states.COMMENT_ENDED;

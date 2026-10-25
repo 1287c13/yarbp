@@ -90,17 +90,9 @@
       "error": ""
     },
     {
-      "type": "PREFIX",
-      "value": "!",
-      "start": 40,
-      "end": 41,
-      "error": ""
-    },
-    {
-      "type": "DIRECTIVE",
-      "value": "important",
-      "prefix": "!",
-      "start": 40,
+      "type": "IMPORTANT",
+      "value": "--! important",
+      "start": 38,
       "end": 51,
       "error": ""
     },
@@ -208,13 +200,12 @@
               "start": 34,
               "end": 37
             },
-            "directives": [
+            "comments": [
               {
-                "nodeType": "DIRECTIVE",
-                "value": "important",
-                "prefix": "!",
+                "nodeType": "IMPORTANT",
+                "value": "--! important",
                 "position": {
-                  "start": 40,
+                  "start": 38,
                   "end": 51
                 }
               }
@@ -246,6 +237,6 @@
   },
   "render": {
     "kind": "lexer",
-    "text": "+-----------+-------------+--------+-------+-----+-------+\n| type      | value       | prefix | start | end | error |\n+-----------+-------------+--------+-------+-----+-------+\n| START     |             |        | 0     | 0   |       |\n| PREFIX    | !           |        | 0     | 1   |       |\n| DIRECTIVE | as lexer    | !      | 0     | 10  |       |\n| SCOPE_IN  |             |        | 11    | 11  |       |\n| PREFIX    | ..          |        | 11    | 13  |       |\n| KEY(ARR)  | arr         | ..     | 11    | 16  |       |\n| SCOPE_IN  |             |        | 19    | 19  |       |\n| KEY(OBJ)  | one         |        | 19    | 22  |       |\n| TODO      | --? todo    |        | 23    | 31  |       |\n| SCOPE_OUT |             |        | 34    | 34  |       |\n| SCOPE_IN  |             |        | 34    | 34  |       |\n| KEY(OBJ)  | two         |        | 34    | 37  |       |\n| PREFIX    | !           |        | 40    | 41  |       |\n| DIRECTIVE | important   | !      | 40    | 51  |       |\n| SCOPE_OUT |             |        | 54    | 54  |       |\n| SCOPE_IN  |             |        | 54    | 54  |       |\n| KEY(OBJ)  | three       |        | 54    | 59  |       |\n| DELETED   | --/ deleted |        | 60    | 71  |       |\n| SCOPE_OUT |             |        | 71    | 71  |       |\n| SCOPE_OUT |             |        | 71    | 71  |       |\n| END       |             |        | 71    | 71  |       |\n+-----------+-------------+--------+-------+-----+-------+\n"
+    "text": "+-----------+---------------+--------+-------+-----+-------+\n| type      | value         | prefix | start | end | error |\n+-----------+---------------+--------+-------+-----+-------+\n| START     |               |        | 0     | 0   |       |\n| PREFIX    | !             |        | 0     | 1   |       |\n| DIRECTIVE | as lexer      | !      | 0     | 10  |       |\n| SCOPE_IN  |               |        | 11    | 11  |       |\n| PREFIX    | ..            |        | 11    | 13  |       |\n| KEY(ARR)  | arr           | ..     | 11    | 16  |       |\n| SCOPE_IN  |               |        | 19    | 19  |       |\n| KEY(OBJ)  | one           |        | 19    | 22  |       |\n| TODO      | --? todo      |        | 23    | 31  |       |\n| SCOPE_OUT |               |        | 34    | 34  |       |\n| SCOPE_IN  |               |        | 34    | 34  |       |\n| KEY(OBJ)  | two           |        | 34    | 37  |       |\n| IMPORTANT | --! important |        | 38    | 51  |       |\n| SCOPE_OUT |               |        | 54    | 54  |       |\n| SCOPE_IN  |               |        | 54    | 54  |       |\n| KEY(OBJ)  | three         |        | 54    | 59  |       |\n| DELETED   | --/ deleted   |        | 60    | 71  |       |\n| SCOPE_OUT |               |        | 71    | 71  |       |\n| SCOPE_OUT |               |        | 71    | 71  |       |\n| END       |               |        | 71    | 71  |       |\n+-----------+---------------+--------+-------+-----+-------+\n"
   }
 }
