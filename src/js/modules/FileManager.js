@@ -1,13 +1,22 @@
 // FileManager.js
+//
+// Встроенные примеры умеют открываться ссылкой: ?example=<slug> (см.
+// readExampleKeyFromUrl / writeExampleKeyToUrl в конце файла).
+const EXAMPLE_PARAM = 'example';
+
 export class FileManager {
   constructor(storageKey = 'yarbp_files') {
     this.storageKey = storageKey;
     this.data = this._loadData();
+    // Пример из адреса (?example=xpo / #example=xpo) главнее localStorage:
+    // ссылку присылают именно для того, чтобы у получателя открылся этот пример.
+    this._applyExampleFromUrl();
     this.editor = null;
     this.onContentChange = null;
     this.uiContainer = null;
     this.autoSaveTimer = null;
     this.autoSaveInterval = 5000; // 5 секунд
+    this._boundSyncFromUrl = null;
   }
 
   /**
@@ -23,7 +32,78 @@ export class FileManager {
 
     this._renderUI();
     this._loadActiveFile();
+    // Адрес всегда показывает активный пример: ссылку можно копировать сразу,
+    // не переключая файлы (и она не зависит от localStorage получателя).
+    this._syncUrlWithActiveFile();
     this._setupAutoSave();
+    this._setupUrlSync();
+  }
+
+  // ---------------------------------------------
+  // Пример из адреса страницы (?example=<slug>)
+  // ---------------------------------------------
+  /**
+   * Слушать изменения адреса: ссылку можно вставить в ту же вкладку, а
+   * hashchange/popstate приходят и от ручной правки URL, и от «назад».
+   */
+  _setupUrlSync() {
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    this._boundSyncFromUrl = () => this._syncFromUrl();
+    window.addEventListener('hashchange', this._boundSyncFromUrl);
+    window.addEventListener('popstate', this._boundSyncFromUrl);
+  }
+
+  /**
+   * Включить пример, указанный в адресе. Нет параметра или пример неизвестен —
+   * ничего не меняем (страница открывается как обычно).
+   */
+  _applyExampleFromUrl() {
+    const key = readExampleKeyFromUrl();
+    if (!key) return;
+
+    const file = this._findBuiltinByKey(key);
+    if (!file) {
+      console.warn(`[FileManager] В адресе неизвестный пример: "${key}"`);
+      return;
+    }
+    this.data.activeFileId = file.id;
+  }
+
+  /** Переключиться на пример из адреса (после ручной правки URL или «назад»). */
+  _syncFromUrl() {
+    const key = readExampleKeyFromUrl();
+    const file = key ? this._findBuiltinByKey(key) : null;
+    if (!file || file.id === this.data.activeFileId) return;
+    this.switchTo(file.id);
+  }
+
+  /**
+   * Встроенный пример по ключу из адреса. Принимаем и slug, и id
+   * (builtin-3): ссылки, скопированные вручную по id, не должны ломаться.
+   */
+  _findBuiltinByKey(key) {
+    const needle = String(key || '').trim().toLowerCase();
+    if (!needle) return null;
+
+    return this.data.files.find(file => file.isBuiltin && (
+      String(file.slug || '').toLowerCase() === needle ||
+      String(file.id || '').toLowerCase() === needle
+    )) || null;
+  }
+
+  /** Ключ файла для адреса: у встроенных — slug, у своих файлов ключа нет. */
+  _exampleKeyOf(file) {
+    if (!file || !file.isBuiltin) return '';
+    return file.slug || file.id;
+  }
+
+  /**
+   * Показать активный пример в адресе страницы. Свой (пользовательский) файл
+   * ключа не имеет — параметр снимается, чтобы ссылка не врала.
+   */
+  _syncUrlWithActiveFile() {
+    const activeFile = this.data.files.find(f => f.id === this.data.activeFileId);
+    writeExampleKeyToUrl(this._exampleKeyOf(activeFile));
   }
 
   // ---------------------------------------------
@@ -72,7 +152,12 @@ export class FileManager {
       files: [
         {
           id: 'builtin-1',
+          // slug — стабильный ключ примера для адреса страницы (?example=xpo).
+          // Именно он попадает в ссылку, поэтому имя можно менять свободно,
+          // а slug — только вместе с поддержкой старого значения в
+          // _findBuiltinByKey (см. алиасы по id).
           name: 'Lexer output',
+          slug: 'lexer-output',
           content: `! as lexer
 :
   .order_id 12345
@@ -87,6 +172,7 @@ export class FileManager {
         {
           id: 'builtin-2',
           name: 'Abstract Syntax Tree',
+          slug: 'ast',
           content: `! as AST
 :
   .order_id 12345
@@ -101,6 +187,7 @@ export class FileManager {
         {
           id: 'builtin-3',
           name: 'JSON',
+          slug: 'json',
           content: `! as json
 :
   .order_id 12345
@@ -115,6 +202,7 @@ export class FileManager {
         {
           id: 'builtin-4',
           name: 'XML, anonymous objects',
+          slug: 'xml-anonymous',
           content: `! as xml
 :
   .order_id 12345
@@ -129,6 +217,7 @@ export class FileManager {
         {
           id: 'builtin-5',
           name: 'XML, explicit objects',
+          slug: 'xml-explicit',
           content: `! as xml
 order .order_id 12345 .status "new" .is_active yes
   client .first_name Jack .last_name White .id '54312'
@@ -141,6 +230,7 @@ order .order_id 12345 .status "new" .is_active yes
         {
           id: 'builtin-6',
           name: 'Protobuf',
+          slug: 'protobuf',
           content: `! as proto
 Order
   .order_number:string -- comment
@@ -156,6 +246,7 @@ Order
         {
           id: 'builtin-7',
           name: 'XPO, full example',
+          slug: 'xpo',
           content: `! как КПО
 
 дорожка
@@ -240,6 +331,7 @@ Order
         {
           id: 'builtin-8',
           name: 'BPMN',
+          slug: 'bpmn',
           content: `! как БПМН
 
 процесс = Процесс 1
@@ -299,6 +391,8 @@ Order
         {
           id: 'builtin-9',
           name: 'Форма ТСД',
+          // Ссылка на этот пример: index.html?example=tsd-form
+          slug: 'tsd-form',
           // Компактный пример формы ТСД: значения по умолчанию в разметке
           // не дублируются — их подставляет конвертер (см. FlexFormsConvertor).
           // Таблица описана поколоночно, как в актуальном синтаксисе.
@@ -392,12 +486,16 @@ Order
   switchTo(fileId) {
     if (fileId === this.data.activeFileId) return;
 
+    const file = this.data.files.find(f => f.id === fileId);
+    if (!file) return;                // неизвестный id: раньше активным становился «мусор»
+
     // Сохраняем текущий перед переключением
     this._saveCurrentContent();
 
     this.data.activeFileId = fileId;
     this._saveData();
     this._loadActiveFile();
+    this._syncUrlWithActiveFile();    // пример виден в адресе — ссылку можно копировать
   }
 
   createNewFile(baseName = 'Новый файл') {
@@ -424,6 +522,7 @@ Order
     this.data.activeFileId = newFile.id;
     this._saveData();
     this._loadActiveFile();
+    this._syncUrlWithActiveFile();   // свой файл ключа не имеет — параметр снимается
 
     this._renderFileList(); // обновить список
     return newFile;
@@ -444,6 +543,7 @@ Order
 
     this._saveData();
     this._loadActiveFile();
+    this._syncUrlWithActiveFile();
     this._renderFileList();
     return true;
   }
@@ -742,6 +842,7 @@ Order
 
       this._saveData();
       this._loadActiveFile();
+      this._syncUrlWithActiveFile();
       this._renderFileList();
 
       return true;
@@ -750,5 +851,86 @@ Order
       alert('Не удалось загрузить файл: ' + e.message);
       return false;
     }
+  }
+}
+
+// ---------------------------------------------
+// Пример в адресе страницы
+// ---------------------------------------------
+/**
+ * Ключ примера из адреса. Приоритет у query-параметра: именно его пишет
+ * writeExampleKeyToUrl, он переживает перезагрузку и пересылку ссылки целиком.
+ * Hash-форма (#example=xpo) поддерживается как ручной/запасной вариант.
+ * Пустая строка — параметра нет (страница открывается как обычно).
+ */
+function readExampleKeyFromUrl() {
+  if (typeof location === 'undefined') return '';
+
+  try {
+    const fromQuery = new URLSearchParams(location.search).get(EXAMPLE_PARAM);
+    if (fromQuery && fromQuery.trim()) return fromQuery.trim();
+  } catch (e) {
+    // URLSearchParams недоступен (очень старый движок) — остаётся hash-форма
+  }
+
+  const hash = String(location.hash || '').replace(/^#/, '');
+  if (!hash) return '';
+
+  try {
+    const fromHash = new URLSearchParams(hash).get(EXAMPLE_PARAM);
+    return fromHash ? fromHash.trim() : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+/**
+ * Записать ключ примера в адрес; пустой ключ — убрать параметр.
+ *
+ * history.replaceState, а не pushState: переключение примеров не должно
+ * плодить записи истории, иначе «назад» листает примеры вместо ухода со
+ * страницы. Если адрес поменять нельзя (file://, запрет history), работаем
+ * через hash — переключение примеров при этом продолжает работать.
+ */
+function writeExampleKeyToUrl(key) {
+  const value = String(key || '').trim();
+  if (typeof location === 'undefined') return;
+
+  try {
+    const url = new URL(location.href);
+    if (value) url.searchParams.set(EXAMPLE_PARAM, value);
+    else url.searchParams.delete(EXAMPLE_PARAM);
+
+    // Два ключа в одном адресе (?example=json#example=xpo) — путаница,
+    // поэтому hash-форму того же параметра убираем.
+    const hash = String(location.hash || '').replace(/^#/, '');
+    if (hash) {
+      const hashParams = new URLSearchParams(hash);
+      if (hashParams.has(EXAMPLE_PARAM)) {
+        hashParams.delete(EXAMPLE_PARAM);
+        const rest = hashParams.toString();
+        url.hash = rest ? `#${rest}` : '';
+      }
+    }
+
+    if (url.href === location.href) return;   // адрес уже правильный
+
+    if (typeof history !== 'undefined' && history.replaceState) {
+      history.replaceState(null, '', url.href);
+      return;
+    }
+  } catch (e) {
+    // location/history недоступны для записи — ниже фолбэк на hash
+  }
+
+  try {
+    if (value) {
+      location.hash = `${EXAMPLE_PARAM}=${value}`;
+    } else {
+      const hash = String(location.hash || '').replace(/^#/, '');
+      if (hash && new URLSearchParams(hash).has(EXAMPLE_PARAM)) location.hash = '';
+    }
+  } catch (e) {
+    // менять адрес нечем — переключение примеров всё равно работает
   }
 }

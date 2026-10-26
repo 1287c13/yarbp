@@ -114,9 +114,12 @@ try {
       режимСканирования: irBarcode.режимСканирования,
     }) : 'нет штрихкода');
   const irActions = irConfig.children.filter(child => child.type === 'операция');
-  expect('IR: «перезагрузить» по умолчанию — реальное false',
-    irActions.length === 2 && irActions.every(action => action.перезагрузить === false),
+  expect('IR: «перезагрузить» по умолчанию не пишется',
+    irActions.length === 2 && irActions.every(action => !('перезагрузить' in action)),
     irActions.map(action => action.имя + '=' + String(action.перезагрузить)).join(', '));
+  expect('IR: табло статистики включено по умолчанию (true)',
+    irActions.length === 2 && irActions.every(action => action.отображатьСтатистику === true),
+    irActions.map(action => action.имя + '=' + String(action.отображатьСтатистику)).join(', '));
 
   await new Promise(resolve => setTimeout(resolve, 1500));
 
@@ -211,7 +214,7 @@ try {
     srcdoc.indexOf('"Подобрать товар"') !== -1 &&
     srcdoc.indexOf('"Отправить результат"') !== -1);
   expect('в странице адрес сервиса из шапки',
-    srcdoc.indexOf('"сервис": "http://127.0.0.1:8765/rt_morato_bot/hs/dp"') !== -1);
+    srcdoc.indexOf('"сервис": "http://127.0.0.1:8765/rt_m_bot/hs/dp"') !== -1);
   expect('в странице относительные хук и урл',
     srcdoc.indexOf('"хук": "/link"') !== -1 &&
     srcdoc.indexOf('"урл": "/processing"') !== -1);
@@ -234,12 +237,109 @@ try {
       !!innerTable && innerTable.id === 'a2_t1' &&
       innerTable.classList.contains('is-empty'),
       innerTable ? innerTable.id + ' / ' + innerTable.className : 'нет table.ff-table');
+    const innerWin = innerDoc.defaultView;
+    /* 3а. Плашки групп и блок таблицы.
+       Подложка (.card.grid-card) ставится на КАЖДУЮ группу операции («поля» в
+       IR), а не одна на экран. Сверяем число групп в IR с числом плашек в DOM. */
+    const innerRows = id => {
+      const table = innerDoc.getElementById(id);
+      return table ? table.querySelectorAll('tbody tr').length : -1;
+    };
+    const rowsInIr = id => {
+      const ir = innerWin.readParams();
+      let count = -1;
+      (ir.children || []).forEach(op => (op.children || []).forEach(grid =>
+        (grid.children || []).forEach(el => {
+          if (el['ид'] === id && el.type === 'таблица') count = (el.children || []).length;
+        })));
+      return count;
+    };
+    const groupsInIr = opId => {
+      const ir = innerWin.readParams();
+      const action = (ir.children || []).find(node => node['ид'] === opId);
+      return action ? (action.children || []).length : -1;
+    };
+    const cardsIn = index => {
+      const screen = track.children[index];
+      return screen ? screen.querySelectorAll(':scope > .card.grid-card').length : -1;
+    };
+    expect('группы: своя плашка-карточка на каждую группу операции',
+      cardsIn(0) === groupsInIr('a1') && cardsIn(1) === groupsInIr('a2') &&
+      cardsIn(0) > 0 && cardsIn(1) > 0,
+      'a1: ' + cardsIn(0) + '/' + groupsInIr('a1') +
+        ', a2: ' + cardsIn(1) + '/' + groupsInIr('a2'));
+
+    /* Пустая таблица-приёмник: шапка блока (имя + счётчик строк) и подсказка
+       про сканер. a2_t1 — приёмник операции a1 (.приемник a2_t1). */
+    const a2Screen = track.children[1];
+    const a2Head = a2Screen ? a2Screen.querySelector('.tbl-head') : null;
+    const a2Empty = a2Screen ? a2Screen.querySelector('.empty') : null;
+    expect('таблица: шапка блока — имя и счётчик строк',
+      !!a2Head && /Товары в заказе/.test(a2Head.textContent) &&
+      !!a2Head.querySelector('.tbl-count') &&
+      a2Head.querySelector('.tbl-count').textContent === '0',
+      a2Head ? a2Head.textContent.replace(/\s+/g, ' ').trim() : 'нет .tbl-head');
+    expect('таблица-приёмник: подсказка «Отсканируйте товар» на месте',
+      !!a2Empty && a2Empty.textContent.indexOf('Отсканируйте товар') !== -1,
+      a2Empty ? a2Empty.textContent.trim() : 'нет .empty');
+
+    /* Редактируемая таблица (a2_t1: .редактируемая да) — кнопка добавления
+       строки. Строка обязана попасть в IR: отправка берёт строки оттуда. */
+    const a2Add = a2Screen ? a2Screen.querySelector('.row-add') : null;
+    expect('редактируемая таблица: кнопка «Добавить строку» есть',
+      !!a2Add && a2Add.dataset.tableId === 'a2_t1' &&
+      a2Add.textContent.indexOf('Добавить строку') !== -1,
+      a2Add ? a2Add.dataset.tableId + ' / ' + a2Add.textContent.trim() : 'нет .row-add');
+    if (a2Add) a2Add.click();
+    expect('редактируемая таблица: строка добавлена в DOM и в IR',
+      innerRows('a2_t1') === 1 && rowsInIr('a2_t1') === 1,
+      'DOM=' + innerRows('a2_t1') + ', IR=' + rowsInIr('a2_t1'));
+    expect('редактируемая таблица: подсказка ушла, счётчик стал 1',
+      !a2Screen.querySelector('.empty') && !!a2Head &&
+      a2Head.querySelector('.tbl-count').textContent === '1',
+      a2Head ? 'счётчик=' + a2Head.querySelector('.tbl-count').textContent : 'нет .tbl-head');
+
+    /* Правка ячейки: contenteditable больше не живёт «сама по себе» — значение
+       уезжает в IR (syncTableCell), иначе оно терялось при отправке. */
+    const firstCell = innerDoc.querySelector('#a2_t1 tbody tr td');
+    if (firstCell) {
+      firstCell.textContent = 'Хлеб';
+      firstCell.dispatchEvent(new innerWin.Event('input', { bubbles: true }));
+    }
+    const cellInIr = (() => {
+      const ir = innerWin.readParams();
+      let value = null;
+      (ir.children || []).forEach(op => (op.children || []).forEach(grid =>
+        (grid.children || []).forEach(el => {
+          if (el['ид'] === 'a2_t1' && el.children && el.children[0]) {
+            value = el.children[0].cells[0].value;
+          }
+        })));
+      return value;
+    })();
+    expect('редактируемая таблица: правка ячейки уходит в IR',
+      cellInIr === 'Хлеб', String(cellInIr));
+
+    /* Возвращаем таблицу приёмника в исходное состояние: следующие проверки
+       (табло, отправка) рассчитывают на пустой приёмник. */
+    const cleanIr = innerWin.readParams();
+    (cleanIr.children || []).forEach(op => (op.children || []).forEach(grid =>
+      (grid.children || []).forEach(el => {
+        if (el['ид'] === 'a2_t1' && el.type === 'таблица') el.children = [];
+      })));
+    innerWin.writeParams(cleanIr);
+    innerWin.refreshReceiverView();
+    expect('редактируемая таблица: после очистки подсказка вернулась',
+      innerRows('a2_t1') === 0 && !!a2Screen.querySelector('.empty') &&
+      rowsInIr('a2_t1') === 0,
+      'строк=' + innerRows('a2_t1') + ', IR=' + rowsInIr('a2_t1'));
+
     expect('движок: заголовок формы в шапке',
       !!brand && brand.textContent === 'Отправка данных в 1С',
       brand ? brand.textContent : 'нет #brandText');
     const server = innerDoc.getElementById('brandServer');
     expect('движок: адрес сервера выведен в шапку',
-      !!server && server.textContent.indexOf('http://127.0.0.1:8765/rt_morato_bot/hs/dp') !== -1,
+      !!server && server.textContent.indexOf('http://127.0.0.1:8765/rt_m_bot/hs/dp') !== -1,
       server ? server.textContent : 'нет #brandServer');
 
     /* 3a. Режим «клавиатура выключена» (scan — по умолчанию): поле readOnly и
@@ -247,8 +347,7 @@ try {
        этом не теряется: мост сканера (initScannerBridge) набирает символы
        клавиатурного клина в readonly-поле и по Enter шлёт 'change' — ровно то,
        что делает сканер на ТСД. */
-    const innerWin = innerDoc.defaultView;
-    const serviceBase = 'http://127.0.0.1:8765/rt_morato_bot/hs/dp';
+    const serviceBase = 'http://127.0.0.1:8765/rt_m_bot/hs/dp';
     expect('адрес: относительный хук склеен с сервисом из шапки',
       typeof innerWin.resolveFormUrl === 'function' &&
       innerWin.resolveFormUrl('/link', serviceBase) === serviceBase + '/link',
@@ -399,6 +498,153 @@ try {
         themeChosen !== themeBefore && themeSaved === themeChosen,
         themeBefore + ' → ' + themeChosen + ', localStorage=' + themeSaved);
     }
+
+    /* 3g. Действие с .урл после успешной отправки сбрасывает данные целиком.
+       Табло «Позиций / Кол-во / Статус» должно пересчитаться из ОЧИЩЕННОГО IR:
+       раньше сводка восстанавливалась из старого state.params и оставалась с
+       цифрами отправленной партии. */
+    const summaryOf = () => {
+      const box = innerDoc.querySelectorAll('.screen')[1];
+      const summary = box ? box.querySelector('.summary') : null;
+      if (!summary) return '';
+      return Array.prototype.map.call(summary.querySelectorAll('b'),
+        item => item.textContent).join('|');
+    };
+    const rowsOf = id => {
+      const table = innerDoc.getElementById(id);
+      return table ? table.querySelectorAll('tbody tr').length : -1;
+    };
+
+    /* Табло показывается у действия с внешним приёмником (.урл). */
+    expect('табло: у действия с .урл есть сводка', summaryOf() !== '',
+      summaryOf() || 'нет .summary');
+
+    /* Кладём строку в приёмник и жмём кнопку действия — как оператор. */
+    const irNow = innerWin.readParams();
+    let a2Table = null;
+    irNow.children.filter(child => child.ид === 'a2').forEach(op =>
+      (op.children || []).forEach(grid => (grid.children || []).forEach(el => {
+        if (el.type === 'таблица') { a2Table = el; }
+      })));
+    if (a2Table) {
+      a2Table.children.push({
+        ид: 'a2_t1-smoke',
+        type: 'строка',
+        cells: [{ 'value': 'Товар А' }, { 'value': '' }, { 'value': '3' }]
+      });
+      innerWin.writeParams(irNow);
+      innerWin.refreshReceiverView();
+    }
+    expect('табло: строка приёмника попала в сводку',
+      rowsOf('a2_t1') === 1 && summaryOf().indexOf('1') === 0,
+      'строк=' + rowsOf('a2_t1') + ', сводка=' + summaryOf());
+
+    innerWin.fetch = () => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ 'result': 'ok' })
+    });
+    /* Остатки прошлых проверок (мост сканера оставил «48120» в поле Кол-во)
+       убираем: иначе отправка спросит confirm'ом про незанесённые данные
+       источника, а диалог в headless подвешивает страницу. */
+    Array.prototype.forEach.call(innerDoc.querySelectorAll('input'), input => {
+      input.value = '';
+      input.dataset.uid = '';
+    });
+    innerWin.confirm = () => false;
+    const sendBtn = innerDoc.getElementById('a2');
+    if (sendBtn) { sendBtn.click(); }
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    expect('отправка: таблица очищена после успеха', rowsOf('a2_t1') === 0,
+      'строк=' + rowsOf('a2_t1'));
+    expect('отправка: табло сброшено после успеха', summaryOf().indexOf('0') === 0,
+      'сводка=' + summaryOf());
+    expect('отправка: форма вернулась на первый экран',
+      innerDoc.getElementById('stepNow').textContent === '1' &&
+      innerDoc.getElementById('action-input').value === 'a1',
+      'шаг=' + innerDoc.getElementById('stepNow').textContent +
+      ', операция=' + innerDoc.getElementById('action-input').value);
+    expect('отправка: снимок localStorage стёрт',
+      innerWin.localStorage.getItem('tsd-form-state') === null,
+      String(innerWin.localStorage.getItem('tsd-form-state')).slice(0, 40));
+
+    /* 3h. Служебные кнопки — обычной строкой в потоке: position static, а
+       прокручивается каркас (.app), поэтому при нехватке места строка уезжает
+       вниз, а не отбирает высоту у формы. */
+    const toolsRow = innerDoc.querySelector('.tools-row');
+    const appBox = innerDoc.querySelector('.app');
+    const toolsStyle = toolsRow ? innerWin.getComputedStyle(toolsRow) : null;
+    const appStyle = appBox ? innerWin.getComputedStyle(appBox) : null;
+    expect('служебные кнопки: position static (не fixed/sticky)',
+      !!toolsStyle && toolsStyle.position === 'static',
+      toolsStyle ? toolsStyle.position : 'нет .tools-row');
+    expect('служебные кнопки: прокручивается каркас, а не форма',
+      !!appStyle && appStyle.overflowY === 'auto',
+      appStyle ? appStyle.overflowY : 'нет .app');
+
+    /* 3i. Редактируемая таблица БЕЗ приёмника (своя форма, собранная из
+       минимального IR): подсказка обязана говорить про добавление строки, а не
+       про сканер с другого экрана, и строка должна добавляться в IR. */
+    const editableIr = {
+      type: 'форма',
+      заголовокФормы: 'Правка таблицы',
+      children: [
+        { type: 'стили', кнопка: '#4ade80' },
+        {
+          type: 'операция', 'ид': 'op1', имя: 'Правка', имяКнопки: 'Сохранить',
+          children: [{
+            type: 'поля',
+            children: [{
+              type: 'таблица', 'ид': 't1', имя: 'Строки',
+              'редактируемая': 'да',
+              шапка: ['Товар', 'Кол-во'],
+              именаВПриемнике: ['Номенклатура', 'Количество'],
+              типы: ['Строка', 'Число'],
+              измерения: ['Товар'],
+              ресурсы: ['Кол-во'],
+              children: []
+            }]
+          }]
+        }
+      ]
+    };
+    const editFrame = document.createElement('iframe');
+    editFrame.style.cssText = 'position:fixed;left:-9999px;top:0;width:356px;height:471px;border:0';
+    editFrame.srcdoc = buildFormPage(JSON.stringify(editableIr, null, 2));
+    document.body.appendChild(editFrame);
+    let editDoc = null;
+    let editWin = null;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      try { editDoc = editFrame.contentDocument; } catch (e) { editDoc = null; }
+      editWin = editDoc && editDoc.defaultView;
+      if (editWin && editDoc.querySelector('.row-add')) break;
+    }
+    if (editWin && editDoc) {
+      const editEmpty = editDoc.querySelector('.empty');
+      expect('таблица без приёмника: подсказка про добавление строки, а не про сканер',
+        !!editEmpty && editEmpty.textContent.indexOf('Добавьте строку') !== -1 &&
+        editEmpty.textContent.indexOf('Отсканируйте') === -1,
+        editEmpty ? editEmpty.textContent.trim() : 'нет .empty');
+      const editAdd = editDoc.querySelector('.row-add');
+      if (editAdd) editAdd.click();
+      const editRows = editDoc.querySelectorAll('#t1 tbody tr').length;
+      const editIr = editWin.readParams();
+      const editTable = (editIr.children || [])
+        .filter(node => node['ид'] === 'op1')
+        .map(node => (node.children || [])[0])
+        .map(grid => (grid.children || [])[0])
+        .filter(el => el && el['ид'] === 't1')[0];
+      expect('таблица без приёмника: кнопка добавляет строку и в DOM, и в IR',
+        editRows === 1 && !!editTable && (editTable.children || []).length === 1,
+        'DOM=' + editRows + ', IR=' + (editTable ? (editTable.children || []).length : 'нет'));
+      expect('таблица без приёмника: ячейки редактируемые (data-cell-editable)',
+        !!editDoc.querySelector('#t1 tbody td[data-cell-editable="1"]'),
+        String(editDoc.querySelectorAll('#t1 tbody td[data-cell-editable="1"]').length) + ' ячеек');
+    } else {
+      report.push('INFO таблица без приёмника: кадр не поднялся');
+    }
+    editFrame.remove();
   } else {
     report.push('INFO нет доступа к iframe.contentDocument (file:// origin)');
   }

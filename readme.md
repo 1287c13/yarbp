@@ -24,6 +24,7 @@
 - [Общее описание](#about)
 - [Идеи](#ideas)
 - [Песочница](#sandbox)
+  - [Ссылки на встроенные примеры](#sandbox-examples)
 - [Спецификация](#spec)
   - [Синтаксис](#syntax)
     - [Расширенный пример](#advanced-example)
@@ -76,6 +77,35 @@
 ## Песочница
 Песочница с актуальной версией:
 https://yarbp.tech/
+
+<a id="sandbox-examples"></a>
+
+### Ссылки на встроенные примеры
+
+Песочницу можно открыть сразу на нужном примере — параметром `example` в адресе:
+
+- https://yarbp.tech/?example=tsd-form — «Форма ТСД»
+- https://yarbp.tech/?example=bpmn — «BPMN»
+
+Параметр подставляется в адрес сам при переключении примера в папке «Примеры»,
+поэтому ссылку достаточно скопировать из адресной строки и отправить: у получателя
+откроется тот же пример, даже если в его localStorage выбран другой файл.
+Без параметра песочница открывается как обычно.
+
+| `example` | Пример |
+| --- | --- |
+| `lexer-output` | Lexer output |
+| `ast` | Abstract Syntax Tree |
+| `json` | JSON |
+| `xml-anonymous` | XML, anonymous objects |
+| `xml-explicit` | XML, explicit objects |
+| `protobuf` | Protobuf |
+| `xpo` | XPO, full example |
+| `bpmn` | BPMN |
+| `tsd-form` | Форма ТСД |
+
+Принимается и id примера (`?example=builtin-3`), и hash-форма
+(`#example=json`); в адресе всегда оказывается читаемый ключ.
 
 <a id="spec"></a>
 

@@ -459,7 +459,7 @@ def test_builtin_example():
           ', '.join(old_defaults))
 
     check('пример: адрес сервера задан в шапке',
-          '.сервис http://127.0.0.1:8765/rt_morato_bot/hs/dp' in actual,
+          '.сервис http://127.0.0.1:8765/rt_m_bot/hs/dp' in actual,
           'нет .сервис в шапке формы')
     check('пример: хук и урл относительные',
           '\n        .хук /link' in actual and '\n    .урл /processing' in actual,
