@@ -1,3 +1,5 @@
+import { escAttr } from './escape.js';
+
 export function calcLeadingSpaces(text) {
   let count = 0;
   for (let i = 0; i < text.length; i++) {
@@ -104,14 +106,12 @@ export function dedentMultilineString(str) {
   return [firstLine, ...processedRest].join('\n');
 }
 
-export function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+/**
+ * Совместимость: под этим именем хелпер используют конвертер BPMN и его
+ * `bpmn/utils.js`. Набор символов — как у `escAttr` (значения атрибутов XML),
+ * поэтому реализация берётся из общего модуля `escape.js`, а не дублируется.
+ */
+export const escapeHtml = escAttr;
 
 export class IdGenerator {
   constructor() {
