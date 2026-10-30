@@ -20,6 +20,7 @@
  */
 import { FLEX_FORMS_STYLES } from './FlexFormsStyles.js';
 import { FLEX_FORMS_RUNTIME } from './FlexFormsRuntime.js';
+import { escJsonForHtml } from '../../../escape.js';
 import {
   FLEX_FORMS_PAGE_SKELETON,
   FLEX_FORMS_IR_MARKER,
@@ -166,7 +167,9 @@ export function buildFormPage(ir, options = {}) {
     // истолковала бы `$&`, `$'`, `` $` `` как подстановки.
     .replace(FLEX_FORMS_STYLES_MARKER, () => FLEX_FORMS_STYLES)
     .replace(FLEX_FORMS_RUNTIME_MARKER, () => FLEX_FORMS_RUNTIME)
-    .replace(FLEX_FORMS_IR_MARKER, () => serializeFormIR(ir));
+    // IR — данные пользователя: `<`/`&` уходят в \u-escape, иначе значение
+    // с тегом становится живым элементом страницы (D-01, refactoring.md).
+    .replace(FLEX_FORMS_IR_MARKER, () => escJsonForHtml(serializeFormIR(ir)));
 }
 
 
