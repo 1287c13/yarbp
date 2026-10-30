@@ -51,6 +51,20 @@ BROWSERS = [
 ]
 
 
+def prepare_stdout():
+    """Windows-консоль в cp1251 падает на кириллице и тире — переводим в utf-8.
+
+    Иначе первый же FAIL (в тексте которого есть «—») превращается в
+    UnicodeEncodeError и выглядит как падение самих тестов.
+    """
+    stream = getattr(sys, 'stdout', None)
+    if stream is not None and hasattr(stream, 'reconfigure'):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except (ValueError, OSError):
+            pass
+
+
 def read_text(path):
     with io.open(path, 'r', encoding='utf-8-sig', newline='') as handle:
         return handle.read().replace('\r\n', '\n').replace('\r', '\n')
@@ -303,6 +317,8 @@ def check_snapshots(output, files):
 
 
 def main(argv):
+    prepare_stdout()
+
     if '--help' in argv or '-h' in argv:
         print(__doc__)
         return 0

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>security cases</title>
+  <style>
+    body { margin: 0; padding: 16px; background: #ffffff; color: #111111;
+      font: 12px/1.5 'JetBrains Mono', Consolas, monospace; }
+    #result { margin: 0; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<pre id="result">running...</pre>
+
+<script type="module">
+  /*
+   * Регрессии безопасности: «на входе тег — на выходе нет живого тега».
+   *
+   * Проверки идут через настоящие модули редактора в браузере (как
+   * tests/lexer/cases.html): экранирование легко проверить на строках, но
+   * интересна именно сборка HTML — поэтому результат каждой сборки ещё и
+   * разбирается DOM-парсером: живой узел виден только там.
+   */
+  import { escText, escAttr, escJsonForHtml } from '../../src/js/escape.js';
+  import { YarbpLexer } from '../../src/js/classes/YarbpLexer.js';
+  import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
+  import { YarbpHighlighter } from '../../src/js/classes/YarbpHighlighter.js';
+  import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
+  import { FileManager } from '../../src/js/modules/FileManager.js';
+  import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
+  import { FLEX_FORMS_RUNTIME } from '../../src/js/classes/renderers/flexforms/FlexFormsRuntime.js';
+
+  const resultBox = document.getElementById('result');
+  const lines = [];
+  let failed = 0;
+
+  function check(name, ok, detail = '') {
+    if (!ok) failed++;
+    lines.push((ok ? 'ok   ' : 'FAIL ') + name + (ok || !detail ? '' : ' — ' + detail));
+  }
+
+  const PAYLOAD = '<img src=x onerror="window.__xss=1">';
+
+  /* Короткая разметка с полезной нагрузкой в значении. */
+  const CODE_WITH_TAG = [
+    '! как json',
+    '.заголовок Форма ' + PAYLOAD,
+    '.подпись Значение с & амперсандом'
+  ].join('\n');
+
+  function tokenize(code) {
+    const lexer = new YarbpLexer();
+    lexer.setInitialState(code);
+    lexer.tokenize();
+    return lexer;
+  }
+
+  function asDocument(html) {
+    return new DOMParser().parseFromString(html, 'text/html');
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 1. Хелперы экранирования                                            */
+  /* ------------------------------------------------------------------ */
+  check('escText: & < > становятся сущностями',
+    escText('<b>&') === '&lt;b&gt;&amp;', escText('<b>&'));
+  check('escAttr: кавычки тоже',
+    escAttr('"\'') === '&quot;&#39;', escAttr('"\''));
+  check('escJsonForHtml: JSON остаётся разбираемым',
+    JSON.parse(escJsonForHtml(JSON.stringify({ a: '<img>&' }))).a === '<img>&');
+
+  /* ------------------------------------------------------------------ */
+  /* 2. D-01: IR формы внутри страницы                                   */
+  /* ------------------------------------------------------------------ */
+  const irWithTag = {
+    type: 'форма',
+    'заголовокФормы': 'Форма ' + PAYLOAD,
+    children: [{ type: 'поле', 'ид': 'f1', 'имя': 'Подпись ' + PAYLOAD, 'вид': 'надпись' }]
+  };
+  const page = buildFormPage(irWithTag);
+
+  check('D-01: в собранной странице нет живого тега', page.indexOf('<img') === -1);
+
+  const pageDoc = asDocument(page);
+  const dataEl = pageDoc.getElementById('form-params');
+  check('D-01: <data id="form-params"> на месте', !!dataEl);
+  check('D-01: в <data> нет дочерних элементов',
+    !!dataEl && dataEl.children.length === 0,
+    dataEl ? String(dataEl.children.length) : 'нет узла');
+
+  let parsedIR = null;
+  try { parsedIR = JSON.parse(dataEl.textContent); } catch (e) { /* ниже */ }
+  check('D-01: IR из <data> читается как JSON', parsedIR !== null);
+  check('D-01: IR из <data> равен исходному (значения не искажены)',
+    JSON.stringify(parsedIR) === JSON.stringify(irWithTag),
+    parsedIR ? JSON.stringify(parsedIR).slice(0, 120) : 'нет');
+
+  check('D-01: движок не читает #form-params через innerHTML',
+    FLEX_FORMS_RUNTIME.indexOf("#form-params').innerHTML") === -1);
+
+  /* ------------------------------------------------------------------ */
+  /* 3. D-02: id и имя поля в движке (проверка шаблонов движка)           */
+  /* ------------------------------------------------------------------ */
+  check('D-02: в движке нет id="${id}"', FLEX_FORMS_RUNTIME.indexOf('id="${id}"') === -1);
+  check('D-02: имя поля не подставляется сырым',
+    FLEX_FORMS_RUNTIME.indexOf("${fieldParams['имя']}") === -1);
+  check('D-02: опции выбора экранируются',
+    FLEX_FORMS_RUNTIME.indexOf("${option['имя']}") === -1);
+
+  /* ------------------------------------------------------------------ */
+  /* 4. D-04: слой подсветки редактора                                   */
+  /* ------------------------------------------------------------------ */
+  const lexer = tokenize(CODE_WITH_TAG);
+  const highlighted = new YarbpHighlighter(CODE_WITH_TAG, lexer.tokens).highlight();
+
+  check('D-04: подсветка не содержит живого тега', highlighted.indexOf('<img') === -1);
+
+  const highlightBox = document.createElement('div');
+  highlightBox.innerHTML = highlighted;
+  check('D-04: в DOM подсветки нет узла IMG', highlightBox.querySelector('img') === null);
+  check('D-04: текст подсветки совпадает с исходным',
+    highlightBox.textContent === CODE_WITH_TAG,
+    '*' + highlightBox.textContent.slice(0, 80) + '*');
+
+  /* ------------------------------------------------------------------ */
+  /* 5. D-14: панель результата (плоские флейворы)                       */
+  /* ------------------------------------------------------------------ */
+  function renderFlavor(directive) {
+    const flavorLexer = tokenize(CODE_WITH_TAG);
+    const parser = new YarbpParser(flavorLexer);
+    const textarea = document.createElement('textarea');
+    const highlight = document.createElement('div');
+    const flavor = new YarbpFlavor(directive);
+    const renderer = new flavor.flavorData.renderer(
+      flavorLexer, parser, textarea, highlight, () => {});
+    renderer.render();
+    return { textarea, highlight };
+  }
+
+  for (const directive of ['as lexer', 'as ast', 'as json', 'as proto']) {
+    let view = null;
+    try {
+      view = renderFlavor(directive);
+    } catch (e) {
+      check('D-14: ' + directive + ' отрисовался', false, String(e && e.message || e));
+      continue;
+    }
+    check('D-14: ' + directive + ' — нет узла IMG',
+      view.highlight.querySelector('img') === null);
+    // Сильный инвариант: подсветка показывает ровно тот текст, что лежит в
+    // текстовом поле результата. Так ловится и потеря данных, и «двойное»
+    // экранирование, и подмена значения тегом.
+    check('D-14: ' + directive + ' — текст подсветки равен тексту результата',
+      view.highlight.textContent === view.textarea.value,
+      '*' + view.highlight.textContent.slice(0, 60) + '* ≠ *' +
+        view.textarea.value.slice(0, 60) + '*');
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 6. D-03: список файлов с id из импортируемого JSON                  */
+  /* ------------------------------------------------------------------ */
+  const STORAGE_KEY = 'yarbp_security_test_files';
+  const hostileId = 'x" onmouseover="window.__xss=3';
+  const hostileName = 'Файл ' + PAYLOAD;
+
+  const fileManager = new FileManager(STORAGE_KEY);
+  fileManager.uiContainer = document.createElement('div');
+  fileManager.data = {
+    version: 1,
+    activeFileId: hostileId,
+    files: [{ id: hostileId, name: hostileName, content: '', isBuiltin: false, lastModified: 1 }]
+  };
+  fileManager._renderUI();
+
+  const item = fileManager.uiContainer.querySelector('.file-item');
+  check('D-03: файл отрисовался', !!item);
+  check('D-03: в списке нет узла IMG',
+    fileManager.uiContainer.querySelector('img') === null);
+  check('D-03: data-id сохранён значением',
+    !!item && item.dataset.id === hostileId,
+    item ? item.dataset.id : 'нет');
+  check('D-03: лишних атрибутов у элемента нет',
+    !!item && !item.hasAttribute('onmouseover'));
+  check('D-03: имя файла видно текстом',
+    !!item && !!item.querySelector('.file-name') &&
+    item.querySelector('.file-name').textContent === hostileName);
+
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem('yarbp_builtin_folder_expanded');
+
+  /* ------------------------------------------------------------------ */
+  /* 7. Страница формы в iframe: движок реально исполняется              */
+  /*    на испорченных данных — так проверяется и D-01, и D-02.          */
+  /* ------------------------------------------------------------------ */
+  function waitForLoad(frame, timeout = 5000) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (ok) => {
+        if (settled) return;
+        settled = true;
+        resolve(ok);
+      };
+      frame.addEventListener('load', () => setTimeout(() => done(true), 300), { once: true });
+      setTimeout(() => done(false), timeout);
+    });
+  }
+
+  async function checkRenderedForm() {
+    let template = null;
+    try {
+      const response = await fetch('../flexforms/builtin-ir.json', { cache: 'no-store' });
+      template = await response.json();
+    } catch (e) {
+      check('iframe: эталонный IR загружен', false, String(e && e.message || e));
+      return;
+    }
+
+    const ir = JSON.parse(JSON.stringify(template));
+    const fieldGroups = ir.children[0].children[0].children;
+    const victim = fieldGroups.find(child => child.type === 'поле');
+    victim['ид'] = 'evil" onmouseover="window.__xss=2';
+    victim['имя'] = 'Поле ' + PAYLOAD;
+
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:356px;height:471px;border:0';
+    frame.srcdoc = buildFormPage(ir);
+
+    const loaded = waitForLoad(frame);
+    document.body.appendChild(frame);
+    const ok = await loaded;
+
+    check('iframe: страница формы загрузилась', ok);
+
+    if (ok) {
+      const doc = frame.contentDocument;
+      const win = frame.contentWindow;
+      check('iframe: движок отрисовал поля',
+        !!doc && doc.querySelectorAll('input').length > 0,
+        doc ? String(doc.querySelectorAll('input').length) : 'нет документа');
+      check('iframe: в форме нет узла IMG',
+        !!doc && doc.querySelectorAll('img').length === 0,
+        doc ? String(doc.querySelectorAll('img').length) : 'нет документа');
+      check('iframe: скрипт из данных не исполнился',
+        !win || win.__xss === undefined,
+        win ? String(win.__xss) : 'нет окна');
+      check('iframe: id поля сохранён значением',
+        !!doc && !!doc.getElementById(victim['ид']));
+      const label = doc && doc.querySelector('.lbl');
+      check('iframe: имя поля показано текстом',
+        !!label && label.textContent === victim['имя'] + ':',
+        label ? '*' + label.textContent + '*' : 'нет label');
+    }
+
+    frame.remove();
+    localStorage.removeItem('tsd-form-state');
+  }
+
+  try {
+    await checkRenderedForm();
+  } catch (e) {
+    check('iframe: проверка выполнилась', false, String(e && e.message || e));
+  }
+
+  /* ------------------------------------------------------------------ */
+  resultBox.textContent = lines.join('\n') + '\n';
+  document.title = failed ? 'SECURITY FAIL' : 'SECURITY PASS';
+</script>
+</body>
+</html>
