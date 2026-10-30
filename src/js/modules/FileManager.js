@@ -2,6 +2,8 @@
 //
 // Встроенные примеры умеют открываться ссылкой: ?example=<slug> (см.
 // readExampleKeyFromUrl / writeExampleKeyToUrl в конце файла).
+import { escAttr, escText } from '../escape.js';
+
 const EXAMPLE_PARAM = 'example';
 
 export class FileManager {
@@ -695,16 +697,19 @@ Order
   _renderFileItem(file) {
     const isActive = file.id === this.data.activeFileId;
     const classes = `file-item ${isActive ? 'active' : ''} ${file.isBuiltin ? 'builtin' : 'user'}`;
+    // `id` приходит из импортируемого «экспорта проекта», поэтому в атрибут —
+    // только через escAttr: кавычка в id иначе добавит свои атрибуты элементу.
+    const fileId = escAttr(file.id);
     const actions = !file.isBuiltin ? `
       <div class="file-item-actions">
-        <button class="file-action rename" data-id="${file.id}" title="Переименовать">✏️</button>
-        <button class="file-action delete" data-id="${file.id}" title="Удалить">🗑️</button>
+        <button class="file-action rename" data-id="${fileId}" title="Переименовать">✏️</button>
+        <button class="file-action delete" data-id="${fileId}" title="Удалить">🗑️</button>
       </div>
     ` : '<span class="builtin-badge">📌</span>';
 
     return `
-      <li class="${classes}" data-id="${file.id}">
-        <span class="file-name">${this._escapeHtml(file.name)}</span>
+      <li class="${classes}" data-id="${fileId}">
+        <span class="file-name">${escText(file.name)}</span>
         ${actions}
       </li>
     `;
@@ -796,9 +801,7 @@ Order
 
   // Утилита
   _escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return escText(text);
   }
 
   importFromJSON(jsonData) {

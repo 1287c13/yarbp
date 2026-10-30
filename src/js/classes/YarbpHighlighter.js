@@ -1,4 +1,5 @@
 import { TokenTypes } from './YarbpLexer.js';
+import { escText } from '../escape.js';
 
 export class YarbpHighlighter {
 
@@ -20,75 +21,63 @@ export class YarbpHighlighter {
     this.tokens = tokens;
   };
 
-  wrapTextByPositions(start, end, className) {
-    this.code = this.code.slice(0, start) +
-      `<span class="${className}">` +
-      this.code.slice(start, end) +
-      '</span>' +
-      this.code.slice(end);
-  };
+  /**
+   * Диапазоны для подсветки: по возрастанию и без пересечений.
+   *
+   * Пересечения и вложенность HTML выразить не может: `<span>` не может
+   * начаться внутри одного и закончиться внутри другого. Раньше такие токены
+   * уходили в медленный путь, который вставлял разметку в уже собранную
+   * строку по «сырым» позициям — то есть давал битый HTML и вдобавок не
+   * экранировал текст. Теперь вложенный диапазон просто пропускается:
+   * внешний токен уже накрыл эти символы своим классом.
+   */
+  collectRanges() {
+    const ranges = [];
 
-  highlight() {
-    const styled = [];
-    let previousStart = -1;
-    let ordered = true;
-
-    for (const token of this.tokens) {
+    for (const token of this.tokens || []) {
       const className = YarbpHighlighter.tokenTypesToCSSClasses[token.type];
       if (!className) continue;
 
-      // Нулевые и некорректные диапазоны оставляем медленному пути:
-      // он сохраняет прежний порядок вложенных/пустых span-ов.
-      if (!Number.isFinite(token.start) || !Number.isFinite(token.end)
-          || token.end <= token.start) {
-        return this.highlightSlow();
-      }
+      // Нулевой или некорректный диапазон подсвечивать нечем.
+      if (!Number.isFinite(token.start) || !Number.isFinite(token.end)) continue;
+      if (token.end <= token.start) continue;
 
-      if (token.start < previousStart) ordered = false;
-      previousStart = token.start;
-      styled.push({ token, className });
+      ranges.push({ token, className });
     }
 
-    if (!styled.length) return this.code;
-    if (!ordered) styled.sort((a, b) => a.token.start - b.token.start);
+    ranges.sort((a, b) => a.token.start - b.token.start || a.token.end - b.token.end);
 
-    let previousEnd = -1;
-    for (const { token } of styled) {
-      if (token.start < previousEnd) return this.highlightSlow();
-      previousEnd = token.end;
+    const ordered = [];
+    let previousEnd = 0;
+    for (const range of ranges) {
+      if (range.token.start < previousEnd) continue;
+      ordered.push(range);
+      previousEnd = range.token.end;
     }
 
-    // Быстрый путь: непересекающиеся стилизованные токены.
-    // Собираем HTML одним проходом вместо O(n²) вставок в строку.
+    return ordered;
+  };
+
+  /**
+   * Код → HTML подсветки. Текст экранируется: символ `<` в документе остаётся
+   * символом, а не началом тега (слой подсветки вставляется через innerHTML).
+   */
+  highlight() {
+    const code = this.code ?? '';
+
     let cursor = 0;
     let result = '';
 
-    for (const { token, className } of styled) {
-      result += this.code.slice(cursor, token.start);
+    for (const { token, className } of this.collectRanges()) {
+      result += escText(code.slice(cursor, token.start));
       result += `<span class="${className}">`
-        + this.code.slice(token.start, token.end)
+        + escText(code.slice(token.start, token.end))
         + '</span>';
       cursor = token.end;
     }
 
-    result += this.code.slice(cursor);
+    result += escText(code.slice(cursor));
     this.code = result;
-    return this.code;
-  };
-
-  /**
-   * Прежний алгоритм: нужен для пересекающихся и пустых токенов,
-   * где порядок вставки span-ов влияет на HTML.
-   */
-  highlightSlow() {
-    const sortedTokens = this.tokens.toSorted((a, b) => b.start - a.start);
-
-    sortedTokens.forEach(token => {
-      const className = YarbpHighlighter.tokenTypesToCSSClasses[token.type];
-      if (!className) return;
-      this.wrapTextByPositions(token.start, token.end, className);
-    });
-
     return this.code;
   };
 

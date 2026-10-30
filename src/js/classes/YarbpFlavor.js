@@ -18,15 +18,16 @@ import { FlexFormsRenderer } from './renderers/FlexFormsRenderer.js';
 /* highlighters */
 import { XMLHighlighter } from './highlighters/XMLHighlighter.js'
 
+/* escaping */
+import { escText } from '../escape.js'
+
 
 class YarbpLexerRenderer extends YarbpBasicRenderer {
   render() {
     if (!this.renderTextarea || !this.renderHighlightDiv) return;
-    const wrapScopeTags = (str) => {
-      str = str.replaceAll(/SCOPE_IN/g, '<span class="scope-in">SCOPE_IN</span>');
-      str = str.replaceAll(/SCOPE_OUT/g, '<span class="scope-out">SCOPE_OUT</span>');
-      return str;
-    };
+    const wrapScopeTags = (str) => escText(str)
+      .replaceAll(/SCOPE_IN/g, '<span class="scope-in">SCOPE_IN</span>')
+      .replaceAll(/SCOPE_OUT/g, '<span class="scope-out">SCOPE_OUT</span>');
     this.renderTextarea.value = this.lexer.getPrettyView();
     this.renderHighlightDiv.innerHTML = wrapScopeTags(this.renderTextarea.value);
     this.syncRenderScroll();
@@ -38,7 +39,7 @@ class ASTRenderer extends YarbpBasicRenderer {
     const ASTView = JSON.stringify(this.parser.getAST(), undefined, 2);
 
     this.renderTextarea.value = ASTView;
-    this.renderHighlightDiv.innerHTML = ASTView;
+    this.renderHighlightDiv.innerHTML = escText(ASTView);
     this.syncRenderScroll();
   };
 }
@@ -50,7 +51,7 @@ class JSONRenderer extends YarbpBasicRenderer {
     const JSONView = JSON.stringify(converter.convert(), null, 2);
 
     this.renderTextarea.value = JSONView;
-    this.renderHighlightDiv.innerHTML = JSONView;
+    this.renderHighlightDiv.innerHTML = escText(JSONView);
     this.syncRenderScroll();
   };
 }
@@ -77,7 +78,7 @@ class ProtobufRenderer extends YarbpBasicRenderer {
     const protoContent = converter.convert();
 
     this.renderTextarea.value = protoContent ;
-    this.renderHighlightDiv.innerHTML = protoContent;
+    this.renderHighlightDiv.innerHTML = escText(protoContent);
     this.syncRenderScroll();
   };
 }
