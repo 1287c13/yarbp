@@ -612,6 +612,19 @@ def test_browser():
 # main
 # --------------------------------------------------------------------------
 
+def summarise():
+    """Итог прогона: без него exit=1 приходит молча (это и было в §13 плана)."""
+    print('')
+    if FAILURES:
+        print('ПРОВАЛЕНО: %d' % len(FAILURES))
+        for name in FAILURES:
+            print('  - %s' % name)
+        return 1
+
+    print('ВСЁ ЗЕЛЁНОЕ%s' % (' (пропущено: %d)' % len(SKIPPED) if SKIPPED else ''))
+    return 0
+
+
 def main(argv):
     prepare_stdout()
 
@@ -626,7 +639,7 @@ def main(argv):
     except ImportError:
         skip('JS-тесты', 'нет модуля quickjs (pip install quickjs)')
         test_builtin_example()      # примеру редактора quickjs не нужен
-        return 1 if FAILURES else 0
+        return summarise()
 
     test_converter()
     plain_page = test_page_parity()
@@ -641,15 +654,7 @@ def main(argv):
         skip('smoke.html', 'нужен браузер: пример → IR проверяется настоящими '
                            'модулями (quickjs не умеет TDZ статических полей лексера)')
 
-    print('')
-    if FAILURES:
-        print('ПРОВАЛЕНО: %d' % len(FAILURES))
-        for name in FAILURES:
-            print('  - %s' % name)
-        return 1
-
-    print('ВСЁ ЗЕЛЁНОЕ%s' % (' (пропущено: %d)' % len(SKIPPED) if SKIPPED else ''))
-    return 0
+    return summarise()
 
 
 if __name__ == '__main__':
