@@ -40,6 +40,7 @@
   import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
   import { YarbpOpenAPIConverter } from '../../src/js/classes/ast-converters/OpenAPIConvertor.js';
   import { YarbpJsonSchemaConverter } from '../../src/js/classes/ast-converters/JsonSchemaConvertor.js';
+  import { YarbpMermaidConverter } from '../../src/js/classes/ast-converters/MermaidConvertor.js';
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
   import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   import { BPMNRenderer } from '../../src/js/classes/renderers/BPMNRenderer.js';
@@ -1147,6 +1148,107 @@
         schemaPane.querySelectorAll('.schema-status').length === 0);
       schemaPane.remove();
     }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 19. Mermaid: та же модель процесса, но текстовой схемой             */
+  /* ------------------------------------------------------------------ */
+  let mermaidSource = '';
+  try {
+    mermaidSource = await fetchText('cases/bpmn_wide.yarbp');
+  } catch (e) { /* ниже */ }
+
+  if (mermaidSource) {
+    const mermaidConverter = new YarbpMermaidConverter(
+      buildAST(mermaidSource).ast, { source: mermaidSource });
+    const mermaid = mermaidConverter.convert();
+    const mermaidLines = mermaid.split('\n').filter(line => line.trim());
+
+    check('Mermaid: заголовок flowchart LR', mermaid.startsWith('flowchart LR'), mermaidLines[0]);
+    check('Mermaid: пулы стали subgraph',
+      /subgraph Process_Request\["Отдел заявок"\]/.test(mermaid) &&
+      /subgraph Process_Approve\["Согласование"\]/.test(mermaid),
+      mermaidLines.filter(line => line.includes('subgraph')).join(' / '));
+    check('Mermaid: дорожка — вложенный subgraph',
+      /subgraph Lane_1\["Оператор"\]/.test(mermaid));
+    check('Mermaid: задача, шлюз и вызов нарисованы разными формами',
+      /Activity_1\["Принять заявку"\]/.test(mermaid) &&
+      /Activity_2\[\["вызов: Согласовать"\]\]/.test(mermaid) &&
+      /StartEvent_1\(\["Начало"\]\)/.test(mermaid),
+      mermaidLines.filter(line => line.includes('Activity_')).join(' / '));
+    check('Mermaid: поток стал стрелкой',
+      /StartEvent_1 --> Activity_1/.test(mermaid) &&
+      /Activity_1 --> Activity_2/.test(mermaid));
+    check('Mermaid: группа отмечена комментарием, а не ломает схему',
+      /%% группа "Финансовый блок"/.test(mermaid));
+    check('Mermaid: на корректной схеме предупреждений нет',
+      mermaidConverter.warnings.length === 0, JSON.stringify(mermaidConverter.warnings));
+
+    // ветки шлюза подписываются, условия — пунктиром
+    const branchSource = [
+      '! как мермейд',
+      'процесс = Ветки',
+      '  событие = Старт',
+      '    шлюз = Выбор',
+      '      ветка = да',
+      '        задача = Идти',
+      '          событие = Таймер .тип таймер',
+      '      ветка = нет',
+      '        событие = Стоп .расположение конец',
+      '    событие .расположение конец',
+    ].join('\n');
+    const branchConverter = new YarbpMermaidConverter(buildAST(branchSource).ast);
+    const branch = branchConverter.convert();
+
+    check('Mermaid: подпись ветки на стрелке',
+      /Gateway_1 -->\|"да"\| Activity_1/.test(branch) &&
+      /Gateway_1 -->\|"нет"\| EndEvent_1/.test(branch),
+      branch.split('\n').filter(line => line.includes('-->')).join(' / '));
+    check('Mermaid: boundary-событие пунктиром от задачи',
+      /Activity_1 -\.->\|"boundary"\| BoundaryEvent_1/.test(branch),
+      branch.split('\n').filter(line => line.includes('-.->')).join(' / '));
+    check('Mermaid: на схеме с ветками предупреждений нет',
+      branchConverter.warnings.length === 0, JSON.stringify(branchConverter.warnings));
+
+    // кавычки и переносы в подписях не должны ломать разметку
+    const quotesSource = [
+      '! как мермейд',
+      'процесс = Кавычки',
+      '  событие = Старт',
+      '    задача = Сказать "привет"',
+      '    событие .расположение конец',
+    ].join('\n');
+    const quotes = new YarbpMermaidConverter(buildAST(quotesSource).ast).convert();
+    check('Mermaid: кавычки в подписи заменяются',
+      !/\["[^"\n]*"[^\]]*"\]/.test(quotes) && quotes.includes("Сказать 'привет'"),
+      quotes.split('\n')[2]);
+
+    const mermaidFlavor = new YarbpFlavor('как мермейд');
+    check('флейвор: «! как мермейд» находит рендерер', !!mermaidFlavor.flavorData &&
+      !!mermaidFlavor.flavorData.renderer, String(mermaidFlavor.flavorName));
+
+    const mermaidPane = document.createElement('div');
+    mermaidPane.className = 'editor-container';
+    const mermaidTextarea = document.createElement('textarea');
+    const mermaidPreview = document.createElement('div');
+    mermaidPane.appendChild(mermaidTextarea);
+    mermaidPane.appendChild(mermaidPreview);
+    document.body.appendChild(mermaidPane);
+
+    const mermaidAst = buildAST(mermaidSource).ast;
+    const mermaidRenderer = new mermaidFlavor.flavorData.renderer(
+      { text: mermaidSource, tokens: [], setObserver() {}, callRendererObserver() {} },
+      { getAST: () => mermaidAst },
+      mermaidTextarea,
+      mermaidPreview,
+      () => {},
+    );
+    mermaidRenderer.render();
+    check('Mermaid: панель показывает схему', mermaidTextarea.value.startsWith('flowchart LR'));
+    mermaidRenderer.destroy();
+    check('Mermaid: destroy убирает свою строку диагностики',
+      mermaidPane.querySelectorAll('.mermaid-status').length === 0);
+    mermaidPane.remove();
   }
 
   /* ------------------------------------------------------------------ */

@@ -16,6 +16,7 @@ import { BPMNRenderer } from './renderers/BPMNRenderer.js';
 import { FlexFormsRenderer } from './renderers/FlexFormsRenderer.js';
 import { OpenAPIRenderer } from './renderers/OpenAPIRenderer.js';
 import { JsonSchemaRenderer } from './renderers/JsonSchemaRenderer.js';
+import { MermaidRenderer } from './renderers/MermaidRenderer.js';
 
 /* highlighters */
 import { XMLHighlighter } from './highlighters/XMLHighlighter.js'
@@ -139,6 +140,12 @@ const KnownFlavors = Object.freeze({
     names: ['схема', 'jsonschema', 'json-schema'],
     textExample: [],
     renderer: JsonSchemaRenderer,
+  },
+  MERMAID: {
+    /* `! как мермейд` — текстовая схема процесса для PR и markdown */
+    names: ['мермейд', 'mermaid'],
+    textExample: [],
+    renderer: MermaidRenderer,
   },
   FLEX_FORMS: {
     /* `normalizeFlavorName` снимает `[-_ ()]` и приводит к нижнему регистру,
