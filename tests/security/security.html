@@ -262,6 +262,42 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* 8. Политика безопасности и страница-хост предпросмотра (страховки)   */
+  /* ------------------------------------------------------------------ */
+  async function fetchText(url) {
+    const response = await fetch(url, { cache: 'no-store' });
+    return response.ok ? response.text() : '';
+  }
+
+  let editorHtml = '';
+  let previewHtml = '';
+  try {
+    editorHtml = await fetchText('../../src/index.html');
+    previewHtml = await fetchText('../../src/preview.html');
+  } catch (e) { /* проверки ниже покажут пустоту */ }
+
+  const cspMatch = editorHtml.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/);
+  const csp = cspMatch ? cspMatch[1] : '';
+
+  check('CSP: политика объявлена в разметке редактора', !!csp);
+
+  // Смотрим только значение политики: в комментарии рядом слово
+  // 'unsafe-inline' встречается как объяснение, и это не должно считаться.
+  check('CSP: скрипты только свои, без unsafe-inline',
+    /script-src 'self'/.test(csp) && !/script-src[^;]*unsafe-inline/.test(csp),
+    (csp.match(/script-src[^;]*/) || ['нет политики'])[0]);
+
+  check('CSP: фреймы только свои (предпросмотр — своя страница)',
+    /frame-src 'self'/.test(csp), csp || 'нет политики');
+  check('A-8: в разметке редактора нет inline-стилей',
+    editorHtml.length > 0 && !/\sstyle="/.test(editorHtml));
+
+  check('предпросмотр: страница-хост существует', previewHtml.length > 0);
+  check('предпросмотр: хост принимает документ через postMessage',
+    previewHtml.includes("'yarbp-preview'") &&
+    previewHtml.includes('document.write'));
+
+  /* ------------------------------------------------------------------ */
   resultBox.textContent = lines.join('\n') + '\n';
   document.title = failed ? 'SECURITY FAIL' : 'SECURITY PASS';
 </script>

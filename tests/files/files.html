@@ -22,6 +22,10 @@
    */
   import { readStored, writeStored, removeStored, storedKeys } from '../../src/js/storage.js';
   import { FileManager } from '../../src/js/modules/FileManager.js';
+  import { YarbpLexer } from '../../src/js/classes/YarbpLexer.js';
+  import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
+  import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
+  import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
 
   const resultBox = document.getElementById('result');
   const lines = [];
@@ -420,6 +424,114 @@
   }
 
   errFrame.remove();
+
+  /* ------------------------------------------------------------------ */
+  /* 8. Один код — одна проверка: предпросмотр и выкачанная страница      */
+  /*    (A-1: раздача и рендер должны вести себя одинаково)               */
+  /* ------------------------------------------------------------------ */
+  const tsdCode = new FileManager('yarbp_parity_test')
+    ._getDefaultData().files.find(file => file.id === 'builtin-9').content;
+
+  function buildIR(code) {
+    const lexer = new YarbpLexer();
+    lexer.setInitialState(code);
+    lexer.tokenize();
+    return new YarbpFlexFormsConverter(new YarbpParser(lexer).getAST()).convert();
+  }
+
+  async function renderFormPage(html, timeout = 8000) {
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:356px;height:471px;border:0';
+    frame.srcdoc = html;
+    const loaded = waitForLoad(frame, timeout);
+    document.body.appendChild(frame);
+    const ok = await loaded;
+    return { frame, ok };
+  }
+
+  /** Что видно в отрисованной форме: поля, таблицы, подпись, кнопки. */
+  function formFacts(doc) {
+    if (!doc) return null;
+    const label = doc.querySelector('.lbl');
+    return {
+      inputs: doc.querySelectorAll('input').length,
+      tables: doc.querySelectorAll('table.ff-table').length,
+      buttons: doc.querySelectorAll('button').length,
+      label: label ? label.textContent.trim() : ''
+    };
+  }
+
+  const parityIR = buildIR(tsdCode);
+  check('паритет: IR из примера собран',
+    !!parityIR && parityIR.type === 'форма', parityIR ? String(parityIR.type) : 'нет');
+
+  // Снимок localStorage формы не должен переезжать из одной проверки в другую.
+  removeStored('tsd-form-state');
+  const previewRun = await renderFormPage(buildFormPage(parityIR, { preview: true }));
+  const previewFacts = formFacts(previewRun.frame.contentDocument);
+  previewRun.frame.remove();
+
+  removeStored('tsd-form-state');
+  const plainRun = await renderFormPage(buildFormPage(parityIR));
+  const plainFacts = formFacts(plainRun.frame.contentDocument);
+  plainRun.frame.remove();
+
+  check('паритет: обе страницы загрузились', previewRun.ok && plainRun.ok);
+  check('паритет: форма отрисована в предпросмотре и в выкачанной',
+    !!previewFacts && previewFacts.inputs > 0 && !!plainFacts && plainFacts.inputs > 0,
+    JSON.stringify(previewFacts) + ' / ' + JSON.stringify(plainFacts));
+  check('паритет: состав полей и таблиц совпадает',
+    !!previewFacts && !!plainFacts &&
+    previewFacts.inputs === plainFacts.inputs &&
+    previewFacts.tables === plainFacts.tables &&
+    previewFacts.label === plainFacts.label,
+    JSON.stringify(previewFacts) + ' / ' + JSON.stringify(plainFacts));
+  check('паритет: таблица есть в обеих',
+    !!previewFacts && previewFacts.tables > 0 &&
+    !!plainFacts && plainFacts.tables > 0,
+    (previewFacts ? previewFacts.tables : 'нет') + ' / ' +
+      (plainFacts ? plainFacts.tables : 'нет'));
+
+  /* ------------------------------------------------------------------ */
+  /* 9. Предпросмотр в редакторе идёт через страницу-хост (CSP)           */
+  /* ------------------------------------------------------------------ */
+  const previewAppFrame = document.createElement('iframe');
+  previewAppFrame.style.cssText = 'position:fixed;left:-9999px;top:0;width:1024px;height:768px;border:0';
+  previewAppFrame.src = '../../src/index.html';
+
+  const previewAppLoaded = waitForLoad(previewAppFrame, 8000);
+  document.body.appendChild(previewAppFrame);
+  const previewAppOk = await previewAppLoaded;
+
+  check('предпросмотр: редактор открылся', previewAppOk);
+
+  if (previewAppOk) {
+    const appDoc = previewAppFrame.contentDocument;
+    const appWin = previewAppFrame.contentWindow;
+    const appEditor = appDoc.getElementById('code-textarea');
+
+    appEditor.value = tsdCode;
+    appEditor.dispatchEvent(new appWin.Event('input', { bubbles: true }));
+
+    // Пауза перерисовки (400 мс) + загрузка страницы-хоста + document.write
+    // + запуск движка формы.
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
+    const hostFrame = appDoc.querySelector('.ff-phone-screen iframe');
+    check('предпросмотр: в рамке ТСД есть iframe', !!hostFrame);
+
+    const hostSrc = hostFrame ? String(hostFrame.getAttribute('src') || '') : '';
+    check('предпросмотр: iframe грузит страницу-хост, а не srcdoc',
+      hostSrc.indexOf('preview.html') === 0, hostSrc || 'нет src');
+
+    const hostDoc = hostFrame ? hostFrame.contentDocument : null;
+    check('предпросмотр: форма отрисована внутри хоста',
+      !!hostDoc && hostDoc.querySelectorAll('input').length > 0,
+      hostDoc ? String(hostDoc.querySelectorAll('input').length) : 'нет документа');
+  }
+
+  previewAppFrame.remove();
+  removeStored('tsd-form-state');
 
   /* ------------------------------------------------------------------ */
   ['yarbp_files_test_a', 'yarbp_files_test_b', 'yarbp_files_test_c',
