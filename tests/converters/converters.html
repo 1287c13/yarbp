@@ -39,6 +39,7 @@
   import { YarbpBPMNConverter, getLayoutStats, resetLayoutStats } from '../../src/js/classes/ast-converters/bpmn/YarbpBPMNConverter.js';
   import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
   import { YarbpOpenAPIConverter } from '../../src/js/classes/ast-converters/OpenAPIConvertor.js';
+  import { YarbpJsonSchemaConverter } from '../../src/js/classes/ast-converters/JsonSchemaConvertor.js';
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
   import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   import { BPMNRenderer } from '../../src/js/classes/renderers/BPMNRenderer.js';
@@ -1019,6 +1020,132 @@
       check('OpenAPI: ссылка ?example=openapi ведёт на встроенный пример',
         !!foundByKey && foundByKey.id === 'builtin-10',
         String(foundByKey && foundByKey.id));
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 18. JSON Schema: та же разметка, но схема данных                    */
+  /* ------------------------------------------------------------------ */
+  let schemaSource = '';
+  try {
+    schemaSource = await fetchText('cases/schema_order.yarbp');
+  } catch (e) { /* ниже */ }
+
+  if (schemaSource) {
+    const schemaConverter = new YarbpJsonSchemaConverter(
+      buildAST(schemaSource).ast, { source: schemaSource });
+
+    let schema = null;
+    try {
+      schema = schemaConverter.convert();
+    } catch (error) {
+      check('JSON Schema: конвертер не падает', false, String(error && error.message || error));
+    }
+
+    if (schema) {
+      const defs = schema.$defs || {};
+      const order = defs['Заказ'] || {};
+      const client = defs['Клиент'] || {};
+
+      check('JSON Schema: draft 2020-12',
+        schema.$schema === 'https://json-schema.org/draft/2020-12/schema', String(schema.$schema));
+      check('JSON Schema: $id и title из api',
+        schema.$id === 'https://example.com/order.schema.json' &&
+        schema.title === 'Заказ' && schema.description === 'Заказ покупателя',
+        JSON.stringify({ id: schema.$id, title: schema.title }));
+      check('JSON Schema: обе схемы в $defs',
+        Object.keys(defs).length === 2 && !!order.properties && !!client.properties,
+        Object.keys(defs).join(','));
+      check('JSON Schema: корень ведёт на .корень',
+        schema.$ref === '#/$defs/Заказ', String(schema.$ref));
+      check('JSON Schema: свойства и required',
+        order.properties.id.type === 'integer' && order.properties.id.format === 'int64' &&
+        JSON.stringify(order.required) === JSON.stringify(['id', 'client']),
+        JSON.stringify(order.required));
+      check('JSON Schema: enum и массив',
+        JSON.stringify(order.properties.status.enum) === JSON.stringify(['new', 'paid']) &&
+        order.properties.items.items.type === 'string');
+      check('JSON Schema: ссылка между схемами — на $defs',
+        order.properties.client.$ref === '#/$defs/Клиент',
+        String(order.properties.client.$ref));
+      check('JSON Schema: на корректной схеме предупреждений нет',
+        schemaConverter.warnings.length === 0, JSON.stringify(schemaConverter.warnings));
+
+      // схему можно использовать как валидатор: $ref и $defs согласованы
+      const refTargets = [];
+      const collect = (value) => {
+        if (!value || typeof value !== 'object') return;
+        if (typeof value.$ref === 'string') refTargets.push(value.$ref);
+        Object.values(value).forEach(collect);
+      };
+      collect(defs);
+      check('JSON Schema: все $ref внутри $defs разрешаются',
+        refTargets.every(ref => !!defs[ref.split('/').pop()]),
+        refTargets.join(','));
+
+      const badSchema = new YarbpJsonSchemaConverter(buildAST([
+        '! как схема',
+        'api = П .корень НетТакой',
+        '  ..схемы',
+        '    схема = Есть',
+        '      поле = a .тип строка .тип2 мусор',
+        '  лишний = узел',
+      ].join('\n')).ast);
+      const badSchemaSpec = badSchema.convert();
+      const badSchemaText = badSchema.warnings.map(item => item.message).join(' | ');
+      check('JSON Schema: неизвестный .корень — предупреждение и первая схема',
+        /корень «НетТакой» не объявлен/.test(badSchemaText) &&
+        badSchemaSpec.$ref === '#/$defs/Есть', badSchemaText);
+      check('JSON Schema: неизвестный узел — предупреждение',
+        /неизвестный узел «лишний»/.test(badSchemaText), badSchemaText);
+
+      const noSchemas = new YarbpJsonSchemaConverter(buildAST('! как схема\napi = Пусто\n').ast);
+      noSchemas.convert();
+      check('JSON Schema: пустой документ — предупреждение',
+        noSchemas.warnings.some(item => /нет ни одной схемы/.test(item.message)),
+        JSON.stringify(noSchemas.warnings));
+
+      // схемы можно писать в корне, без api
+      const rootSchemas = new YarbpJsonSchemaConverter(buildAST([
+        '! как схема',
+        'схема = Точка',
+        '  поле = x .тип число .обязательное да',
+      ].join('\n')).ast);
+      const rootSpec = rootSchemas.convert();
+      check('JSON Schema: схемы в корне документа тоже работают',
+        !!rootSpec.$defs['Точка'] && rootSpec.$ref === '#/$defs/Точка',
+        JSON.stringify(Object.keys(rootSpec.$defs || {})));
+
+      const schemaFlavor = new YarbpFlavor('как схема');
+      check('флейвор: «! как схема» находит рендерер', !!schemaFlavor.flavorData &&
+        !!schemaFlavor.flavorData.renderer, String(schemaFlavor.flavorName));
+      check('флейвор: «! as json-schema» — тот же флейвор',
+        new YarbpFlavor('as json-schema').flavorName === new YarbpFlavor('как jsonschema').flavorName);
+
+      // панель рендерера: контракт и своя строка диагностики
+      const schemaPane = document.createElement('div');
+      schemaPane.className = 'editor-container';
+      const schemaTextarea = document.createElement('textarea');
+      const schemaPreview = document.createElement('div');
+      schemaPane.appendChild(schemaTextarea);
+      schemaPane.appendChild(schemaPreview);
+      document.body.appendChild(schemaPane);
+
+      const schemaAst = buildAST(schemaSource).ast;
+      const schemaRenderer = new schemaFlavor.flavorData.renderer(
+        { text: schemaSource, tokens: [], setObserver() {}, callRendererObserver() {} },
+        { getAST: () => schemaAst },
+        schemaTextarea,
+        schemaPreview,
+        () => {},
+      );
+      schemaRenderer.render();
+      check('JSON Schema: панель показывает схему',
+        schemaTextarea.value.includes('"$defs"') && schemaTextarea.value.includes('"openapi"') === false);
+      schemaRenderer.destroy();
+      check('JSON Schema: destroy убирает свою строку диагностики',
+        schemaPane.querySelectorAll('.schema-status').length === 0);
+      schemaPane.remove();
     }
   }
 

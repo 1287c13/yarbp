@@ -3,21 +3,28 @@ import { YarbpOpenAPIConverter } from '../ast-converters/OpenAPIConvertor.js';
 import { escText } from '../../escape.js';
 
 /**
- * Панель флейвора `! как openapi`: JSON-контракт OpenAPI 3.0 + строка
- * диагностики.
+ * Панель «JSON-документ»: конвертер → JSON + строка диагностики.
  *
- * Устроено как панель BPMN (B-1): конвертер сообщает, что не понял
- * (неизвестный узел, путь без методов, ссылка на несуществующую схему), а
- * здесь это показывается строкой, а не теряется молча.
+ * Общая часть для OpenAPI и JSON Schema: оба конвертера отдают объект и
+ * warnings[], поэтому отличается только сам конвертер и имя класса строки
+ * статуса (чтобы стили и `destroy()` не путались между панелями).
  */
-export class OpenAPIRenderer extends YarbpBasicRenderer {
+export class JsonDocumentRenderer extends YarbpBasicRenderer {
+  /** @abstract */
+  createConverter() {
+    throw new Error('createConverter must be implemented');
+  }
+
+  get statusClassName() {
+    return 'json-status';
+  }
+
   render() {
     if (!this.renderTextarea || !this.renderHighlightDiv) return;
 
     const AST = this.parser.getAST();
-    const converter = new YarbpOpenAPIConverter(AST, {
-      source: this.lexer && typeof this.lexer.text === 'string' ? this.lexer.text : '',
-    });
+    const source = this.lexer && typeof this.lexer.text === 'string' ? this.lexer.text : '';
+    const converter = this.createConverter(AST, source);
     const spec = JSON.stringify(converter.convert(), null, 2);
 
     this.showWarnings(converter.warnings);
@@ -40,7 +47,7 @@ export class OpenAPIRenderer extends YarbpBasicRenderer {
 
     if (!this.statusBox || !this.statusBox.isConnected) {
       const box = document.createElement('div');
-      box.className = 'openapi-status';
+      box.className = this.statusClassName;
       box.setAttribute('role', 'status');
       box.hidden = true;
       host.appendChild(box);
@@ -74,9 +81,20 @@ export class OpenAPIRenderer extends YarbpBasicRenderer {
   destroy() {
     const host = this.panelHost();
     if (host) {
-      host.querySelectorAll('.openapi-status').forEach(element => element.remove());
+      host.querySelectorAll('.' + this.statusClassName).forEach(element => element.remove());
     }
     this.statusBox = null;
     this.lastSpec = null;
+  }
+}
+
+/** `! как openapi` — контракт REST API. */
+export class OpenAPIRenderer extends JsonDocumentRenderer {
+  createConverter(ast, source) {
+    return new YarbpOpenAPIConverter(ast, { source });
+  }
+
+  get statusClassName() {
+    return 'openapi-status';
   }
 }

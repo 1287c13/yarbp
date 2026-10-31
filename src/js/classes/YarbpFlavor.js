@@ -15,6 +15,7 @@ import { XPMRenderer } from './renderers/XPMRenderer.js'
 import { BPMNRenderer } from './renderers/BPMNRenderer.js';
 import { FlexFormsRenderer } from './renderers/FlexFormsRenderer.js';
 import { OpenAPIRenderer } from './renderers/OpenAPIRenderer.js';
+import { JsonSchemaRenderer } from './renderers/JsonSchemaRenderer.js';
 
 /* highlighters */
 import { XMLHighlighter } from './highlighters/XMLHighlighter.js'
@@ -132,6 +133,12 @@ const KnownFlavors = Object.freeze({
     names: ['openapi', 'open-api', 'swagger'],
     textExample: [],
     renderer: OpenAPIRenderer,
+  },
+  JSON_SCHEMA: {
+    /* `! как схема` — схема данных для валидаторов, без путей и эндпоинтов */
+    names: ['схема', 'jsonschema', 'json-schema'],
+    textExample: [],
+    renderer: JsonSchemaRenderer,
   },
   FLEX_FORMS: {
     /* `normalizeFlavorName` снимает `[-_ ()]` и приводит к нижнему регистру,
