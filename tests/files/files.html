@@ -207,6 +207,10 @@
   const backupKeysOf = () => storedKeys()
     .filter(key => key.startsWith(FileManager.BACKUP_PREFIX));
 
+  // Импорты из предыдущих проверок тоже оставляют копии — чистим, чтобы
+  // считать копии именно этого шага.
+  backupKeysOf().forEach(key => removeStored(key));
+
   confirmMessage = '';
   const applied = guarded.importFromJSON(applyPayload);
 
@@ -366,19 +370,22 @@
     const errEditor = doc.getElementById('code-textarea');
     const status = doc.getElementById('editor-status');
 
-    const typeCode = (value) => {
+    const typeCode = async (value) => {
       errEditor.value = value;
       errEditor.dispatchEvent(new view.Event('input', { bubbles: true }));
+      // Пересчёт панелей идёт раз в кадр (requestAnimationFrame), плюс есть
+      // таймер-страховка на 100 мс — ждём её, чтобы читать готовое состояние.
+      await new Promise((resolve) => setTimeout(resolve, 150));
     };
 
     check('D-05: строка статуса есть в разметке', !!status);
     check('D-05: на исходном примере статус скрыт', !!status && status.hidden === true);
 
-    typeCode('! as json\n:\n  .a 1');
+    await typeCode('! as json\n:\n  .a 1');
     check('D-05: корректный текст ошибки не показывает',
       !!status && status.hidden === true);
 
-    typeCode("! as json\n.a 'b");
+    await typeCode("! as json\n.a 'b");
     check('D-05: незакрытая кавычка видна',
       !!status && status.hidden === false && /незакрытая кавычка/.test(status.textContent),
       status ? status.textContent : 'нет статуса');
@@ -391,13 +398,13 @@
     // Значение вправе содержать `<` (`.a < b` — валидное значение), поэтому
     // «недопустимый символ» берём в том виде, в каком он существует:
     // строка без префикса, как в notes/cases/22_invalid_chars.txt.
-    typeCode('! as json\na < b\nc');
+    await typeCode('! as json\na < b\nc');
     check('D-05: недопустимый фрагмент виден',
       !!status && status.hidden === false &&
       /недопустимый символ|не удалось разобрать/.test(status.textContent),
       status ? status.textContent : '');
 
-    typeCode('! as json\n:\n  .a 1');
+    await typeCode('! as json\n:\n  .a 1');
     check('D-05: статус снова скрывается', !!status && status.hidden === true);
   }
 

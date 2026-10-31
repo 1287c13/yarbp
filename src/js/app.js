@@ -81,7 +81,6 @@ function createResizer(config) {
   let isResizing = false;
   let startPos = 0;
   let startSize = 0;
-  let startParentSize = 0;
 
   const getClientPos = (e) => (direction === 'horizontal' ? e.clientX : e.clientY);
 
@@ -118,14 +117,7 @@ function createResizer(config) {
     const delta = currentPos - startPos;
 
     const currentParentSize = getContainerSize();
-
-    let newSize;
-    if (direction === 'horizontal') {
-      newSize = startSize + delta;
-    } else {
-      newSize = startSize + delta;
-    }
-
+    const newSize = startSize + delta;
     const percent = (newSize / currentParentSize) * 100;
 
     if (percent >= minPercent && percent <= maxPercent) {
@@ -156,7 +148,6 @@ function createResizer(config) {
     isResizing = true;
     startPos = getClientPos(e);
     startSize = getElementSize();
-    startParentSize = getContainerSize();
 
     document.body.style.userSelect = 'none';
     document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
@@ -299,10 +290,58 @@ function cleanupRenderer() {
   }
 }
 
+/* Пересчёт панелей — раз в кадр, а не на каждое нажатие: rAF склеивает серию
+   событий `input` в одну отрисовку. Текст, который не изменился (undo в
+   исходное состояние, повторное событие), полностью не пересчитывается. */
+let pendingUpdateFrame = 0;
+let lastRenderedCode = null;
+let lastAST = null;
+
+function scheduleUpdateViews() {
+  if (pendingUpdateFrame) return;
+
+  pendingUpdateFrame = requestAnimationFrame(() => {
+    pendingUpdateFrame = 0;
+    updateViews();
+  });
+
+  // Страховка: в фоновой вкладке и в скрытом iframe кадры могут не приходить.
+  // Тогда пересчитываем по таймеру — правка не должна «застревать».
+  setTimeout(() => {
+    if (!pendingUpdateFrame) return;
+    cancelAnimationFrame(pendingUpdateFrame);
+    pendingUpdateFrame = 0;
+    updateViews();
+  }, 100);
+}
+
+/** Подсказки зависят от каретки, поэтому планируются и при неизменном тексте. */
+function scheduleSuggestions(flavor, ast) {
+  YarbpAppGlobals.suggestionTicker.schedule(() => {
+    const result = YarbpAppGlobals.suggestionProvider.update({
+      tokens: YarbpAppGlobals.lexer.tokens,
+      ast,
+      cursorOffset: textarea.selectionStart,
+      text: textarea.value,
+      flavor,
+    });
+    if (result) YarbpAppGlobals.suggestionUI.show(result);
+    else YarbpAppGlobals.suggestionUI.hide();
+  });
+}
+
 function updateViews() {
   if (!textarea || !highlightDiv) return;
 
   const code = textarea.value;
+
+  // Тот же текст: тяжёлую часть (лексинг, AST, конвертер, innerHTML) пропускаем.
+  if (code === lastRenderedCode && YarbpAppGlobals.flavor) {
+    scheduleSuggestions(YarbpAppGlobals.flavor, lastAST);
+    return;
+  }
+
+  lastRenderedCode = code;
   YarbpAppGlobals.lexer.setInitialState(code);
   YarbpAppGlobals.lexer.tokenize();
   updateStatus(code);
@@ -328,18 +367,9 @@ function updateViews() {
   } catch (e) {
     console.error('[app] AST build failed:', e);
   }
+  lastAST = ast;
 
-  YarbpAppGlobals.suggestionTicker.schedule(() => {
-    const result = YarbpAppGlobals.suggestionProvider.update({
-      tokens: YarbpAppGlobals.lexer.tokens,
-      ast,
-      cursorOffset: textarea.selectionStart,
-      text: textarea.value,
-      flavor,
-    });
-    if (result) YarbpAppGlobals.suggestionUI.show(result);
-    else YarbpAppGlobals.suggestionUI.hide();
-  });
+  scheduleSuggestions(flavor, ast);
 
   const flavorChanged = !!YarbpAppGlobals.flavor &&
     YarbpAppGlobals.flavor.flavorName !== flavor.flavorName;
@@ -692,7 +722,7 @@ window.addEventListener('resize', () => {
 });
 
 if (textarea && highlightDiv) {
-  textarea.addEventListener('input', updateViews);
+  textarea.addEventListener('input', scheduleUpdateViews);
   textarea.addEventListener('scroll', syncScroll);
   renderTextarea.addEventListener('scroll', syncRenderScroll);
   textarea.addEventListener('blur', () => YarbpAppGlobals.suggestionUI.hide());
