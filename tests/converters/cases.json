@@ -6,6 +6,8 @@
     "bpmn_subprocess",
     "bpmn_features",
     "bpmn_data",
-    "bpmn_wide"
+    "bpmn_wide",
+    "bpmn_fanout",
+    "bpmn_swimswitch"
   ]
 }

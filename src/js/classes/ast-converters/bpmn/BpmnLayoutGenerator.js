@@ -654,7 +654,11 @@ export class BpmnLayoutGenerator {
           && !this.isUpperBranchOfGateway(targetParams.id, id)) {
         arrowType = 'rb';
       } else if (isRightShift && isUpShift) {
-        arrowType = 'tl';
+        // Подъём из нижнего ряда в верхний: идём вправо до правой грани, поднимаемся
+        // в промежутке между задачами и входим в левую грань цели. Раньше подъём
+        // шёл по центру источника (x = центр), и это совпадало с вертикалью
+        // входящего сверху потока — две стрелки рисовались одной линией.
+        arrowType = 'rlv';
       } else if (this.isGatewayId(sourceParams.id)
           && this.isGatewayId(targetParams.id)
           && !this.isUpperBranchOfGateway(sourceParams.id, id)) {
@@ -668,6 +672,10 @@ export class BpmnLayoutGenerator {
 
       let waypoints;
       if (arrowType === 'bl' || arrowType === 'tl') {
+        waypoints = [firstWaypoint, [firstWaypoint[0], lastWaypoint[1]], lastWaypoint];
+      } else if (arrowType === 'rlv') {
+        // вправо до правой грани, вверх по этой же вертикали, затем влево-вправо
+        // в левую грань цели: вертикаль проходит в промежутке между задачами
         waypoints = [firstWaypoint, [firstWaypoint[0], lastWaypoint[1]], lastWaypoint];
       } else if (arrowType === 'rb' || arrowType === 'rt') {
         waypoints = [firstWaypoint, [lastWaypoint[0], firstWaypoint[1]], lastWaypoint];

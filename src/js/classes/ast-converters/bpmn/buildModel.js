@@ -706,7 +706,12 @@ function buildGateway(node, ctx, process, opts) {
     .filter(t => t && t.tag !== 'endEvent');
 
   let gatewayTail;
-  if (openTails.length === 0) {
+  if (!branchNodes.length) {
+    // Шлюз без веток — это точка слияния (или просто пропуск потока): он
+    // передаёт управление дальше как обычный узел. Раньше tail был null, и
+    // следующий сиблинг оставался без входящего потока (§17.5 №7).
+    gatewayTail = fork;
+  } else if (openTails.length === 0) {
     gatewayTail = null;
   } else if (openTails.length === 1) {
     gatewayTail = openTails[0];
