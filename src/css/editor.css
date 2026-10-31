@@ -191,6 +191,11 @@ body.dark .xml-attribute { color: #bcd9fc; text-decoration: none; }
 .file-manager-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
   padding: 0 4px; }
 .file-manager-title { font-weight: bold; }
+/* Метка «не сохранено»: хранилище недоступно или переполнено (см. FileManager._setSaveState). */
+.file-manager-save-state { margin-left: auto; padding-right: 6px; color: #b00020;
+  font-size: 10px; white-space: nowrap; }
+.file-manager-save-state[hidden] { display: none; }
+body.dark .file-manager-save-state { color: #ff8a80; }
 .file-manager-actions { display: flex; gap: 4px; }
 .file-manager-btn { background: white; border: 1px solid #ccc; border-radius: 4px; padding: 4px 8px;
   cursor: pointer; font-size: 14px; line-height: 1; transition: background 0.2s; }

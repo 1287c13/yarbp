@@ -3,10 +3,14 @@
 // Встроенные примеры умеют открываться ссылкой: ?example=<slug> (см.
 // readExampleKeyFromUrl / writeExampleKeyToUrl в конце файла).
 import { escAttr, escText } from '../escape.js';
+import { clearStored, readStored, writeStored } from '../storage.js';
 
 const EXAMPLE_PARAM = 'example';
 
 export class FileManager {
+  /** Версия формата экспорта: 1 — без id/slug (читается), 2 — с ними. */
+  static EXPORT_VERSION = 2;
+
   constructor(storageKey = 'yarbp_files') {
     this.storageKey = storageKey;
     this.data = this._loadData();
@@ -115,7 +119,7 @@ export class FileManager {
     const defaults = this._getDefaultData();
     const builtinFiles = defaults.files.filter(f => f.isBuiltin);
 
-    const raw = localStorage.getItem(this.storageKey);
+    const raw = readStored(this.storageKey);
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
@@ -458,7 +462,27 @@ Order
       files: userFiles
     };
 
-    localStorage.setItem(this.storageKey, JSON.stringify(payload));
+    const saved = writeStored(this.storageKey, JSON.stringify(payload));
+    this._setSaveState(saved);
+    return saved;
+  }
+
+  /**
+   * Показать, что изменения не сохраняются: квота или запрет хранилища.
+   *
+   * Молчание здесь опаснее ошибки — пользователь считает, что документ уже
+   * сохранён. Метка живёт в шапке файлового менеджера и гаснет, когда запись
+   * снова проходит.
+   */
+  _setSaveState(saved) {
+    this.saveIssue = !saved;
+    const marker = this.uiContainer?.querySelector('#fm-save-state');
+    if (!marker) return;
+
+    marker.hidden = saved;
+    marker.textContent = saved ? '' : 'не сохранено';
+    marker.title = saved ? '' : 'Хранилище браузера недоступно или переполнено: ' +
+      'изменения не сохраняются. Скачайте экспорт, чтобы не потерять файлы.';
   }
 
   // ---------------------------------------------
@@ -562,14 +586,25 @@ Order
     return true;
   }
 
+  /**
+   * Экспорт «всего проекта» в JSON.
+   *
+   * Версия 2: у файлов сохраняются `id` (и `slug` у встроенных), а ещё
+   * активный файл. Без идентификаторов экспорт→импорт менял «личность»
+   * файлов: import генерировал новые id, активным становился первый, а
+   * ссылки вида `?example=` переставали работать.
+   */
   exportAll() {
     const exportData = {
       exportedAt: new Date().toISOString(),
-      version: this.data.version,
+      version: FileManager.EXPORT_VERSION,
+      activeFileId: this.data.activeFileId,
       files: this.data.files.map(f => ({
+        id: f.id,
         name: f.name,
+        slug: f.slug,
         content: f.content,
-        isBuiltin: f.isBuiltin,
+        isBuiltin: !!f.isBuiltin,
         lastModified: f.lastModified
       }))
     };
@@ -593,6 +628,7 @@ Order
       <div class="file-manager">
         <div class="file-manager-toolbar">
           <span class="file-manager-title">📁 Проект</span>
+          <span class="file-manager-save-state" id="fm-save-state" hidden></span>
           <div class="file-manager-actions">
             <button class="file-manager-btn" id="fm-new-file" title="Новый файл">➕</button>
             <button class="file-manager-btn" id="fm-import-file" title="Загрузить из файла">📂</button>
@@ -605,6 +641,7 @@ Order
     `;
 
     this._renderFileList();
+    this._setSaveState(!this.saveIssue);
     this._attachEventListeners();
   }
 
@@ -630,7 +667,7 @@ Order
     // Встроенные файлы в папке
     if (builtinFiles.length > 0) {
       const folderId = 'builtin-folder';
-      const isExpanded = localStorage.getItem('yarbp_builtin_folder_expanded') !== 'false';
+      const isExpanded = readStored('yarbp_builtin_folder_expanded') !== 'false';
 
       html += `
         <li class="file-folder ${isExpanded ? 'expanded' : ''}" data-folder-id="${folderId}">
@@ -661,7 +698,7 @@ Order
         folder.classList.toggle('expanded', isNowExpanded);
         content.style.display = isNowExpanded ? 'block' : 'none';
         toggle.textContent = isNowExpanded ? '📂' : '📁';
-        localStorage.setItem('yarbp_builtin_folder_expanded', isNowExpanded);
+        writeStored('yarbp_builtin_folder_expanded', isNowExpanded);
       });
     }
 
@@ -759,7 +796,7 @@ Order
 
     resetBtn?.addEventListener('click', () => {
       if (confirm('Сбросить все данные? Это удалит все ваши файлы и настройки, страница перезагрузится.')) {
-        localStorage.clear();
+        clearStored();
         location.reload();
       }
     });
@@ -804,43 +841,71 @@ Order
     return escText(text);
   }
 
+  /**
+   * Импорт «экспорта проекта».
+   *
+   * Встроенные примеры из файла игнорируются: они поставляются кодом и в
+   * localStorage не живут, иначе после импорта появлялись бы дубли.
+   * Дубли `id` внутри файла разводятся суффиксом — иначе переключение файлов
+   * цепляется не за тот документ.
+   */
   importFromJSON(jsonData) {
     try {
       const imported = JSON.parse(jsonData);
 
-      // Базовая валидация структуры
-      if (!imported.version || !Array.isArray(imported.files)) {
-        throw new Error('Неверный формат файла: отсутствуют version или files');
+      if (!imported || !Array.isArray(imported.files)) {
+        throw new Error('Неверный формат файла: нет массива files');
       }
 
-      // Опционально: проверить версию (если не 1 — можно попробовать сконвертировать, но пока просто предупредим)
-      if (imported.version !== 1) {
+      if (imported.version !== undefined
+          && imported.version !== 1 && imported.version !== FileManager.EXPORT_VERSION) {
         console.warn('Версия файла отличается, возможны проблемы.');
       }
 
-      // Преобразуем файлы: добавляем недостающие поля
       const now = Date.now();
-      const files = imported.files.map(f => ({
-        id: f.id || `imported-${now}-${Math.random().toString(36).substr(2, 5)}`,
-        name: f.name || 'Без имени',
-        content: f.content || '',
-        isBuiltin: f.isBuiltin || false,
-        lastModified: f.lastModified || now
-      }));
+      const usedIds = new Set();
+      const userFiles = [];
 
-      // Убедимся, что есть хотя бы один встроенный файл (чтобы интерфейс не сломался)
-      const hasBuiltin = files.some(f => f.isBuiltin);
-      if (!hasBuiltin) {
-        // Добавим стандартные, если их нет
-        const defaults = this._getDefaultData().files.filter(f => f.isBuiltin);
-        files.unshift(...defaults);
+      for (const raw of imported.files) {
+        if (!raw || typeof raw !== 'object' || raw.isBuiltin) continue;
+
+        // Запись похожа на файл, только если у неё есть строковое имя или
+        // содержимое. Всё остальное (числа, объекты без полей) — мусор из
+        // чужого JSON: молча пропускаем, иначе в списке появляются пустышки.
+        const hasName = typeof raw.name === 'string';
+        const hasContent = typeof raw.content === 'string';
+        if (!hasName && !hasContent) continue;
+
+        let id = typeof raw.id === 'string' && raw.id
+          ? raw.id
+          : `imported-${now}-${userFiles.length + 1}`;
+        if (usedIds.has(id)) id = `${id}~${userFiles.length + 1}`;
+        usedIds.add(id);
+
+        const name = hasName && raw.name.trim() ? raw.name : 'Без имени';
+
+        userFiles.push({
+          id,
+          name,
+          content: hasContent ? raw.content : '',
+          isBuiltin: false,
+          lastModified: Number.isFinite(raw.lastModified) ? raw.lastModified : now
+        });
       }
 
-      // Обновляем данные
+      const builtins = this._getDefaultData().files.filter(f => f.isBuiltin);
+      const wantedActive = typeof imported.activeFileId === 'string'
+        ? imported.activeFileId
+        : null;
+      const activeFileId = userFiles.some(f => f.id === wantedActive)
+        ? wantedActive
+        : (builtins[0]?.id || userFiles[0]?.id);
+
+      // Встроенные примеры — из кода, пользовательские — из файла.
       this.data = {
         version: 1,
-        activeFileId: files[0]?.id || 'builtin-1',
-        files: files
+        activeFileId,
+        files: [...builtins, ...userFiles]
       };
 
       this._saveData();
