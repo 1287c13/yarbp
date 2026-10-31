@@ -43,7 +43,16 @@ src: url('/src/fonts/JetBrainsMono-Bold.woff2') format('woff2'); }
 #work-area[data-layout="vertical"] #pane-resizer:active { background: #007acc; }
 
 #code-pane { position: relative; background: #1e1e1e; border-right: 1px solid #cccccc;
-border-bottom: 0px solid #cccccc; }
+border-bottom: 0px solid #cccccc; display: flex; flex-direction: column; }
+/* Редактор кода занимает всё, кроме строки статуса под ним (см. #editor-status). */
+#code-pane > .editor-container { flex: 1 1 auto; height: auto; min-height: 0; }
+/* Строка статуса: ошибки разбора из лексера (app.js, describeSyntaxError). */
+.editor-status { flex: 0 0 auto; padding: 4px 15px; font: 11px/1.4 'JetBrains Mono', monospace;
+  color: #ffb4ab; background: #3a2323; border-top: 1px solid #5a3030;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.editor-status[hidden] { display: none; }
+/* Недопустимый фрагмент: волнистое подчёркивание, текст при этом остаётся текстом. */
+.ide-code-unparsed { text-decoration: underline wavy #ff6b6b; text-decoration-skip-ink: none; }
 .editor-container { position: relative; width: 100%; height: 100%; overflow: hidden; }
 .highlight-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; padding: 15px;
 font-size: 12px; line-height: 1.5; white-space: pre; word-wrap: normal;

@@ -13,7 +13,10 @@ export class YarbpHighlighter {
     [TokenTypes.COMMENT_IMPORTANT]: 'important',
     [TokenTypes.COMMENT_OUT]: 'removed',
     [TokenTypes.DIRECTIVE]: 'flavor',
-    [TokenTypes.TYPE]: 'ide-code-type'
+    [TokenTypes.TYPE]: 'ide-code-type',
+    // Недопустимый фрагмент: подсвечивается волнистым подчёркиванием, а текст
+    // под ним остаётся текстом (экранируется как все остальные токены).
+    [TokenTypes.UNPARSED]: 'ide-code-unparsed'
   });
 
   constructor(code=undefined, tokens=undefined) {

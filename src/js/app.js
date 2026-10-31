@@ -39,6 +39,7 @@ const codePane = document.getElementById('code-pane');
 const paneResizer = document.getElementById('pane-resizer');
 const workArea = document.getElementById('work-area');
 const renderTextarea = document.getElementById('render-textarea');
+const editorStatus = document.getElementById('editor-status');
 const themeBtn = document.querySelector('.theme-btn');
 const layoutSwitch = document.getElementById('layout-switch');
 
@@ -236,6 +237,52 @@ function syncRenderScroll() {
 
 /* region code & render */
 
+const LEXER_ERROR_TEXT = {
+  'unterminated quoted value': 'незакрытая кавычка',
+  'unknown prefix value': 'неизвестный префикс',
+  'empty key': 'пустой ключ',
+  'invalid char': 'недопустимый символ'
+};
+
+/** Смещение в тексте → номер строки и позиция в строке (с единицы). */
+function lineColumnAt(text, offset) {
+  const safeOffset = Math.max(0, Math.min(offset, text.length));
+  const lines = text.slice(0, safeOffset).split('\n');
+  return { line: lines.length, column: lines[lines.length - 1].length + 1 };
+}
+
+/**
+ * Первая проблема разбора — в строку статуса.
+ *
+ * Лексер уже отдаёт и токены `UNPARSED`, и текст `error`; не хватало только
+ * вывода. Сообщения лексера технические («invalid char»), поэтому здесь они
+ * переводятся в человеческие формулировки — сам лексер не меняется.
+ */
+function describeSyntaxError(code, tokens) {
+  const broken = tokens.find(token => token.error || token.type === TokenTypes.UNPARSED);
+  if (!broken) return '';
+
+  const { line, column } = lineColumnAt(code, broken.start);
+  const raw = String(broken.error || '').trim();
+  const reason = LEXER_ERROR_TEXT[raw] || raw || 'не удалось разобрать';
+
+  const fragment = String(broken.value ?? '').trim();
+  const tail = fragment
+    ? ': «' + (fragment.length > 24 ? fragment.slice(0, 24) + '…' : fragment) + '»'
+    : '';
+
+  return 'строка ' + line + ', позиция ' + column + ' — ' + reason + tail;
+}
+
+function updateStatus(code) {
+  if (!editorStatus) return;
+
+  const message = describeSyntaxError(code, YarbpAppGlobals.lexer.tokens);
+  editorStatus.hidden = !message;
+  editorStatus.textContent = message;
+  editorStatus.title = message;
+}
+
 function cleanupRenderer() {
   const renderer = YarbpAppGlobals.renderer;
   if (renderer && typeof renderer.destroy === 'function') {
@@ -258,6 +305,7 @@ function updateViews() {
   const code = textarea.value;
   YarbpAppGlobals.lexer.setInitialState(code);
   YarbpAppGlobals.lexer.tokenize();
+  updateStatus(code);
 
   YarbpAppGlobals.highlighter.code = code;
   YarbpAppGlobals.highlighter.tokens = YarbpAppGlobals.lexer.tokens;
