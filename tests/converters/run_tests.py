@@ -10,12 +10,20 @@ UI-макет, BPMN, форма-ТСД. Проверяется контракт,
 конвертер не падает, отдаёт непустой результат ожидаемого вида, сохраняет
 значения из разметки; XML и BPMN дополнительно разбираются XML-парсером.
 
+Отдельно — golden-снимки BPMN XML по документам из `cases/`: они фиксируют
+текущее поведение конвертера и раскладки. Пересъёмка после осознанного
+изменения вывода:
+
+    python yarbp/tests/converters/run_tests.py --update
+
 Запуск (из корня репозитория):
     python yarbp/tests/converters/run_tests.py
 """
 
 from __future__ import print_function
 
+import io
+import json
 import os
 import re
 import shutil
@@ -31,6 +39,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))      # .../yarbp
 REPO = os.path.dirname(ROOT)                      # корень репозитория
 PROJECT_NAME = os.path.basename(ROOT)
 PAGE_PATH = '%s/tests/converters/converters.html' % PROJECT_NAME
+GOLDEN_DIR = os.path.join(HERE, 'golden')
 
 BROWSERS = [
     r'C:\Program Files\Google\Chrome\Application\chrome.exe',
@@ -112,9 +121,12 @@ def stop_server(server):
         server.kill()
 
 
-def run_page(port, browser):
+def run_page(port, browser, update=False):
     profile = tempfile.mkdtemp(prefix='yarbp-converters-')
-    url = 'http://127.0.0.1:%d/%s?t=%d' % (port, PAGE_PATH, int(time.time() * 1000))
+    params = ['t=%d' % int(time.time() * 1000)]
+    if update:
+        params.append('update=1')
+    url = 'http://127.0.0.1:%d/%s?%s' % (port, PAGE_PATH, '&'.join(params))
 
     command = [
         browser,
@@ -148,6 +160,46 @@ def result_lines(output):
     return [line for line in text.splitlines() if line.strip()]
 
 
+def extract_pre(output, pre_id):
+    pattern = re.compile(r'<pre id="%s"[^>]*>(.*?)</pre>' % re.escape(pre_id), re.S)
+    match = pattern.search(output)
+    return html_unescape(match.group(1)) if match else None
+
+
+def write_snapshots(output):
+    """Пересъёмка golden-снимков BPMN (запуск с --update)."""
+    text = extract_pre(output, 'golden')
+    if text is None:
+        print('  FAIL браузер не отдал <pre id="golden">')
+        print(output[-800:])
+        return 1
+
+    try:
+        snapshots = json.loads(text)
+    except Exception as error:
+        print('  FAIL не удалось разобрать снимки: %s' % error)
+        return 1
+
+    if not isinstance(snapshots, dict) or not snapshots:
+        print('  FAIL снимков нет: пустой список кейсов?')
+        return 1
+
+    if not os.path.isdir(GOLDEN_DIR):
+        os.makedirs(GOLDEN_DIR)
+
+    for name in sorted(snapshots):
+        payload = snapshots[name]
+        path = os.path.join(GOLDEN_DIR, name + '.json')
+        data = json.dumps(payload, ensure_ascii=False, indent=2) + '\n'
+        with io.open(path, 'w', encoding='utf-8', newline='\n') as handle:
+            handle.write(data)
+        print('  записан golden/%s.json (%d символов XML)' % (name, len(payload.get('xml', ''))))
+
+    print('')
+    print('СНИМКИ ОБНОВЛЕНЫ: %d' % len(snapshots))
+    return 0
+
+
 def main(argv):
     prepare_stdout()
 
@@ -155,18 +207,37 @@ def main(argv):
         print(__doc__)
         return 0
 
+    unknown = [arg for arg in argv if arg != '--update']
+    if unknown:
+        print('Неизвестные аргументы: %s' % ' '.join(unknown))
+        print(__doc__)
+        return 2
+
+    update = '--update' in argv
+
     browser = find_browser()
     if not browser:
         print('FAIL не найден Chrome/Edge: укажите браузер вручную')
         return 1
 
-    print('1. конвертеры: json, xml, proto, ui, bpmn, flexforms')
+    print('1. конвертеры: json, xml, proto, ui, bpmn, flexforms'
+          + (', golden BPMN (пересъёмка)' if update else ', golden BPMN'))
 
     server, port = start_server()
     try:
-        output = run_page(port, browser)
+        output = run_page(port, browser, update)
     finally:
         stop_server(server)
+
+    if update:
+        lines = result_lines(output) or []
+        for line in lines:
+            print('  ' + line)
+        if '<title>CONVERTERS UPDATE</title>' not in output:
+            print('  FAIL страница не сняла снимки (нет итогового title)')
+            print(output[-800:])
+            return 1
+        return write_snapshots(output)
 
     lines = result_lines(output)
     if lines is None:

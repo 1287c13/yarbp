@@ -414,8 +414,144 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* 10. Golden-снимки BPMN XML (B-2)                                    */
+  /*     Фиксирует текущее поведение конвертера: правки раскладки,       */
+  /*     порядка DI и сериализации не должны проходить незаметно.         */
+  /*     Пересъёмка: python tests/converters/run_tests.py --update        */
+  /* ------------------------------------------------------------------ */
+  const UPDATE = new URLSearchParams(location.search).has('update');
+
+  async function fetchText(url) {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error(response.status + ' ' + response.statusText + ': ' + url);
+    return response.text();
+  }
+
+  /** Сколько чего в документе: и в модели, и в DI. */
+  const STAT_TAGS = {
+    processes: ['bpmn:process'],
+    tasks: ['bpmn:task', 'bpmn:serviceTask', 'bpmn:userTask', 'bpmn:manualTask',
+      'bpmn:scriptTask', 'bpmn:sendTask', 'bpmn:receiveTask', 'bpmn:businessRuleTask'],
+    gateways: ['bpmn:exclusiveGateway', 'bpmn:parallelGateway'],
+    events: ['bpmn:startEvent', 'bpmn:endEvent', 'bpmn:intermediateThrowEvent',
+      'bpmn:boundaryEvent'],
+    flows: ['bpmn:sequenceFlow'],
+    lanes: ['bpmn:lane'],
+    annotations: ['bpmn:textAnnotation'],
+    dataObjects: ['bpmn:dataObjectReference'],
+    shapes: ['bpmndi:BPMNShape'],
+    edges: ['bpmndi:BPMNEdge'],
+    waypoints: ['di:waypoint']
+  };
+
+  function countTags(xml, tags) {
+    let total = 0;
+    for (const tag of tags) {
+      const pattern = new RegExp('<' + tag + '[\\s/>]', 'g');
+      total += (xml.match(pattern) || []).length;
+    }
+    return total;
+  }
+
+  function bpmnStats(xml) {
+    const stats = {};
+    for (const [name, tags] of Object.entries(STAT_TAGS)) {
+      stats[name] = countTags(xml, tags);
+    }
+    return stats;
+  }
+
+  /** Первое расхождение двух строк — чтобы в логе было видно, где именно. */
+  function firstDifference(expected, actual) {
+    const length = Math.min(expected.length, actual.length);
+    for (let index = 0; index < length; index++) {
+      if (expected[index] !== actual[index]) {
+        return 'символ ' + index + ': ожидалось «' +
+          expected.slice(index, index + 40).replace(/\n/g, '\\n') + '», получено «' +
+          actual.slice(index, index + 40).replace(/\n/g, '\\n') + '»';
+      }
+    }
+    return 'длина ' + actual.length + ' вместо ' + expected.length;
+  }
+
+  const goldenOut = {};
+  let caseNames = [];
+  try {
+    caseNames = (JSON.parse(await fetchText('cases.json')).files) || [];
+  } catch (e) {
+    check('golden: список кейсов прочитан', false, String(e && e.message || e));
+  }
+
+  for (const name of caseNames) {
+    let source = '';
+    try {
+      source = await fetchText('cases/' + name + '.yarbp');
+    } catch (e) {
+      check('golden ' + name + ': исходник прочитан', false, String(e && e.message || e));
+      continue;
+    }
+
+    const xml = new YarbpBPMNConverter(buildAST(source).ast).convert();
+    const stats = bpmnStats(xml);
+
+    if (UPDATE) {
+      goldenOut[name] = { source: name, stats, xml };
+      lines.push('ok   golden ' + name + ': снимок снят (' + xml.length + ' символов)');
+      continue;
+    }
+
+    let golden = null;
+    try {
+      golden = JSON.parse(await fetchText('golden/' + name + '.json'));
+    } catch (e) {
+      check('golden ' + name + ': снимок найден', false,
+        String(e && e.message || e) + ' — запустите с --update');
+      continue;
+    }
+
+    check('golden ' + name + ': XML совпадает с текущим поведением',
+      golden.xml === xml, firstDifference(golden.xml || '', xml));
+    check('golden ' + name + ': состав модели и DI совпадает',
+      JSON.stringify(golden.stats) === JSON.stringify(stats),
+      JSON.stringify(golden.stats) + ' ≠ ' + JSON.stringify(stats));
+  }
+
+  if (UPDATE) {
+    const pre = document.createElement('pre');
+    pre.id = 'golden';
+    pre.hidden = true;
+    pre.textContent = JSON.stringify(goldenOut);
+    document.body.appendChild(pre);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 11. B-0: пример из readme — наблюдение, ждёт решения по ядру        */
+  /*     Пустая строка внутри документа и шлюз, вложенный в задачу,       */
+  /*     меняют результат: см. refactoring.md §17.9. Когда ядро или       */
+  /*     пример поправят, проверка станет обычной (без skip).            */
+  /* ------------------------------------------------------------------ */
+  let readmeSource = '';
+  try {
+    readmeSource = await fetchText('cases/bpmn_readme_example.yarbp');
+  } catch (e) { /* ниже */ }
+
+  if (readmeSource) {
+    const readmeXml = new YarbpBPMNConverter(buildAST(readmeSource).ast).convert();
+    const readmeStats = bpmnStats(readmeXml);
+
+    if (readmeStats.processes === 0) {
+      lines.push('skip B-0: пример из readme даёт пустую модель — ' +
+        'пустая строка после директивы рвёт документ (ядро, нужно решение)');
+    } else {
+      check('B-0: пример из readme собирается',
+        readmeStats.tasks > 0 && readmeStats.flows > 0, JSON.stringify(readmeStats));
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
   resultBox.textContent = lines.join('\n') + '\n';
-  document.title = failed ? 'CONVERTERS FAIL' : 'CONVERTERS PASS';
+  document.title = UPDATE ? 'CONVERTERS UPDATE'
+    : (failed ? 'CONVERTERS FAIL' : 'CONVERTERS PASS');
 </script>
 </body>
 </html>

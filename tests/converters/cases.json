@@ -1,0 +1,7 @@
+{
+  "files": [
+    "bpmn_lanes_gateway",
+    "bpmn_branches_artifacts",
+    "bpmn_subprocess"
+  ]
+}
