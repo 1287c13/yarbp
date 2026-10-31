@@ -74,3 +74,20 @@ export function clearStored() {
     return false;
   }
 }
+
+/** Все ключи хранилища (без значений). Пустой список, если доступа нет. */
+export function storedKeys() {
+  const store = getStore();
+  if (!store) return [];
+
+  try {
+    const keys = [];
+    for (let index = 0; index < store.length; index++) {
+      const key = store.key(index);
+      if (key !== null) keys.push(key);
+    }
+    return keys;
+  } catch (e) {
+    return [];
+  }
+}

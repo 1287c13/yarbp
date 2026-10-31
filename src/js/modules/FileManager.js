@@ -3,13 +3,17 @@
 // Встроенные примеры умеют открываться ссылкой: ?example=<slug> (см.
 // readExampleKeyFromUrl / writeExampleKeyToUrl в конце файла).
 import { escAttr, escText } from '../escape.js';
-import { clearStored, readStored, writeStored } from '../storage.js';
+import { clearStored, removeStored, readStored, storedKeys, writeStored } from '../storage.js';
 
 const EXAMPLE_PARAM = 'example';
 
 export class FileManager {
   /** Версия формата экспорта: 1 — без id/slug (читается), 2 — с ними. */
   static EXPORT_VERSION = 2;
+
+  /** Резервная копия перед импортом: `<префикс><timestamp>`; храним последние N. */
+  static BACKUP_PREFIX = 'yarbp_backup_';
+  static BACKUP_LIMIT = 3;
 
   constructor(storageKey = 'yarbp_files') {
     this.storageKey = storageKey;
@@ -770,10 +774,9 @@ Order
     newBtn?.addEventListener('click', () => this.createNewFile());
 
     importBtn?.addEventListener('click', () => {
-      // Диалог с предупреждением
-      if (!confirm('⚠️ Загрузка из файла заменит все текущие файлы и настройки. Продолжить?')) {
-        return; // пользователь отменил
-      }
+      // Подтверждение спрашивается после разбора файла, когда известны числа:
+      // «сейчас N файлов, в файле M» (см. importFromJSON). Слепой вопрос до
+      // выбора файла не сообщал ничего полезного.
 
       // Создаём скрытый input для выбора файла
       const input = document.createElement('input');
@@ -842,14 +845,18 @@ Order
   }
 
   /**
-   * Импорт «экспорта проекта».
+   * Разобрать «экспорт проекта», ничего не меняя.
+   *
+   * Возвращает `{ userFiles, wantedActive }` либо null, если файл не годится
+   * (пользователю уже сообщили). Отделено от применения: подтверждение должно
+   * показывать количество файлов до перезаписи, а не после.
    *
    * Встроенные примеры из файла игнорируются: они поставляются кодом и в
    * localStorage не живут, иначе после импорта появлялись бы дубли.
    * Дубли `id` внутри файла разводятся суффиксом — иначе переключение файлов
    * цепляется не за тот документ.
    */
-  importFromJSON(jsonData) {
+  parseImport(jsonData) {
     try {
       const imported = JSON.parse(jsonData);
 
@@ -893,32 +900,97 @@ Order
         });
       }
 
-      const builtins = this._getDefaultData().files.filter(f => f.isBuiltin);
       const wantedActive = typeof imported.activeFileId === 'string'
         ? imported.activeFileId
         : null;
-      const activeFileId = userFiles.some(f => f.id === wantedActive)
-        ? wantedActive
-        : (builtins[0]?.id || userFiles[0]?.id);
 
-      // Встроенные примеры — из кода, пользовательские — из файла.
-      this.data = {
-        version: 1,
-        activeFileId,
-        files: [...builtins, ...userFiles]
-      };
-
-      this._saveData();
-      this._loadActiveFile();
-      this._syncUrlWithActiveFile();
-      this._renderFileList();
-
-      return true;
+      return { userFiles, wantedActive };
     } catch (e) {
       console.error('Ошибка импорта:', e);
       alert('Не удалось загрузить файл: ' + e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Резервная копия текущих файлов перед перезаписью (D-08).
+   *
+   * Копия пишется в отдельный ключ `yarbp_backup_<timestamp>`, поэтому отмена
+   * импорта уже ничего не восстанавливает — но при неудачном импорте данные
+   * можно вернуть вручную из хранилища. Старые копии подрезаются, чтобы не
+   * съесть квоту.
+   */
+  _backupBeforeImport() {
+    const payload = {
+      version: 1,
+      createdAt: new Date().toISOString(),
+      activeFileId: this.data.activeFileId,
+      files: this.data.files.filter(file => !file.isBuiltin)
+    };
+
+    const key = FileManager.BACKUP_PREFIX + Date.now();
+    const saved = writeStored(key, JSON.stringify(payload));
+
+    if (!saved) {
+      // Квота или запрет хранилища: импорт не блокируем (пользователь уже
+      // подтвердил замену), но метка «не сохранено» покажет проблему.
+      console.warn('[FileManager] резервная копия не сохранена:', key);
+    }
+
+    this._pruneBackups();
+    return saved;
+  }
+
+  /** Оставить только последние `limit` резервных копий (имя содержит timestamp). */
+  _pruneBackups(limit = FileManager.BACKUP_LIMIT) {
+    const backups = storedKeys()
+      .filter(key => key.startsWith(FileManager.BACKUP_PREFIX))
+      .sort();
+
+    backups.slice(0, Math.max(0, backups.length - limit))
+      .forEach(key => removeStored(key));
+  }
+
+  /** Применить разобранный импорт: встроенные — из кода, пользовательские — из файла. */
+  applyImport(parsed) {
+    const builtins = this._getDefaultData().files.filter(file => file.isBuiltin);
+    const activeFileId = parsed.userFiles.some(file => file.id === parsed.wantedActive)
+      ? parsed.wantedActive
+      : (builtins[0]?.id || parsed.userFiles[0]?.id);
+
+    this.data = {
+      version: 1,
+      activeFileId,
+      files: [...builtins, ...parsed.userFiles]
+    };
+
+    this._saveData();
+    this._loadActiveFile();
+    this._syncUrlWithActiveFile();
+    this._renderFileList();
+  }
+
+  /**
+   * Импорт «экспорта проекта»: разбор → подтверждение с числами → резервная
+   * копия → применение. Пока пользователь не подтвердил, ничего не меняется.
+   */
+  importFromJSON(jsonData) {
+    const parsed = this.parseImport(jsonData);
+    if (!parsed) return false;
+
+    const localCount = this.data.files.filter(file => !file.isBuiltin).length;
+    const question = 'Импорт заменит ваши файлы: сейчас ' + localCount +
+      ', в файле ' + parsed.userFiles.length + '.\n' +
+      'Текущие данные сохранятся в резервной копии в браузере. Продолжить?';
+
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function'
+        && !window.confirm(question)) {
       return false;
     }
+
+    this._backupBeforeImport();
+    this.applyImport(parsed);
+    return true;
   }
 }
 
