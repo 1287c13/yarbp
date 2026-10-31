@@ -680,6 +680,27 @@
     check('B-4: неизвестный тип шлюза — предупреждение',
       warningsOf(['! как бпмн', 'процесс = П', '  событие = С', '  шлюз = Г .тип хитрый'].join('\n'))
         .some(item => /неизвестный тип шлюза/.test(item.message)));
+
+    // событийный шлюз не сходится: продолжение идёт от каждой ветки
+    let eventGatewaySource = '';
+    try {
+      eventGatewaySource = await fetchText('cases/bpmn_eventgateway.yarbp');
+    } catch (e) { /* ниже */ }
+
+    if (eventGatewaySource) {
+      const eventGatewayXml = new YarbpBPMNConverter(buildAST(eventGatewaySource).ast).convert();
+      const catchEvents = (eventGatewayXml.match(/<bpmn:intermediateCatchEvent /g) || []).length;
+
+      check('B-4: событийный шлюз собран',
+        eventGatewayXml.includes('<bpmn:eventBasedGateway'), String(catchEvents));
+      check('B-4: обе ветки событийного шлюза продолжаются',
+        (eventGatewayXml.match(/<bpmn:outgoing>Flow_\d+<\/bpmn:outgoing>/g) || []).length >= 4 &&
+        !/у узла «Обработать» нет входящего потока/.test(
+          JSON.stringify(warningsOf(eventGatewaySource))),
+        JSON.stringify(warningsOf(eventGatewaySource)));
+      check('B-4: на схеме с событийным шлюзом предупреждений нет',
+        warningsOf(eventGatewaySource).length === 0, JSON.stringify(warningsOf(eventGatewaySource)));
+    }
   }
 
   /* ------------------------------------------------------------------ */

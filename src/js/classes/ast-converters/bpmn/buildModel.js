@@ -742,6 +742,8 @@ function buildGateway(node, ctx, process, opts) {
     .filter(t => t && t.tag !== 'endEvent');
 
   let gatewayTail;
+  let branchContinuations = [];
+
   if (!branchNodes.length) {
     // Шлюз без веток — это точка слияния (или просто пропуск потока): он
     // передаёт управление дальше как обычный узел. Раньше tail был null, и
@@ -752,8 +754,11 @@ function buildGateway(node, ctx, process, opts) {
   } else if (openTails.length === 1) {
     gatewayTail = openTails[0];
   } else if (tag === 'eventBasedGateway') {
-    // Событийный шлюз не сходится: ветки ведут в разные ловящие события.
-    gatewayTail = null;
+    // Событийный шлюз не сходится: ветки ведут в разные ловящие события, и
+    // продолжение идёт от КАЖДОЙ ветки. Раньше tail был null — следующий
+    // сиблинг оставался без входящего потока, то есть ветки обрывались.
+    gatewayTail = openTails[openTails.length - 1];
+    branchContinuations = openTails.slice(0, -1);
   } else {
     const join = new BpmnFlowNode({
       id: ctx.idGen.next('Gateway'),
@@ -776,17 +781,22 @@ function buildGateway(node, ctx, process, opts) {
       laneState: opts.laneState,
       container: opts.container,
     });
-    if (after.head && gatewayTail) {
-      addSequenceFlow(gatewayTail, after.head, ctx, opts.container || process);
+    if (after.head) {
+      // Для событийного шлюза продолжаем от каждой ветки, для остальных —
+      // от общей точки слияния.
+      const sources = branchContinuations.length ? openTails : [gatewayTail];
+      for (const source of sources) {
+        if (source) addSequenceFlow(source, after.head, ctx, opts.container || process);
+      }
     }
     return {
       head: fork,
       tail: after.tails.length ? after.tails[after.tails.length - 1] : gatewayTail,
-      branches: after.tails.slice(0, -1),
+      branches: [...branchContinuations, ...after.tails.slice(0, -1)],
     };
   }
 
-  return { head: fork, tail: gatewayTail, branches: [] };
+  return { head: fork, tail: gatewayTail, branches: branchContinuations };
 }
 
 /* ------------------------------------------------------------------ *
