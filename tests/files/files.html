@@ -406,6 +406,17 @@
 
     await typeCode('! as json\n:\n  .a 1');
     check('D-05: статус снова скрывается', !!status && status.hidden === true);
+
+    // D-10: тот же текст не пересчитывается — узлы подсветки остаются теми же
+    // объектами, а не пересоздаются (innerHTML не переписывается).
+    const firstSpans = Array.from(doc.querySelectorAll('#highlight-div span'));
+    await typeCode('! as json\n:\n  .a 1');
+    const secondSpans = Array.from(doc.querySelectorAll('#highlight-div span'));
+
+    check('D-10: повторный ввод того же текста не перерисовывает подсветку',
+      firstSpans.length > 0 && firstSpans.length === secondSpans.length &&
+      firstSpans[0] === secondSpans[0],
+      firstSpans.length + ' → ' + secondSpans.length);
   }
 
   errFrame.remove();
