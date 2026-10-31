@@ -1222,6 +1222,39 @@
         noSchemas.warnings.some(item => /нет ни одной схемы/.test(item.message)),
         JSON.stringify(noSchemas.warnings));
 
+      /* Круговой рейс для схемы: schema.json → (tools/schema2yarbp.py) →
+         cases/schema_imported.yarbp → наш конвертер → снова JSON Schema. */
+      let importedSchemaSource = '';
+      let sampleSchema = null;
+      try {
+        importedSchemaSource = await fetchText('cases/schema_imported.yarbp');
+        sampleSchema = JSON.parse(await fetchText('../schema2yarbp/schema.json'));
+      } catch (e) { /* ниже */ }
+
+      if (importedSchemaSource && sampleSchema) {
+        const importedSchemaConverter = new YarbpJsonSchemaConverter(
+          buildAST(importedSchemaSource).ast, { source: importedSchemaSource });
+        const importedSchemaSpec = importedSchemaConverter.convert();
+
+        check('JSON Schema: импортированный кейс собирается без предупреждений',
+          importedSchemaConverter.warnings.length === 0,
+          JSON.stringify(importedSchemaConverter.warnings));
+
+        const canonical = (value) => {
+          if (Array.isArray(value)) return value.map(canonical);
+          if (!value || typeof value !== 'object') return value;
+          const sorted = {};
+          for (const key of Object.keys(value).sort()) sorted[key] = canonical(value[key]);
+          return sorted;
+        };
+
+        const left = JSON.stringify(canonical(importedSchemaSpec));
+        const right = JSON.stringify(canonical(sampleSchema));
+        check('JSON Schema: круговой рейс schema → ЯРБП → schema совпадает',
+          left === right,
+          left === right ? '' : ('получено ' + left.slice(0, 160) + ' … ожидалось ' + right.slice(0, 160)));
+      }
+
       // схемы можно писать в корне, без api
       const rootSchemas = new YarbpJsonSchemaConverter(buildAST([
         '! как схема',

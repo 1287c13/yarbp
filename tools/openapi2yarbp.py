@@ -24,19 +24,15 @@ oneOf/anyOf, content не application/json, ...) не теряется молч�
 
 from __future__ import print_function
 
-import io
-import json
+import os
 import sys
 
-# Типы JSON Schema → типы разметки (обратная таблица к schemaFields.js).
-TYPES_TO_DSL = {
-    'string':  'строка',
-    'integer': 'целое',
-    'number':  'число',
-    'boolean': 'логическое',
-    'array':   'массив',
-    'object':  'объект',
-}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from yarbp_text import (  # noqa: E402
+    Warnings, attr, compare_with_file, configure_streams, quote, read_json,
+    schema_lines, write_output,
+)
 
 REF_PREFIX = '#/components/schemas/'
 INDENT = '  '
@@ -45,114 +41,9 @@ INDENT = '  '
 KNOWN_OPERATION_KEYS = ('summary', 'tags', 'responses', 'requestBody', 'operationId', 'description')
 
 
-class Warnings(object):
-    """Копилка предупреждений: печатаются в stderr, в разметку не попадают."""
-
-    def __init__(self):
-        self.items = []
-
-    def add(self, where, message):
-        self.items.append('%s: %s' % (where, message))
-
-    def print_all(self, stream):
-        for item in self.items:
-            print('warning: ' + item, file=stream)
-
-
-def quote(value):
-    """Значение для разметки: простое — как есть, иначе в кавычках.
-
-    Кавычки внутри заменяются на апостроф: разметка не умеет экранировать `"`,
-    а молча сломанная строка хуже неточной кавычки.
-    """
-    text = str(value)
-    text = text.replace('\r', ' ').replace('\n', ' ').strip()
-    if not text:
-        return '""'
-
-    safe = all(ch not in text for ch in ' \t"\'') and not text.startswith('.')
-    if safe and text.lower() not in ('да', 'нет', 'yes', 'no', 'null'):
-        return text
-
-    return '"' + text.replace('"', "'") + '"'
-
-
-def attr(name, value):
-    """Атрибут с точкой: `.тип строка`."""
-    return '.' + name + ' ' + value
-
-
-def field_lines(field, name, required, warnings, where):
-    """Одно поле схемы → строка разметки `поле = …`."""
-    parts = ['поле = ' + quote(name)]
-
-    ref = field.get('$ref')
-    if isinstance(ref, str):
-        target = ref[len(REF_PREFIX):] if ref.startswith(REF_PREFIX) else None
-        if target is None:
-            warnings.add(where, 'ссылка «%s» не на components.schemas — пропущена' % ref)
-            return None
-        parts.append(attr('тип', 'ссылка:' + target))
-    else:
-        raw_type = field.get('type')
-        if raw_type is None:
-            parts.append(attr('тип', 'строка'))
-        elif raw_type in TYPES_TO_DSL:
-            parts.append(attr('тип', TYPES_TO_DSL[raw_type]))
-        else:
-            warnings.add(where, 'тип «%s» не поддерживается — подставлена строка' % raw_type)
-            parts.append(attr('тип', 'строка'))
-
-        items = field.get('items')
-        if isinstance(items, dict):
-            item_type = items.get('type')
-            if item_type in TYPES_TO_DSL:
-                parts.append(attr('элемент', TYPES_TO_DSL[item_type]))
-            else:
-                warnings.add(where, 'элемент массива без типа — подставлена строка')
-
-    if field.get('format'):
-        parts.append(attr('формат', quote(field['format'])))
-    if field.get('description'):
-        parts.append(attr('описание', quote(field['description'])))
-
-    for value in field.get('enum') or []:
-        parts.append(attr('значение', quote(value)))
-
-    if required:
-        parts.append(attr('обязательное', 'да'))
-
-    for unsupported in ('oneOf', 'anyOf', 'allOf', 'additionalProperties', 'pattern'):
-        if unsupported in field:
-            warnings.add(where, '«%s» в поле «%s» не поддерживается' % (unsupported, name))
-
-    return ' '.join(parts)
-
-
 def schema_block(name, schema, warnings):
-    """`схема = Имя` + её поля."""
-    where = 'схема «%s»' % name
-    lines = [INDENT * 2 + 'схема = ' + quote(name)]
-
-    if schema.get('description'):
-        lines[0] += ' ' + attr('описание', quote(schema['description']))
-
-    properties = schema.get('properties') or {}
-    required = set(schema.get('required') or [])
-
-    if not properties:
-        warnings.add(where, 'нет properties — схема получится пустой')
-
-    for field_name, field in properties.items():
-        if not isinstance(field, dict):
-            warnings.add(where, 'поле «%s» описано не объектом — пропущено' % field_name)
-            continue
-        line = field_lines(field, field_name, field_name in required, warnings,
-                           where + ', поле «%s»' % field_name)
-        if line:
-            lines.append(INDENT * 3 + line)
-
-    return lines
+    """`схема = Имя` + её поля (общая часть вынесена в yarbp_text)."""
+    return schema_lines(name, schema, warnings, REF_PREFIX, INDENT * 2)
 
 
 def operation_line(verb, operation, warnings, where):
@@ -253,22 +144,12 @@ def convert(spec, warnings):
 
 
 def read_spec(path):
-    if path == '-':
-        raw = sys.stdin.read()
-    else:
-        with io.open(path, 'r', encoding='utf-8-sig') as handle:
-            raw = handle.read()
-    return json.loads(raw)
+    """Чтение спецификации: общий `read_json` из yarbp_text."""
+    return read_json(path)
 
 
 def main(argv):
-    for name in ('stdout', 'stderr'):
-        stream = getattr(sys, name, None)
-        if stream is not None and hasattr(stream, 'reconfigure'):
-            try:
-                stream.reconfigure(encoding='utf-8', errors='replace')
-            except (ValueError, OSError):
-                pass
+    configure_streams()
 
     if '--help' in argv or '-h' in argv or not argv:
         print(__doc__)
@@ -311,24 +192,9 @@ def main(argv):
     warnings.print_all(sys.stderr)
 
     if check:
-        try:
-            with io.open(check, 'r', encoding='utf-8') as handle:
-                expected = handle.read()
-        except (IOError, OSError) as error:
-            print('FAIL не читается «%s»: %s' % (check, error))
-            return 1
-        if expected.replace('\r\n', '\n') != text:
-            print('FAIL «%s» не совпадает с импортом: переснимите через -o' % check)
-            return 1
-        print('ok   «%s» совпадает с импортом' % check)
-        return 0
+        return compare_with_file(text, check)
 
-    if output:
-        with io.open(output, 'w', encoding='utf-8', newline='\n') as handle:
-            handle.write(text)
-        print('записан «%s» (%d строк)' % (output, len(text.splitlines())))
-    else:
-        print(text, end='')
+    write_output(text, output)
 
     if not spec.get('paths') and not (spec.get('components') or {}).get('schemas'):
         print('FAIL импортировать нечего: нет ни paths, ни components.schemas')

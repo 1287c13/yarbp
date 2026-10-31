@@ -708,6 +708,24 @@ api = Заказ .версия 1.0.0 .описание "Заказ покупа�
 - `поле … .тип ссылка:<Схема>` → `$ref: "#/$defs/<Схема>"`;
 - `схема` можно писать и прямо в корне документа, без `api`.
 
+**Обратный импорт.** Готовую схему (от бэкенда, из генератора типов, из
+редактора JSON) тоже можно затащить в разметку — симметрично OpenAPI:
+
+```powershell
+python tools/schema2yarbp.py schema.json                 # разметка в stdout
+python tools/schema2yarbp.py schema.json -o case.yarbp   # в файл
+python tools/schema2yarbp.py schema.json --check case.yarbp   # сверить, что не разъехалось
+```
+
+Читаются `$defs` (и старое `definitions` из черновика-07), `properties`,
+`required`, `type`/`format`/`enum`/`items`/`$ref`, `title`/`$id`/`description`
+корня. Схема без `$defs` (просто объект с `properties`) становится одной схемой
+с именем из `title`. Всё, чего разметка не умеет (`oneOf`, `allOf`, `pattern`,
+границы чисел, `if/then/else`, поля прямо в корне при наличии `$defs`),
+печатается предупреждением в stderr — молча ничего не выбрасывается. Круговой
+рейс `schema → разметка → schema` проверяется тестами (`tests/schema2yarbp` +
+браузерный набор).
+
 <a id="mermaid"></a>
 
 #### Конвертер Mermaid (мермейд)
