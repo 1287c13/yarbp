@@ -1,7 +1,9 @@
 import { nodeTypes } from '../../YarbpParser.js';
 import { buildModel } from './buildModel.js';
 import { serializeBpmn } from './serializeBpmn.js';
-import { recalculateDi } from './BpmnDiGenerator.js';
+import { recalculateDi, getLayoutStats, resetLayoutStats } from './BpmnDiGenerator.js';
+
+export { getLayoutStats, resetLayoutStats };
 
 export class YarbpBPMNConverter {
   /**

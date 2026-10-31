@@ -5,9 +5,193 @@ import {
   findAssocOwner, findAssocOwnerAll, simpleWaypoints,
 } from './layoutUtils.js';
 
+/**
+ * Переиспользование раскладки (B-6).
+ *
+ * Пока правится имя узла, геометрия не меняется, а `BpmnLayoutGenerator`
+ * считался заново целиком (это самый дорогой шаг пересборки). Ключ —
+ * «структурная» часть модели: id, теги, связи, артефакты, явные координаты;
+ * имена и подписи в него не входят. При совпадении координаты берутся из кэша,
+ * а пост-обработка DI (артефакты, границы, укладка пулов) выполняется как
+ * обычно — она дешёвая и от имён тоже не зависит.
+ */
+const LAYOUT_CACHE_LIMIT = 8;
+const layoutCache = new Map();
+const layoutStats = { runs: 0, hits: 0 };
+
+export function getLayoutStats() {
+  return { runs: layoutStats.runs, hits: layoutStats.hits };
+}
+
+export function resetLayoutStats() {
+  layoutStats.runs = 0;
+  layoutStats.hits = 0;
+}
+
+function structuralKey(model) {
+  const parts = [];
+
+  const collab = model.collaboration;
+  parts.push(collab ? [
+    collab.participants.map(p => p.id + '>' + p.processRef).join(','),
+    collab.associations.map(a => a.id + ':' + a.sourceRef + '>' + a.targetRef).join(','),
+    collab.messageFlows.map(m => m.id + ':' + m.sourceRef + '>' + m.targetRef).join(','),
+    collab.textAnnotations.map(t => t.id).join(','),
+  ].join('|') : '-');
+
+  const boundsKey = (node) => (node.bounds
+    ? [node.bounds.x, node.bounds.y, node.bounds.width, node.bounds.height].join(':')
+    : '');
+  const joinKey = (node) => (node.joinBounds
+    ? [node.joinBounds.x, node.joinBounds.y].join(':')
+    : '');
+
+  for (const process of model.processes) {
+    parts.push('p:' + process.id + ':' +
+      process.lanes.map(l => l.id + '[' + l.flowNodeRefs.join(',') + ']').join(','));
+
+    const walk = (nodes) => {
+      for (const node of nodes) {
+        parts.push([
+          node.id, node.tag, node.laneId || '', node.attachedToRef || '',
+          node.eventDefinition || '', node.cancelActivity === false ? 'nc' : '',
+          node.defaultFlowId || '', node.loopCharacteristics || '',
+          (node.dataInputAssocs || []).map(a => a.sourceRef).join(','),
+          (node.dataOutputAssocs || []).map(a => a.targetRef).join(','),
+          boundsKey(node), joinKey(node),
+        ].join('/'));
+        if (node.children && node.children.length) {
+          parts.push('{');
+          walk(node.children);
+          parts.push('}');
+        }
+      }
+    };
+    walk(process.flowNodes);
+
+    for (const flow of process.sequenceFlows) {
+      parts.push(flow.id + '>' + flow.sourceRef + '-' + flow.targetRef + (flow.condition ? '/c' : ''));
+    }
+    for (const node of collectAllNodes(process.flowNodes)) {
+      for (const flow of node.sequenceFlows || []) {
+        parts.push(flow.id + '>' + flow.sourceRef + '-' + flow.targetRef + (flow.condition ? '/c' : ''));
+      }
+    }
+
+    parts.push('d:' + process.dataObjects.map(obj => obj.id).join(','));
+    parts.push('r:' + process.dataObjectRefs.map(ref => ref.id + '>' + ref.dataObjectRef).join(','));
+    parts.push('s:' + process.dataStores.map(ref => ref.id).join(','));
+  }
+
+  return parts.join('|');
+}
+
+function snapshotGeometry(model) {
+  const copyPoint = (point) => (point ? { ...point } : null);
+  const copyWaypoints = (points) => (points ? points.map(([x, y]) => [x, y]) : null);
+
+  const processes = [];
+  for (const process of model.processes) {
+    const allNodes = collectAllNodes(process.flowNodes);
+
+    const nodes = allNodes.map(node => ({
+      id: node.id,
+      bounds: copyPoint(node.bounds),
+      labelPos: copyPoint(node.labelPos),
+    }));
+
+    const flows = [];
+    const addFlow = (flow) => flows.push({
+      id: flow.id,
+      waypoints: copyWaypoints(flow.waypoints),
+      labelPos: copyPoint(flow.labelPos),
+    });
+    for (const flow of process.sequenceFlows) addFlow(flow);
+    for (const node of allNodes) {
+      for (const flow of node.sequenceFlows || []) addFlow(flow);
+    }
+
+    processes.push({
+      id: process.id,
+      bounds: copyPoint(process.bounds),
+      lanes: process.lanes.map(lane => ({ id: lane.id, bounds: copyPoint(lane.bounds) })),
+      nodes,
+      flows,
+    });
+  }
+  return { processes };
+}
+
+function applyGeometry(model, snapshot) {
+  const byProcessId = new Map(snapshot.processes.map(item => [item.id, item]));
+
+  for (const process of model.processes) {
+    const saved = byProcessId.get(process.id);
+    if (!saved) return false;
+
+    process.bounds = saved.bounds ? { ...saved.bounds } : null;
+
+    const laneById = new Map(saved.lanes.map(item => [item.id, item]));
+    for (const lane of process.lanes) {
+      const laneSnapshot = laneById.get(lane.id);
+      if (!laneSnapshot) return false;
+      lane.bounds = laneSnapshot.bounds ? { ...laneSnapshot.bounds } : null;
+    }
+
+    const nodeById = new Map(saved.nodes.map(item => [item.id, item]));
+    const allNodes = collectAllNodes(process.flowNodes);
+
+    for (const node of allNodes) {
+      const nodeSnapshot = nodeById.get(node.id);
+      if (!nodeSnapshot) return false;
+      node.bounds = nodeSnapshot.bounds ? { ...nodeSnapshot.bounds } : null;
+      node.labelPos = nodeSnapshot.labelPos ? { ...nodeSnapshot.labelPos } : null;
+    }
+
+    const flowById = new Map(saved.flows.map(item => [item.id, item]));
+    const restoreFlow = (flow) => {
+      const flowSnapshot = flowById.get(flow.id);
+      if (!flowSnapshot) return false;
+      flow.waypoints = flowSnapshot.waypoints
+        ? flowSnapshot.waypoints.map(([x, y]) => [x, y])
+        : null;
+      flow.labelPos = flowSnapshot.labelPos ? { ...flowSnapshot.labelPos } : null;
+      return true;
+    };
+
+    for (const flow of process.sequenceFlows) {
+      if (!restoreFlow(flow)) return false;
+    }
+    for (const node of allNodes) {
+      for (const flow of node.sequenceFlows || []) {
+        if (!restoreFlow(flow)) return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function rememberLayout(key, model) {
+  if (layoutCache.has(key)) layoutCache.delete(key);
+  layoutCache.set(key, snapshotGeometry(model));
+  while (layoutCache.size > LAYOUT_CACHE_LIMIT) {
+    layoutCache.delete(layoutCache.keys().next().value);
+  }
+}
+
 export function recalculateDi(model) {
-  const layout = new BpmnLayoutGenerator(model);
-  layout.generate();
+  const key = structuralKey(model);
+  const cached = layoutCache.get(key);
+
+  if (cached && applyGeometry(model, cached)) {
+    layoutStats.hits++;
+  } else {
+    const layout = new BpmnLayoutGenerator(model);
+    layout.generate();
+    layoutStats.runs++;
+    rememberLayout(key, model);
+  }
 
   // сначала артефакты: они могут поднять верхнюю границу пула,
   // и участник должен получить уже итоговые размеры

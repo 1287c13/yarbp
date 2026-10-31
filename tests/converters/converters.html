@@ -36,7 +36,7 @@
   import { YarbpJSONConverter } from '../../src/js/classes/ast-converters/JSONConvertor.js';
   import { YarbpXMLConverter } from '../../src/js/classes/ast-converters/XMLConvertor.js';
   import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
-  import { YarbpBPMNConverter } from '../../src/js/classes/ast-converters/bpmn/YarbpBPMNConverter.js';
+  import { YarbpBPMNConverter, getLayoutStats, resetLayoutStats } from '../../src/js/classes/ast-converters/bpmn/YarbpBPMNConverter.js';
   import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
   import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
@@ -386,12 +386,21 @@
     const xml = new YarbpBPMNConverter(ast).convert();
     const elapsed = performance.now() - started;
 
+    // повторная сборка того же документа: раскладка должна взяться из кэша (B-6)
+    const repeatStarted = performance.now();
+    const repeatedXml = new YarbpBPMNConverter(buildAST(code).ast).convert();
+    const repeatElapsed = performance.now() - repeatStarted;
+
     const highlightStarted = performance.now();
     new XMLHighlighter(xml).highlight();
     const highlightElapsed = performance.now() - highlightStarted;
 
     timings.push(size + ' шагов: сборка ' + elapsed.toFixed(0) +
+      ' мс, повтор ' + repeatElapsed.toFixed(0) +
       ' мс, подсветка ' + highlightElapsed.toFixed(0) + ' мс');
+
+    check('бенчмарк BPMN (' + size + ' шагов): повтор даёт ту же схему',
+      repeatedXml === xml, repeatedXml.length + ' символов');
     check('бенчмарк BPMN (' + size + ' шагов): схема собрана',
       xml.includes('<bpmn:process') && xml.includes('Шаг ' + size) &&
       xml.length > 500,
@@ -724,6 +733,43 @@
     check('B-5: на схеме с данными предупреждений нет',
       dataWarnings.length === 0, JSON.stringify(dataWarnings));
   }
+
+  /* ------------------------------------------------------------------ */
+  /* 15. B-6: переиспользование раскладки, когда меняются только имена    */
+  /* ------------------------------------------------------------------ */
+  const renameBase = [
+    '! как БПМН',
+    'процесс = П',
+    '  событие = Начало',
+    '    задача = Первая',
+    '    задача = Вторая',
+    '    событие .расположение конец',
+  ].join('\n');
+
+  resetLayoutStats();
+  const renameXmlBefore = new YarbpBPMNConverter(buildAST(renameBase).ast).convert();
+  const statsFirst = getLayoutStats();
+
+  const renamedSource = renameBase.replace('задача = Первая', 'задача = Первая переименована');
+  const renameXmlAfter = new YarbpBPMNConverter(buildAST(renamedSource).ast).convert();
+  const statsRenamed = getLayoutStats();
+
+  check('B-6: переименование не пересчитывает раскладку',
+    statsRenamed.runs === statsFirst.runs && statsRenamed.hits === statsFirst.hits + 1,
+    'runs ' + statsFirst.runs + '→' + statsRenamed.runs +
+    ', hits ' + statsFirst.hits + '→' + statsRenamed.hits);
+
+  check('B-6: переименование меняет только подпись',
+    renameXmlAfter === renameXmlBefore.replace('Первая', 'Первая переименована'));
+
+  const extendedSource = renameBase.replace('    событие .расположение конец',
+    '    задача = Третья\n    событие .расположение конец');
+  new YarbpBPMNConverter(buildAST(extendedSource).ast).convert();
+  const statsExtended = getLayoutStats();
+
+  check('B-6: изменение структуры пересчитывает раскладку',
+    statsExtended.runs === statsRenamed.runs + 1,
+    'runs ' + statsRenamed.runs + '→' + statsExtended.runs);
 
   /* ------------------------------------------------------------------ */
   resultBox.textContent = lines.join('\n') + '\n';
