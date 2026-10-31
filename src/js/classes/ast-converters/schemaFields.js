@@ -25,10 +25,27 @@ export function isFlagOn(value) {
 }
 
 /**
+ * Атрибуты поля, которые понимает конвертер.
+ *
+ * Список нужен не для чтения, а для проверки: `поле = id .тпи целое` раньше
+ * молча становилось строкой, а `.обязателное да` — молча переставало делать
+ * поле обязательным. Опечатка в три буквы не должна менять схему без единого
+ * слова (у методов OpenAPI такая проверка уже была).
+ */
+const FIELD_ATTRS = Object.freeze(new Set([
+  'тип', 'элемент', 'формат', 'описание', 'пример', 'значение', 'обязательное',
+]));
+
+/**
  * Одно поле схемы → JSON Schema свойства.
  * Неизвестный тип — предупреждение и `string` (как BPMN-конвертер: не молчим).
  */
 export function buildSchemaField(node, ctx) {
+  for (const child of ctx.children(node)) {
+    if (FIELD_ATTRS.has(child.key)) continue;
+    ctx.warn(child, 'неизвестный атрибут поля «' + child.key + '»');
+  }
+
   const typeValue = ctx.childValue(node, 'тип');
   const field = {};
 

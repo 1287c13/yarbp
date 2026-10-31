@@ -586,6 +586,15 @@
   check('B-1: дубль идентификатора виден',
     dupWarnings.some(item => /уже занят/.test(item.message)), JSON.stringify(dupWarnings));
 
+  // Опечатка в атрибуте задачи (`.типп` вместо `.тип`) не должна менять модель
+  // молча: у задачи атрибут-опечатка выглядит как вложенный узел, и он тоже
+  // обязан попасть в диагностику.
+  const attrTypoWarnings = warningsOf(['! как бпмн', 'процесс = П', '  событие = Старт',
+    '  задача = Дело .типп сервис'].join('\n'));
+  check('B-1: опечатка в атрибуте задачи названа',
+    attrTypoWarnings.some(item => /неизвестный узел «типп»/.test(item.message)),
+    JSON.stringify(attrTypoWarnings));
+
   const noStartWarnings = warningsOf(['! как бпмн', 'процесс = П', '  задача = Дело'].join('\n'));
   check('B-1: процесс без старта виден',
     noStartWarnings.some(item => /нет стартового события/.test(item.message)),
@@ -1221,6 +1230,32 @@
       check('JSON Schema: пустой документ — предупреждение',
         noSchemas.warnings.some(item => /нет ни одной схемы/.test(item.message)),
         JSON.stringify(noSchemas.warnings));
+
+      // Опечатка в атрибуте поля раньше молчала: `.тпи целое` давало строку,
+      // а `.обязателное да` тихо переставало делать поле обязательным.
+      const typoField = new YarbpJsonSchemaConverter(buildAST([
+        '! как схема',
+        'схема = Точка',
+        '  поле = x .тпи целое .обязателное да',
+      ].join('\n')).ast);
+      const typoSpec = typoField.convert();
+      const typoText = typoField.warnings.map(item => item.message).join(' | ');
+      check('JSON Schema: опечатка в атрибуте поля — предупреждение на каждый',
+        /неизвестный атрибут поля «тпи»/.test(typoText) &&
+        /неизвестный атрибут поля «обязателное»/.test(typoText), typoText);
+      check('JSON Schema: опечатка не меняет схему молча',
+        typoSpec.$defs['Точка'].properties.x.type === 'string' &&
+        typoSpec.$defs['Точка'].required === undefined,
+        JSON.stringify(typoSpec.$defs['Точка']));
+
+      const knownField = new YarbpJsonSchemaConverter(buildAST([
+        '! как схема',
+        'схема = Точка',
+        '  поле = x .тип целое .формат int32 .значение 1 .значение 2 .обязательное да .описание "ось"',
+      ].join('\n')).ast);
+      knownField.convert();
+      check('JSON Schema: известные атрибуты поля предупреждений не дают',
+        knownField.warnings.length === 0, JSON.stringify(knownField.warnings));
 
       /* Круговой рейс для схемы: schema.json → (tools/schema2yarbp.py) →
          cases/schema_imported.yarbp → наш конвертер → снова JSON Schema. */
