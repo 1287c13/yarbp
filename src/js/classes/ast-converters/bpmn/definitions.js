@@ -44,6 +44,8 @@ export const TASK_TAG_MAP = Object.freeze({
   'отправка-сообщения':  'sendTask',
   'получение-сообщения': 'receiveTask',
   'бизнес-правило':      'businessRuleTask',
+  /* B-7: вызов другого процесса (`.вызывает = <id процесса>`). */
+  'вызов':               'callActivity',
 });
 export const DEFAULT_TASK_TAG = 'manualTask';
 
@@ -124,6 +126,10 @@ export const ATTRIBUTE_KEYS = Object.freeze(new Set([
   'прерывающее',
   'условие',
   'по-умолчанию',
+  /* B-7: процесс и вызов процесса. */
+  'исполняемый',
+  'пул',
+  'вызывает',
 ]));
 
 /** Ключи — дочерние сущности (артефакты и связи). */
@@ -133,6 +139,7 @@ export const ENTITY_KEYS = Object.freeze(new Set([
   'данные-вход',
   'данные-выход',
   'база-данных',
+  'группа',
   'связь',
 ]));
 

@@ -5,6 +5,7 @@
     "bpmn_branches_artifacts",
     "bpmn_subprocess",
     "bpmn_features",
-    "bpmn_data"
+    "bpmn_data",
+    "bpmn_wide"
   ]
 }

@@ -32,10 +32,27 @@ export function serializeBpmn(definitions) {
     serializeProcess(process, definitions, lines, 1);
   }
 
+  for (const category of definitions.categories || []) {
+    serializeCategory(category, lines, 1);
+  }
+
   serializeDiagram(definitions, lines, 1);
 
   lines.push('</bpmn:definitions>');
   return lines.join('\n');
+}
+
+/** B-7: `<bpmn:category>` со значениями — подписи групп. */
+function serializeCategory(category, lines, depth) {
+  const ind = INDENT.repeat(depth);
+  lines.push(`${ind}<bpmn:category id="${escapeHtml(category.id)}">`);
+  for (const value of category.values) {
+    lines.push(
+      `${ind}${INDENT}<bpmn:categoryValue id="${escapeHtml(value.id)}" ` +
+      `value="${escapeHtml(value.value || '')}" />`
+    );
+  }
+  lines.push(`${ind}</bpmn:category>`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -102,6 +119,14 @@ function serializeProcess(process, definitions, lines, depth) {
     );
   }
 
+  // B-7: группы-артефакты процесса
+  for (const group of process.groups || []) {
+    lines.push(
+      `${ind}${INDENT}<bpmn:group id="${escapeHtml(group.id)}" ` +
+      `categoryValueRef="${escapeHtml(group.categoryValueId)}" />`
+    );
+  }
+
   for (const flow of process.sequenceFlows) {
     serializeSequenceFlow(flow, lines, depth + 1);
   }
@@ -134,6 +159,8 @@ function serializeFlowNode(node, lines, depth) {
   // B-3/B-4: «непрерывающее» boundary и поток по умолчанию у шлюза.
   if (node.cancelActivity === false) attrs.push('cancelActivity="false"');
   if (node.defaultFlowId) attrs.push(`default="${escapeHtml(node.defaultFlowId)}"`);
+  // B-7: вызов процесса
+  if (node.calledElement) attrs.push(`calledElement="${escapeHtml(node.calledElement)}"`);
 
   const loopXml = loopCharacteristicsXml(node.loopCharacteristics);
   const hasInner = node.children && node.children.length;
@@ -312,6 +339,9 @@ function serializeDiagram(definitions, lines, depth) {
     for (const ref of process.dataStores) {
       serializeArtifactShape(ref, lines, depth + 2);
     }
+    for (const group of process.groups || []) {
+      serializeGroupShape(group, lines, depth + 2);
+    }
 
     for (const flow of process.sequenceFlows) {
       serializeEdge(flow.id, flow.waypoints, lines, depth + 2, !!flow.name, flow.labelPos);
@@ -418,6 +448,18 @@ function serializeTextAnnotationShape(ta, lines, depth) {
 
   lines.push(`${ind}<bpmndi:BPMNShape id="${escapeHtml(ta.id)}_di" bpmnElement="${escapeHtml(ta.id)}">`);
   lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${width}" height="${height}" />`);
+  lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
+  lines.push(`${ind}</bpmndi:BPMNShape>`);
+}
+
+/** B-7: рамка группы — обычный BPMNShape с bpmnElement группы. */
+function serializeGroupShape(group, lines, depth) {
+  if (!group.bounds) return;
+  const ind = INDENT.repeat(depth);
+  const b = group.bounds;
+
+  lines.push(`${ind}<bpmndi:BPMNShape id="${escapeHtml(group.id)}_di" bpmnElement="${escapeHtml(group.id)}">`);
+  lines.push(`${ind}${INDENT}<dc:Bounds x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" />`);
   lines.push(`${ind}${INDENT}<bpmndi:BPMNLabel />`);
   lines.push(`${ind}</bpmndi:BPMNShape>`);
 }

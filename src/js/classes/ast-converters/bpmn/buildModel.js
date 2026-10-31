@@ -3,6 +3,7 @@ import {
   BpmnDefinitions, BpmnCollaboration, BpmnParticipant,
   BpmnProcess, BpmnLane, BpmnFlowNode, BpmnSequenceFlow,
   BpmnMessageFlow, BpmnTextAnnotation, BpmnAssociation,
+  BpmnCategory, BpmnGroup,
   BpmnDataInputAssociation, BpmnDataOutputAssociation,
   BpmnDataObjectReference, BpmnDataStoreReference,
 } from './BpmnModel.js';
@@ -76,6 +77,10 @@ export function buildModel(ast, options = {}) {
   const allMessageFlows    = [];
 
   for (const proc of definitions.processes) {
+    if (proc._category) {
+      definitions.categories.push(proc._category);
+      delete proc._category;
+    }
     if (proc._pendingArtifacts) {
       allTextAnnotations.push(...proc._pendingArtifacts.textAnnotations);
       allAssociations.push(...proc._pendingArtifacts.associations);
@@ -95,7 +100,7 @@ export function buildModel(ast, options = {}) {
     collab.id = ctx.idGen.next('Collaboration');
     for (const proc of definitions.processes) {
       const participant = new BpmnParticipant(
-        ctx.idGen.next('Participant'), proc.name, proc.id);
+        ctx.idGen.next('Participant'), proc.poolName || proc.name, proc.id);
       collab.participants.push(participant);
     }
     collab.textAnnotations = allTextAnnotations;
@@ -155,9 +160,14 @@ function checkIncoming(nodes, ctx) {
 
 function buildProcess(node, ctx) {
   const process = new BpmnProcess();
-  process.id = ctx.idGen.next('Process');
+  // B-7: `.ид` у процесса нужен, чтобы на него можно было ссылаться из
+  // `задача .тип вызов .вызывает = <ид>`. Без `.ид` — как раньше, авто-id.
+  process.id = extractExplicitId(node) || ctx.idGen.next('Process');
   process.name = node.value;
-  process.isExecutable = false;
+  // B-7: `.исполняемый да` → isExecutable, `.пул = <имя>` → имя пула-участника.
+  // Без ключей поведение прежнее, поэтому старые схемы не меняются.
+  process.isExecutable = isFlagOn(childValue(node, 'исполняемый'));
+  process.poolName = childValue(node, 'пул') || node.value;
   process.bounds = readBounds(node);
   process.position = node.position;
   process._pendingArtifacts = {
@@ -351,6 +361,18 @@ function buildTask(node, ctx, process, opts) {
   self.bounds = readBounds(node);
   self.position = node.position;
   self.loopCharacteristics = readLoopCharacteristics(node);
+
+  // B-7: вызов другого процесса — `callActivity` + `calledElement`.
+  // Ссылка идёт на `id` процесса из разметки (`.ид` у `процесс`).
+  if (tag === 'callActivity') {
+    const called = childValue(node, 'вызывает');
+    if (called === null) {
+      warn(ctx, node, 'у задачи-вызова нет .вызывает — callActivity без calledElement');
+    } else {
+      self.calledElement = String(called);
+    }
+  }
+
   registerNode(self, name, ctx, process, opts);
 
   const branches = buildBoundaryBranches(node, self, ctx, process, opts);
@@ -407,6 +429,7 @@ function buildArtifacts(node, task, ctx, process, opts) {
       case 'данные-выход': buildDataObject(art, task, ctx, process); break;
       case 'данные-вход':  buildDataInput(art, task, ctx, process); break;
       case 'база-данных':  buildDataStore(art, task, ctx, process); break;
+      case 'группа':       buildGroup(art, task, ctx, process); break;
       case 'связь':        buildMessageFlow(art, task, ctx, process); break;
     }
   }
@@ -487,6 +510,28 @@ function buildDataInput(node, task, ctx, process) {
 
   process.dataObjectRefs.push(ref);
   task.dataInputAssocs.push(assoc);
+}
+
+/** `.группа = <имя>` — рамка группы вокруг задачи (B-7). */
+function buildGroup(node, task, ctx, process) {
+  const name = node.value || null;
+
+  // По BPMN у группы нет своего имени: подпись живёт в categoryValue.
+  let category = process._category;
+  if (!category) {
+    category = new BpmnCategory(ctx.idGen.next('Category'));
+    process._category = category;
+  }
+
+  const categoryValueId = ctx.idGen.next('CategoryValue');
+  category.values.push({ id: categoryValueId, value: name });
+
+  process.groups.push(new BpmnGroup({
+    id: ctx.idGen.next('Group'),
+    name,
+    categoryValueId,
+    ownerId: task.id,
+  }));
 }
 
 function buildDataStore(node, task, ctx, process) {

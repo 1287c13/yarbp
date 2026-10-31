@@ -212,6 +212,10 @@ export function recalculateDi(model) {
   snapEndEventsToRightEdge(model);
 
   for (const process of model.processes) {
+    applyGroupBounds(process);
+  }
+
+  for (const process of model.processes) {
     refreshAssocWaypoints(process);
   }
   refreshCollaborationWaypoints(model);
@@ -562,6 +566,29 @@ function shiftIncomingFlows(process, targetId, dx) {
   for (const flow of process.sequenceFlows) shiftFlow(flow);
   for (const node of collectAllNodes(process.flowNodes)) {
     for (const flow of node.sequenceFlows || []) shiftFlow(flow);
+  }
+}
+
+/* ---------------- B-7: рамки групп ---------------- */
+
+/**
+ * Группа — рамка вокруг задачи. Считаем в самом конце: после укладки пулов и
+ * сдвигов, иначе рамка отрывается от задачи.
+ */
+function applyGroupBounds(process) {
+  const nodesById = new Map();
+  collectNodesById(process.flowNodes, nodesById);
+
+  for (const group of process.groups || []) {
+    const owner = nodesById.get(group.ownerId);
+    if (!owner || !owner.bounds) continue;
+    const pad = LAYOUT.groupPadding;
+    group.bounds = {
+      x: owner.bounds.x - pad,
+      y: owner.bounds.y - pad,
+      width: owner.bounds.width + 2 * pad,
+      height: owner.bounds.height + 2 * pad,
+    };
   }
 }
 

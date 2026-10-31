@@ -772,6 +772,51 @@
     'runs ' + statsRenamed.runs + '→' + statsExtended.runs);
 
   /* ------------------------------------------------------------------ */
+  /* 16. B-7: модель шире — пул, isExecutable, вызов процесса, группы    */
+  /* ------------------------------------------------------------------ */
+  let wideSource = '';
+  try {
+    wideSource = await fetchText('cases/bpmn_wide.yarbp');
+  } catch (e) { /* ниже */ }
+
+  if (wideSource) {
+    const wideXml = new YarbpBPMNConverter(buildAST(wideSource).ast).convert();
+
+    check('B-7: .исполняемый да → isExecutable="true"', /<bpmn:process id="Process_Request" isExecutable="true">/.test(wideXml),
+      (wideXml.match(/<bpmn:process [^>]*>/) || ['нет'])[0]);
+
+    check('B-7: без флага процесс остаётся isExecutable="false"',
+      /<bpmn:process id="Process_Approve" isExecutable="false">/.test(wideXml));
+
+    check('B-7: .пул задаёт имя участника',
+      /<bpmn:participant [^>]*name="Отдел заявок"/.test(wideXml) &&
+      /<bpmn:participant [^>]*name="Согласование"/.test(wideXml));
+
+    check('B-7: задача-вызов стала callActivity с calledElement',
+      /<bpmn:callActivity [^>]*calledElement="Process_Approve"/.test(wideXml),
+      (wideXml.match(/<bpmn:callActivity [^>]*>/) || ['нет'])[0]);
+
+    check('B-7: группа объявлена с categoryValue',
+      /<bpmn:category id="[^"]+">\s*<bpmn:categoryValue id="[^"]+" value="Финансовый блок" \/>/.test(wideXml));
+
+    check('B-7: у группы есть ссылка на значение категории',
+      /<bpmn:group id="[^"]+" categoryValueRef="[^"]+" \/>/.test(wideXml) &&
+      (wideXml.match(/<bpmn:group /g) || []).length === 2,
+      (wideXml.match(/<bpmn:group /g) || []).length + ' групп');
+
+    check('B-7: у группы есть рамка в DI',
+      (wideXml.match(/<bpmndi:BPMNShape [^>]*bpmnElement="Group_\d+"/g) || []).length === 2);
+
+    check('B-7: у задачи-вызова без .вызывает — предупреждение',
+      warningsOf(['! как бпмн', 'процесс = П', '  событие = Начало',
+        '    задача = Вызвать .тип вызов', '    событие .расположение конец'].join('\n'))
+        .some(item => /нет \.вызывает/.test(item.message)));
+
+    check('B-7: на схеме с новой моделью предупреждений нет',
+      warningsOf(wideSource).length === 0, JSON.stringify(warningsOf(wideSource)));
+  }
+
+  /* ------------------------------------------------------------------ */
   resultBox.textContent = lines.join('\n') + '\n';
   document.title = UPDATE ? 'CONVERTERS UPDATE'
     : (failed ? 'CONVERTERS FAIL' : 'CONVERTERS PASS');

@@ -3,6 +3,15 @@ export class BpmnDefinitions {
     this.id            = null;
     this.collaboration = null;
     this.processes     = [];
+    this.categories    = [];   // B-7: <bpmn:category> для групп
+  }
+}
+
+/** B-7: категория со значениями — на неё ссылаются `<bpmn:group>`. */
+export class BpmnCategory {
+  constructor(id) {
+    this.id     = id;
+    this.values = [];   // { id, value }
   }
 }
 
@@ -59,6 +68,7 @@ export class BpmnProcess {
     this.id             = null;
     this.name           = null;
     this.isExecutable   = false;
+    this.poolName       = null;      // B-7: имя пула-участника (по умолчанию = имя процесса)
     this.laneSetId      = null;
     this.lanes          = [];
     this.flowNodes      = [];
@@ -66,7 +76,19 @@ export class BpmnProcess {
     this.dataObjects    = [];
     this.dataObjectRefs = [];
     this.dataStores     = [];
+    this.groups         = [];        // B-7: <bpmn:group> задачи
     this.bounds         = null;
+  }
+}
+
+/** B-7: группа-артефакт вокруг задачи; имя хранится в `<bpmn:categoryValue>`. */
+export class BpmnGroup {
+  constructor({ id, name, categoryValueId, ownerId }) {
+    this.id              = id;
+    this.name            = name || null;
+    this.categoryValueId = categoryValueId;
+    this.ownerId         = ownerId;
+    this.bounds          = null;
   }
 }
 
@@ -91,6 +113,7 @@ export class BpmnFlowNode {
     this.attachedToRef       = null;
     this.cancelActivity      = null;   // boundary: false → cancelActivity="false"
     this.eventDefinition     = null;   // message/timer/error/signal/…
+    this.calledElement       = null;   // callActivity: id вызываемого процесса
     this.defaultFlowId       = null;   // шлюз: id потока по умолчанию
     this.loopCharacteristics = null;
     this.children            = [];
