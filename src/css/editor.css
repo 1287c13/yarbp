@@ -287,8 +287,10 @@ body.dark .bpmn-refresh-btn:hover { background: rgba(128, 128, 128, 0.18); }
 body.dark .bpmn-refresh-btn.is-stale { color: #ff8a80; border-color: rgba(255, 138, 128, 0.5); }
 .bpmn-refresh-btn svg { display: block; }
 
-/* Диагностика сборки BPMN (B-1): что конвертер не понял. */
-.bpmn-status {
+/* Диагностика сборки (B-1): что конвертер не понял. Общий стиль для панелей
+   BPMN и OpenAPI — сообщения одного вида не должны выглядеть по-разному. */
+.bpmn-status,
+.openapi-status {
   position: absolute;
   left: 0;
   right: 0;
@@ -303,8 +305,10 @@ body.dark .bpmn-refresh-btn.is-stale { color: #ff8a80; border-color: rgba(255, 1
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.bpmn-status[hidden] { display: none; }
-body.dark .bpmn-status { color: #ffd79a; background: #3a3020; border-top-color: #5a4a2a; }
+.bpmn-status[hidden],
+.openapi-status[hidden] { display: none; }
+body.dark .bpmn-status,
+body.dark .openapi-status { color: #ffd79a; background: #3a3020; border-top-color: #5a4a2a; }
 
 /* Автодополнение */
 .suggestion-popup {

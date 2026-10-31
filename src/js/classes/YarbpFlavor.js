@@ -14,6 +14,7 @@ import { HTMLUIRenderer } from './renderers/HTMLUIRenderer.js'
 import { XPMRenderer } from './renderers/XPMRenderer.js'
 import { BPMNRenderer } from './renderers/BPMNRenderer.js';
 import { FlexFormsRenderer } from './renderers/FlexFormsRenderer.js';
+import { OpenAPIRenderer } from './renderers/OpenAPIRenderer.js';
 
 /* highlighters */
 import { XMLHighlighter } from './highlighters/XMLHighlighter.js'
@@ -125,6 +126,12 @@ const KnownFlavors = Object.freeze({
     textExample: [],
     renderer: BPMNRenderer,
     suggestions: bpmnSuggestions
+  },
+  OPENAPI: {
+    /* `! как openapi` / `! как OpenAPI` / `! as open-api` — одно и то же */
+    names: ['openapi', 'open-api', 'swagger'],
+    textExample: [],
+    renderer: OpenAPIRenderer,
   },
   FLEX_FORMS: {
     /* `normalizeFlavorName` снимает `[-_ ()]` и приводит к нижнему регистру,

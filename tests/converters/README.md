@@ -38,6 +38,11 @@ python tests/converters/run_tests.py --update
 Визуально посмотреть, как схему видит bpmn-io (и увидеть наложения, которые
 счётчики не ловят): `tests/bpmn-io/README.md`.
 
+Кейсы BPMN — в `cases/bpmn_*.yarbp`, кейс OpenAPI — `cases/openapi_orders.yarbp`
+(конвертер `! как openapi`). У кейса OpenAPI нет golden-снимка: проверяется
+структура контракта (пути, операции, ответы, схемы, `$ref`) и то, что контракт
+проходит структурную проверку `validateOpenApi` в `converters.html`.
+
 Документы в наборе:
 
 | Файл | Что фиксирует |

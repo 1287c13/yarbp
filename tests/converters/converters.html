@@ -38,6 +38,7 @@
   import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
   import { YarbpBPMNConverter, getLayoutStats, resetLayoutStats } from '../../src/js/classes/ast-converters/bpmn/YarbpBPMNConverter.js';
   import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
+  import { YarbpOpenAPIConverter } from '../../src/js/classes/ast-converters/OpenAPIConvertor.js';
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
   import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   import { BPMNRenderer } from '../../src/js/classes/renderers/BPMNRenderer.js';
@@ -814,6 +815,147 @@
 
     check('B-7: на схеме с новой моделью предупреждений нет',
       warningsOf(wideSource).length === 0, JSON.stringify(warningsOf(wideSource)));
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 17. OpenAPI 3: вторая жизнь той же разметки (новый конвертер)       */
+  /* ------------------------------------------------------------------ */
+  let apiSource = '';
+  try {
+    apiSource = await fetchText('cases/openapi_orders.yarbp');
+  } catch (e) { /* ниже */ }
+
+  if (apiSource) {
+    /** Структурная проверка контракта: то, что обычно делает валидатор OpenAPI. */
+    function validateOpenApi(spec) {
+      const problems = [];
+      const schemas = (spec.components && spec.components.schemas) || {};
+
+      if (!/^3\.0\.\d+$/.test(spec.openapi || '')) problems.push('openapi: ' + spec.openapi);
+      if (!spec.info || !spec.info.title || !spec.info.version) problems.push('info');
+      if (!spec.paths || !Object.keys(spec.paths).length) problems.push('paths пусты');
+
+      const refs = [];
+      const collect = (value) => {
+        if (!value || typeof value !== 'object') return;
+        if (typeof value.$ref === 'string') refs.push(value.$ref);
+        for (const inner of Object.values(value)) collect(inner);
+      };
+      collect(spec.paths);
+      collect(schemas);
+      for (const ref of refs) {
+        if (!schemas[ref.split('/').pop()]) problems.push('битая ссылка ' + ref);
+      }
+
+      for (const [path, item] of Object.entries(spec.paths || {})) {
+        if (!path.startsWith('/')) problems.push('путь без «/»: ' + path);
+        for (const [verb, op] of Object.entries(item)) {
+          if (verb === 'description' || !op || typeof op !== 'object') continue;
+          if (!op.responses || !Object.keys(op.responses).length) {
+            problems.push(verb + ' ' + path + ' без ответов');
+          }
+        }
+      }
+
+      return problems;
+    }
+    const apiConverter = new YarbpOpenAPIConverter(buildAST(apiSource).ast, { source: apiSource });
+    let apiSpec = null;
+    try {
+      apiSpec = apiConverter.convert();
+    } catch (error) {
+      apiSpec = null;
+      check('OpenAPI: конвертер не падает', false, String(error && error.message || error));
+    }
+
+    if (apiSpec) {
+      const post = apiSpec.paths['/orders'] && apiSpec.paths['/orders'].post;
+      const get = apiSpec.paths['/orders'] && apiSpec.paths['/orders'].get;
+      const order = apiSpec.components && apiSpec.components.schemas
+        && apiSpec.components.schemas['Заказ'];
+
+      check('OpenAPI: версия контракта 3.0.3', apiSpec.openapi === '3.0.3', String(apiSpec.openapi));
+      check('OpenAPI: info из api',
+        apiSpec.info.title === 'Заказы' && apiSpec.info.version === '1.0.0' &&
+        apiSpec.info.description === 'API заказов', JSON.stringify(apiSpec.info));
+      check('OpenAPI: серверы', Array.isArray(apiSpec.servers) &&
+        apiSpec.servers[0].url === 'https://api.example.com/v1', JSON.stringify(apiSpec.servers));
+      check('OpenAPI: путь и описание', !!apiSpec.paths['/orders'] &&
+        apiSpec.paths['/orders'].description === 'Заказы');
+      check('OpenAPI: операция get с двумя ответами',
+        !!get && get.summary === 'Список заказов' &&
+        !!get.responses['200'] && !!get.responses['500'],
+        JSON.stringify(get && get.responses));
+      check('OpenAPI: requestBody ссылается на схему',
+        !!post && post.requestBody.required === true &&
+        post.requestBody.content['application/json'].schema.$ref === '#/components/schemas/Заказ',
+        JSON.stringify(post && post.requestBody));
+      check('OpenAPI: 201 у post', !!post && !!post.responses['201']);
+      check('OpenAPI: схема с полями и required',
+        !!order && order.type === 'object' &&
+        JSON.stringify(order.required) === JSON.stringify(['id']),
+        JSON.stringify(order && order.required));
+      check('OpenAPI: типы полей',
+        order.properties.id.type === 'integer' && order.properties.id.format === 'int64' &&
+        order.properties.items.type === 'array' && order.properties.items.items.type === 'string' &&
+        order.properties.client.$ref === '#/components/schemas/Клиент',
+        JSON.stringify(order.properties));
+      check('OpenAPI: enum из .значение',
+        JSON.stringify(order.properties.status.enum) === JSON.stringify(['new', 'paid']),
+        JSON.stringify(order.properties.status.enum));
+      check('OpenAPI: на корректном контракте предупреждений нет',
+        apiConverter.warnings.length === 0, JSON.stringify(apiConverter.warnings));
+
+      const apiProblems = validateOpenApi(apiSpec);
+      check('OpenAPI: контракт проходит структурную проверку',
+        apiProblems.length === 0, apiProblems.join('; '));
+
+      const dangling = new YarbpOpenAPIConverter(buildAST([
+        '! как openapi',
+        'api = П .версия 1.0.0',
+        '  путь = /a',
+        '    метод = get .ответ 200',
+        '  схема = A',
+        '    поле = b .тип ссылка:B',
+      ].join('\n')).ast);
+      dangling.convert();
+      check('OpenAPI: поле со ссылкой на неизвестную схему — предупреждение',
+        dangling.warnings.some(item => /неизвестную схему «B»/.test(item.message)),
+        JSON.stringify(dangling.warnings));
+
+      const badApi = new YarbpOpenAPIConverter(buildAST([
+        '! как openapi',
+        'api = Плохо .версия 0.0.1',
+        '  путь = orders',
+        '    метод = get .ответ 200',
+        '  путь = /ok',
+        '    метод = get .ответ 2000 .запрос НетТакой',
+        '  неизвестный = узел',
+      ].join('\n')).ast);
+      badApi.convert();
+      const badText = badApi.warnings.map(item => item.message).join(' | ');
+      check('OpenAPI: путь без «/» — предупреждение', /должен начинаться с «\/»/.test(badText), badText);
+      check('OpenAPI: кривой код ответа — предупреждение', /трёхзначным/.test(badText), badText);
+      check('OpenAPI: ссылка на несуществующую схему — предупреждение', /неизвестную схему/.test(badText), badText);
+      check('OpenAPI: неизвестный узел — предупреждение', /неизвестный узел/.test(badText), badText);
+
+      const noRespond = new YarbpOpenAPIConverter(buildAST([
+        '! как openapi',
+        'api = П .версия 1.0.0',
+        '  путь = /a',
+        '    метод = get',
+      ].join('\n')).ast);
+      const noRespondSpec = noRespond.convert();
+      check('OpenAPI: без .ответ подставляется 200',
+        !!noRespondSpec.paths['/a'].get.responses['200'] &&
+        noRespond.warnings.some(item => /200 по умолчанию/.test(item.message)));
+    }
+
+    const openApiFlavor = new YarbpFlavor('как openapi');
+    check('флейвор: «! как openapi» находит рендерер', !!openApiFlavor.flavorData &&
+      !!openApiFlavor.flavorData.renderer, String(openApiFlavor.flavorName));
+    check('флейвор: «! AS Open-API» — тот же флейвор',
+      new YarbpFlavor('as Open-API').flavorName === openApiFlavor.flavorName);
   }
 
   /* ------------------------------------------------------------------ */
