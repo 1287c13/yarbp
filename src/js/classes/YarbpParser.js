@@ -44,6 +44,15 @@ class ASTNode {
 }
 
 
+/**
+ * `expandMacros` исторически всегда возвращает `children` (даже пустой), и
+ * снимки AST это фиксируют. Быстрый путь без макросов держит ту же форму,
+ * иначе у документов без детей поле пропадает.
+ */
+function withChildren(node) {
+  return Array.isArray(node.children) ? node : { ...node, children: [] };
+}
+
 export class YarbpParser {
   static QUOTES = ['"', "'", "(", ")"];
   static ARRAY_SEPARATOR = ' ';
@@ -60,6 +69,9 @@ export class YarbpParser {
     this.tokens = [];
     this.idx = 0;
     this.AST = { };
+    // Кэш AST: за один пересчёт его просят дважды (подсказки и рендерер).
+    this.cachedTokens = null;
+    this.cachedAST = null;
   };
 
   /** sequential processing of tokens and recursive calls to create a tree */
@@ -79,7 +91,6 @@ export class YarbpParser {
         let props = {
           nodeType: token.type,
           value: token.value,
-          baseValueType: String,
           position: { start: token.start, end: token.end }};
 
         if (token.type === TokenTypes.DIRECTIVE) {
@@ -226,10 +237,35 @@ export class YarbpParser {
     return value;
   }
 
+  /**
+   * Есть ли в документе что раскрывать: определение `@имя` или подстановка
+   * `((имя))`. Проверка по тексту дешёвая; `@` внутри кавычек даст ложное
+   * «да», и это безопасно — просто выполнится полный проход.
+   */
+  hasMacroSyntax() {
+    const text = this.lexer && typeof this.lexer.text === 'string' ? this.lexer.text : '';
+    return text.includes('@') || text.includes('((');
+  }
+
   getAST() {
+    // Пока токены не пересобраны, AST тот же: за один пересчёт его просят
+    // дважды (подсказки и рендерер). `tokenize()` создаёт новый массив токенов,
+    // поэтому ссылка — надёжный признак «документ не менялся».
+    if (this.cachedAST && this.cachedTokens === this.lexer.tokens) {
+      return this.cachedAST;
+    }
+
     this.idx = 0;
     this.AST = { root: new ASTNode({ nodeType: nodeTypes.ROOT }) };
 
-    return expandMacros(this.traverse(this.AST.root));
+    const ast = this.traverse(this.AST.root);
+
+    // Без макросов раскрывать нечего: `expandMacros` пересобирает дерево и
+    // клонирует каждый узел, а результат структурно равен входу.
+    const result = this.hasMacroSyntax() ? expandMacros(ast) : withChildren(ast);
+
+    this.cachedTokens = this.lexer.tokens;
+    this.cachedAST = result;
+    return result;
   }
 }
