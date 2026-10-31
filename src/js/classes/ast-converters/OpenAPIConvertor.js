@@ -112,12 +112,20 @@ export class YarbpOpenAPIConverter {
           this.warn(node, 'путь должен начинаться с «/»: «' + (path || '') + '»');
           continue;
         }
+        // Два `путь` с одинаковым адресом раньше молча перетирали друг друга:
+        // второй путь просто исчезал из контракта.
+        if (paths[String(path)]) {
+          this.warn(node, 'путь «' + path + '» объявлен дважды — берём последний');
+        }
         paths[String(path)] = this.buildPath(node);
       } else if (node.key === 'схема') {
         const name = node.value;
         if (!name) {
           this.warn(node, 'схема без имени — пропущена');
           continue;
+        }
+        if (schemas[String(name)]) {
+          this.warn(node, 'схема «' + name + '» объявлена дважды — берём последнюю');
         }
         schemas[String(name)] = this.buildSchema(node);
       } else if (node.key !== 'api') {

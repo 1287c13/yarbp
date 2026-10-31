@@ -89,6 +89,11 @@ export function buildSchemaObject(node, ctx) {
       continue;
     }
 
+    // Одноимённые поля раньше молча перетирали друг друга.
+    if (schema.properties[String(name)]) {
+      ctx.warn(child, 'поле «' + name + '» объявлено дважды — берём последнее');
+    }
+
     schema.properties[String(name)] = buildSchemaField(child, ctx);
     if (isFlagOn(ctx.childValue(child, 'обязательное'))) {
       required.push(String(name));

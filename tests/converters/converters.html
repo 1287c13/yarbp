@@ -964,6 +964,29 @@
       check('OpenAPI: без .ответ подставляется 200',
         !!noRespondSpec.paths['/a'].get.responses['200'] &&
         noRespond.warnings.some(item => /200 по умолчанию/.test(item.message)));
+
+      // дубли раньше молча перетирали друг друга
+      const dupApi = new YarbpOpenAPIConverter(buildAST([
+        '! как openapi',
+        'api = Дубли .версия 1.0.0',
+        '  путь = /a',
+        '    метод = get .ответ 200',
+        '  путь = /a',
+        '    метод = post .ответ 201',
+        '  схема = S',
+        '    поле = id .тип целое',
+        '  схема = S',
+        '    поле = name .тип строка',
+        '    поле = name .тип целое',
+      ].join('\n')).ast);
+      const dupSpec = dupApi.convert();
+      const dupText = dupApi.warnings.map(item => item.message).join(' | ');
+      check('OpenAPI: дубль пути — предупреждение', /путь «\/a» объявлен дважды/.test(dupText), dupText);
+      check('OpenAPI: дубль схемы — предупреждение', /схема «S» объявлена дважды/.test(dupText), dupText);
+      check('OpenAPI: дубль поля — предупреждение', /поле «name» объявлено дважды/.test(dupText), dupText);
+      check('OpenAPI: дубль пути не теряется молча — остался последний',
+        !!dupSpec.paths['/a'].post && !dupSpec.paths['/a'].get,
+        Object.keys(dupSpec.paths['/a']).join(','));
     }
 
     /* Круговой рейс: spec.json → (python tools/openapi2yarbp.py) → кейс в
