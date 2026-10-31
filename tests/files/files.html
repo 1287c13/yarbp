@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>files cases</title>
+  <style>
+    body { margin: 0; padding: 16px; background: #ffffff; color: #111111;
+      font: 12px/1.5 'JetBrains Mono', Consolas, monospace; }
+    #result { margin: 0; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<pre id="result">running...</pre>
+
+<script type="module">
+  /*
+   * Файлы и хранилище: обёртка над localStorage и round-trip «экспорт→импорт».
+   *
+   * Проверяется поведение, а не наличие строк: FileManager поднимается на
+   * настоящем localStorage (этот origin), экспорт перехватывается на уровне
+   * Blob, а запрет хранилища имитируется подменой свойства window.
+   */
+  import { readStored, writeStored, removeStored } from '../../src/js/storage.js';
+  import { FileManager } from '../../src/js/modules/FileManager.js';
+
+  const resultBox = document.getElementById('result');
+  const lines = [];
+  let failed = 0;
+
+  function check(name, ok, detail = '') {
+    if (!ok) failed++;
+    lines.push((ok ? 'ok   ' : 'FAIL ') + name + (ok || !detail ? '' : ' — ' + detail));
+  }
+
+  function makeManager(key, files = null, activeFileId = null) {
+    const manager = new FileManager(key);
+    manager.uiContainer = document.createElement('div');
+    if (files) manager.data = { version: 1, activeFileId, files };
+    manager._renderUI();
+    return manager;
+  }
+
+  /** Перехватить то, что exportAll отдал бы в файл, и вернуть текстом. */
+  async function captureExport(manager) {
+    const realCreate = URL.createObjectURL;
+    const realClick = HTMLAnchorElement.prototype.click;
+    let blob = null;
+
+    URL.createObjectURL = (created) => { blob = created; return 'blob:files-test'; };
+    HTMLAnchorElement.prototype.click = function () {};
+
+    try {
+      manager.exportAll();
+    } finally {
+      URL.createObjectURL = realCreate;
+      HTMLAnchorElement.prototype.click = realClick;
+    }
+
+    return blob ? await blob.text() : '';
+  }
+
+  const KEY = 'yarbp_files_test_key';
+
+  /* ------------------------------------------------------------------ */
+  /* 1. Обёртка над localStorage                                        */
+  /* ------------------------------------------------------------------ */
+  check('storage: запись и чтение',
+    writeStored(KEY, 'v1') && readStored(KEY) === 'v1');
+  check('storage: число сохраняется строкой',
+    writeStored(KEY, 0) && readStored(KEY) === '0', readStored(KEY));
+  check('storage: удаление ключа',
+    removeStored(KEY) && readStored(KEY, 'fb') === 'fb');
+  check('storage: нет ключа — возвращается fallback',
+    readStored('yarbp_never_written_key', 'fb') === 'fb');
+  check('storage: нет ключа и нет fallback — null',
+    readStored('yarbp_never_written_key') === null);
+
+  /* ------------------------------------------------------------------ */
+  /* 2. Экспорт: идентичность файлов (D-16)                              */
+  /* ------------------------------------------------------------------ */
+  const STORAGE_A = 'yarbp_files_test_a';
+  const STORAGE_B = 'yarbp_files_test_b';
+  const STORAGE_C = 'yarbp_files_test_c';
+
+  const builtins = new FileManager(STORAGE_A)._getDefaultData()
+    .files.filter(file => file.isBuiltin);
+
+  const userFiles = [
+    { id: 'user-a', name: 'Мой файл A', content: '.a 1', isBuiltin: false, lastModified: 1000 },
+    { id: 'user-b', name: 'Мой файл B', content: '.b 2', isBuiltin: false, lastModified: 2000 }
+  ];
+
+  const source = makeManager(STORAGE_A, [...builtins, ...userFiles], 'user-b');
+  const exported = await captureExport(source);
+
+  let payload = null;
+  try { payload = JSON.parse(exported); } catch (e) { /* ниже */ }
+
+  check('D-16: экспорт — валидный JSON', payload !== null,
+    exported ? exported.slice(0, 80) : 'пусто');
+  check('D-16: версия экспорта — 2', !!payload && payload.version === 2,
+    payload ? String(payload.version) : 'нет');
+  check('D-16: в экспорте есть id файлов',
+    !!payload && payload.files.some(file => file.id === 'user-a'));
+  check('D-16: в экспорте есть slug встроенных',
+    !!payload && payload.files.some(file => file.isBuiltin && file.slug));
+  check('D-16: в экспорте есть активный файл',
+    !!payload && payload.activeFileId === 'user-b',
+    payload ? String(payload.activeFileId) : 'нет');
+
+  /* ------------------------------------------------------------------ */
+  /* 3. Импорт: round-trip и устойчивость к мусору                        */
+  /* ------------------------------------------------------------------ */
+  const target = makeManager(STORAGE_B);
+  const imported = target.importFromJSON(exported);
+  const targetUsers = target.data.files.filter(file => !file.isBuiltin);
+
+  check('D-16: импорт прошёл', imported === true);
+  check('D-16: id пользовательских файлов сохранены',
+    targetUsers.map(file => file.id).join(',') === 'user-a,user-b',
+    targetUsers.map(file => file.id).join(','));
+  check('D-16: содержимое файлов сохранено',
+    targetUsers[0] && targetUsers[0].content === '.a 1' &&
+    targetUsers[1] && targetUsers[1].content === '.b 2');
+  check('D-16: активный файл восстановлен',
+    target.data.activeFileId === 'user-b', String(target.data.activeFileId));
+  check('D-16: встроенные примеры не задвоены',
+    target.data.files.filter(file => file.isBuiltin).length === builtins.length,
+    String(target.data.files.filter(file => file.isBuiltin).length));
+
+  const duplicates = makeManager(STORAGE_C);
+  duplicates.importFromJSON(JSON.stringify({
+    version: 2,
+    files: [{ id: 'dup', name: 'Первый' }, { id: 'dup', name: 'Второй' }]
+  }));
+  const duplicateIds = duplicates.data.files
+    .filter(file => !file.isBuiltin).map(file => file.id);
+
+  check('D-16: дубли id разведены',
+    duplicateIds.length === 2 && duplicateIds[0] !== duplicateIds[1],
+    duplicateIds.join(','));
+
+  const garbage = makeManager('yarbp_files_test_d');
+  garbage.importFromJSON(JSON.stringify({
+    version: 2,
+    files: [null, 42, { name: 123 }, { id: 'ok', name: '   ', content: 5 }]
+  }));
+  const garbageUsers = garbage.data.files.filter(file => !file.isBuiltin);
+
+  check('D-16: мусорные записи пропущены', garbageUsers.length === 1,
+    String(garbageUsers.length));
+  check('D-16: битые поля заменены значениями по умолчанию',
+    !!garbageUsers[0] && garbageUsers[0].name === 'Без имени' &&
+    garbageUsers[0].content === '',
+    garbageUsers[0] ? garbageUsers[0].name + '|' + garbageUsers[0].content : 'нет');
+
+  const legacy = makeManager('yarbp_files_test_e');
+  legacy.importFromJSON(JSON.stringify({
+    version: 1,
+    files: [{ name: 'Старый экспорт', content: 'x', isBuiltin: false }]
+  }));
+  const legacyUsers = legacy.data.files.filter(file => !file.isBuiltin);
+
+  check('D-16: старый формат (v1) читается',
+    legacyUsers.length === 1 && /^imported-/.test(legacyUsers[0].id),
+    legacyUsers.map(file => file.id).join(','));
+
+  /* ------------------------------------------------------------------ */
+  /* 4. Ошибки импорта                                                   */
+  /* ------------------------------------------------------------------ */
+  const before = JSON.stringify(target.data);
+
+  const realAlert = window.alert;
+  const realConsoleError = console.error;
+  let alerts = 0;
+  window.alert = () => { alerts++; };
+  console.error = () => {};
+
+  const broken = target.importFromJSON('{oops');
+  const noFiles = target.importFromJSON(JSON.stringify({ version: 2 }));
+
+  window.alert = realAlert;
+  console.error = realConsoleError;
+
+  check('D-16: битый JSON не меняет данные',
+    broken === false && JSON.stringify(target.data) === before);
+  check('D-16: битый JSON сообщает пользователю', alerts === 2, String(alerts));
+  check('D-16: файл без массива files отклонён', noFiles === false);
+
+  /* ------------------------------------------------------------------ */
+  /* 5. Запрет хранилища (D-15) и метка «не сохранено» (D-12)            */
+  /* ------------------------------------------------------------------ */
+  const ownDescriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+  let blocked = false;
+
+  try {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() { throw new Error('storage blocked'); }
+    });
+    blocked = true;
+  } catch (e) {
+    blocked = false;
+  }
+
+  if (!blocked) {
+    lines.push('skip запрет хранилища: браузер не даёт подменить window.localStorage');
+  } else {
+    check('D-15: чтение при запрете не бросает', readStored('any', 'fb') === 'fb');
+    check('D-15: запись при запрете сообщает false', writeStored('any', 1) === false);
+    check('D-15: удаление при запрете сообщает false', removeStored('any') === false);
+
+    let blockedManager = null;
+    let creationError = '';
+    try {
+      blockedManager = new FileManager('yarbp_files_test_blocked');
+    } catch (e) {
+      creationError = String(e && e.message || e);
+    }
+
+    check('D-15: FileManager создаётся без хранилища', !!blockedManager, creationError);
+    check('D-15: без хранилища доступны встроенные примеры',
+      !!blockedManager && blockedManager.data.files.length > 0 &&
+      blockedManager.data.files.every(file => file.isBuiltin));
+
+    if (blockedManager) {
+      blockedManager.uiContainer = document.createElement('div');
+      blockedManager._renderUI();
+      const marker = blockedManager.uiContainer.querySelector('#fm-save-state');
+      const saved = blockedManager._saveData();
+
+      check('D-12: неудачная запись возвращает false', saved === false);
+      check('D-12: метка «не сохранено» показана',
+        !!marker && marker.hidden === false && marker.textContent !== '',
+        marker ? marker.textContent + ' / hidden=' + marker.hidden : 'нет метки');
+    }
+
+    if (ownDescriptor) Object.defineProperty(window, 'localStorage', ownDescriptor);
+    else delete window.localStorage;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 6. Смоук редактора: app.js инициализируется целиком                  */
+  /*    (проверка, что правки в хранилище не уронили запуск страницы)     */
+  /* ------------------------------------------------------------------ */
+  function waitForLoad(frame, timeout = 8000) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (ok) => {
+        if (settled) return;
+        settled = true;
+        resolve(ok);
+      };
+      frame.addEventListener('load', () => setTimeout(() => done(true), 400), { once: true });
+      setTimeout(() => done(false), timeout);
+    });
+  }
+
+  const appFrame = document.createElement('iframe');
+  appFrame.style.cssText = 'position:fixed;left:-9999px;top:0;width:1024px;height:768px;border:0';
+  appFrame.src = '../../src/index.html';
+
+  const appLoaded = waitForLoad(appFrame);
+  document.body.appendChild(appFrame);
+  const appOk = await appLoaded;
+
+  check('app: страница редактора загрузилась', appOk);
+
+  if (appOk) {
+    const doc = appFrame.contentDocument;
+    const editor = doc && doc.getElementById('code-textarea');
+    const highlight = doc && doc.getElementById('highlight-div');
+
+    check('app: список файлов отрисован',
+      !!doc && doc.querySelectorAll('.file-item').length > 0,
+      doc ? String(doc.querySelectorAll('.file-item').length) : 'нет документа');
+    check('app: пример открыт в редакторе',
+      !!editor && editor.value.length > 0,
+      editor ? String(editor.value.length) : 'нет поля');
+    check('app: подсветка построена',
+      !!highlight && highlight.querySelectorAll('span').length > 0);
+    check('app: метка «не сохранено» скрыта',
+      !!doc && doc.querySelector('#fm-save-state:not([hidden])') === null);
+  }
+
+  appFrame.remove();
+
+  /* ------------------------------------------------------------------ */
+  ['yarbp_files_test_a', 'yarbp_files_test_b', 'yarbp_files_test_c',
+   'yarbp_files_test_d', 'yarbp_files_test_e', 'yarbp_files_test_blocked',
+   'yarbp_files_test_key', 'yarbp_builtin_folder_expanded']
+    .forEach(key => removeStored(key));
+
+  resultBox.textContent = lines.join('\n') + '\n';
+  document.title = failed ? 'FILES FAIL' : 'FILES PASS';
+</script>
+</body>
+</html>
