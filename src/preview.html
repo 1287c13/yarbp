@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>ЯРБП: предпросмотр формы</title>
+  <style>
+    /* До подстановки страницы формы экран пустой и прозрачный: фон даёт
+       рамка ТСД в редакторе, чтобы не было белой вспышки. */
+    html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  </style>
+</head>
+<body>
+<script>
+  /*
+   * Хост предпросмотра формы ТСД.
+   *
+   * Зачем отдельная страница, а не `srcdoc` в редакторе: `srcdoc` (как и
+   * about:blank, blob:) наследует CSP родительского документа. У редактора
+   * политика строгая (`script-src 'self'`, `style-src 'self'`), а страница
+   * формы собрана из встроенных <script>/<style> — под унаследованной
+   * политикой движок бы не запустился. Этот файл отдаётся сервером как
+   * обычный документ, политику редактора не наследует и принимает готовую
+   * страницу как есть.
+   *
+   * Протокол (каждая перерисовка — новая загрузка хоста, поэтому обработчик
+   * всегда живёт в свежем документе):
+   *   1. хост: parent.postMessage({type: 'yarbp-preview-ready'}, origin);
+   *   2. редактор: {type: 'yarbp-preview', html} обратно в это окно;
+   *   3. хост: document.open/write/close — страница формы становится
+   *      документом, её скрипты выполняются как обычно, origin остаётся
+   *      прежним (localStorage формы работает).
+   */
+  (function () {
+    'use strict';
+
+    var origin = window.location.origin;
+    var handled = false;
+
+    window.addEventListener('message', function (event) {
+      if (event.origin !== origin) return;
+      if (handled) return;
+
+      var data = event.data;
+      if (!data || data.type !== 'yarbp-preview' || typeof data.html !== 'string') return;
+
+      handled = true;
+      try {
+        document.open();
+        document.write(data.html);
+        document.close();
+      } catch (e) {
+        // Страница формы не подставилась: сообщаем в редактор, чтобы он
+        // показал ошибку, а не пустой экран.
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(
+            { type: 'yarbp-preview-error', message: String(e && e.message || e) },
+            origin
+          );
+        }
+      }
+    });
+
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'yarbp-preview-ready' }, origin);
+    }
+  }());
+</script>
+</body>
+</html>

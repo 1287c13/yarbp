@@ -206,7 +206,12 @@ try {
       ' / ' + (htmlBtn ? htmlBtn.offsetWidth + 'x' + htmlBtn.offsetHeight : 'нет') +
       ' / ' + (mockBtn ? mockBtn.offsetWidth + 'x' + mockBtn.offsetHeight : 'нет'));
 
-  const srcdoc = iframe ? iframe.srcdoc : '';
+  // Страница формы уходит в iframe через страницу-хост (src/preview.html) —
+  // иначе её встроенные скрипты блокировала бы строгая CSP редактора. Поэтому
+  // проверяем ровно тот документ, который рендерер отдал хосту.
+  const srcdoc = renderer && typeof renderer.pendingPreviewHtml === 'string'
+    ? renderer.pendingPreviewHtml
+    : (iframe ? iframe.srcdoc : '');
   expect('iframe получил страницу формы', srcdoc.length > 100000, String(srcdoc.length));
   expect('в странице IR из разметки',
     srcdoc.indexOf('"заголовокФормы": "Отправка данных в 1С"') !== -1);

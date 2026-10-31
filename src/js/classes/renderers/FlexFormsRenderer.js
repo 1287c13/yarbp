@@ -14,6 +14,16 @@ import { FLEX_FORMS_MOCK_SERVER } from './flexforms/FlexFormsMockServer.js';
 /** Пауза перед перезагрузкой предпросмотра: пока печатают — не дёргаем iframe. */
 const PREVIEW_DEBOUNCE_MS = 400;
 
+/**
+ * Страница-хост предпросмотра.
+ *
+ * Отдельный документ нужен из-за CSP: `srcdoc`/`blob:` наследуют политику
+ * редактора, а страница формы собрана из встроенных <script>/<style>.
+ * `preview.html` отдаётся сервером и политику не наследует — см. файл
+ * `src/preview.html` и описание протокола `postMessage` там же.
+ */
+const PREVIEW_HOST_PAGE = 'preview.html';
+
 /** Заглушка экрана, если из разметки не собирается IR. */
 const EMPTY_IR_HINT = '<!DOCTYPE html><meta charset="utf-8">' +
   '<style>html,body{margin:0;height:100%;background:#0a0c10;color:#8b93a7;' +
@@ -49,6 +59,11 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     this.errorTimer = null;    // плашка ошибки выгрузки
     this.resizeObserver = null;
     this.windowResizeHandler = null;
+    this.previewSerial = 0;    // номер загрузки хоста: каждая — свежий документ
+    this.pendingPreviewHtml = null;
+    this.previewMounted = false;
+    this.onPreviewMessage = (event) => this.handlePreviewMessage(event);
+    window.addEventListener('message', this.onPreviewMessage);
   }
 
   render() {
@@ -65,13 +80,13 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     if (IR === null) {
       // Разметка неполная — прошлый предпросмотр не трогаем; если его не было,
       // показываем, что форма пока не собрана.
-      if (this.iframe && !this.iframe.srcdoc) this.iframe.srcdoc = EMPTY_IR_HINT;
+      if (this.iframe && !this.previewMounted) this.showPreviewHtml(EMPTY_IR_HINT);
       return;
     }
 
     clearTimeout(this.timer);
     // Первый показ — сразу, дальше — после паузы в наборе.
-    const delay = this.iframe.srcdoc ? PREVIEW_DEBOUNCE_MS : 0;
+    const delay = this.previewMounted ? PREVIEW_DEBOUNCE_MS : 0;
     this.timer = setTimeout(() => this.mountPreview(IR, serialized), delay);
   }
 
@@ -113,7 +128,8 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
 
     const screen = container.querySelector('.ff-phone-screen');
 
-    // srcdoc задаём свойством: так не нужно экранировать кавычки и амперсанды.
+    // Документ подставляет страница-хост (preview.html): srcdoc наследовал бы
+    // CSP редактора, а странице формы нужны встроенные скрипты и стили.
     const iframe = document.createElement('iframe');
     iframe.title = 'Предпросмотр формы ТСД';
     iframe.setAttribute('allow', 'clipboard-write');
@@ -122,6 +138,9 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     this.container = container;
     this.iframe = iframe;
     this.lastIR = '';
+    this.previewSerial = 0;
+    this.pendingPreviewHtml = null;
+    this.previewMounted = false;
     this.createExportButtons(container);
     this.observeResize(container);
 
@@ -260,11 +279,61 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     if (!this.iframe || !this.iframe.isConnected) return;
 
     try {
-      this.iframe.srcdoc = buildFormPage(IR, { preview: true });
+      this.showPreviewHtml(buildFormPage(IR, { preview: true }));
       this.lastIR = serialized;
     } catch (e) {
       console.error('[flexforms] страница формы не собрана:', e);
     }
+  }
+
+  /**
+   * Отдать готовую страницу в iframe через страницу-хост.
+   *
+   * Хост перезагружается на каждую перерисовку: `document.write` заменяет
+   * документ целиком вместе с обработчиком `message`, поэтому «готовность»
+   * всегда приходит из свежего документа.
+   */
+  showPreviewHtml(html) {
+    if (!this.iframe || !this.iframe.isConnected) return;
+
+    this.pendingPreviewHtml = html;
+    this.previewSerial += 1;
+    this.iframe.src = PREVIEW_HOST_PAGE + '?v=' + this.previewSerial;
+    this.previewMounted = true;
+  }
+
+  /** Хост загрузился и ждёт документ — отдаём ему собранную страницу формы. */
+  handlePreviewMessage(event) {
+    if (event.origin !== window.location.origin) return;
+
+    const data = event.data;
+    if (!data) return;
+
+    if (data.type === 'yarbp-preview-error') {
+      console.error('[flexforms] предпросмотр не подставился:', data.message);
+      return;
+    }
+
+    if (data.type !== 'yarbp-preview-ready') return;
+    if (!this.iframe || !this.iframe.contentWindow) return;
+    if (event.source !== this.iframe.contentWindow) return;
+    if (typeof this.pendingPreviewHtml !== 'string') return;
+
+    this.iframe.contentWindow.postMessage(
+      { type: 'yarbp-preview', html: this.pendingPreviewHtml },
+      window.location.origin
+    );
+  }
+
+  /** Смена флейвора и уход со страницы: снять слушатель и таймеры. */
+  destroy() {
+    window.removeEventListener('message', this.onPreviewMessage);
+    this.disconnectResize();
+    clearTimeout(this.timer);
+    clearTimeout(this.errorTimer);
+    this.pendingPreviewHtml = null;
+    this.iframe = null;
+    this.container = null;
   }
 
   /* ------------------------------------------------------------------ */

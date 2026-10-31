@@ -102,6 +102,14 @@ overflow-x: auto; overflow-y: auto; z-index: 2; white-space: pre; word-wrap: nor
 /* Тёмная тема */
 #day-icon, #night-icon {height: 15px; padding: 0 12px 0 12px; margin-top: 5px; }
 #theme-separator { margin: 0 3px 0 3px; }
+/* Верхняя панель: раньше жила в style-атрибутах разметки, из-за чего строгая
+   CSP по стилям была невозможна (см. index.html, Content-Security-Policy). */
+.top-controls { position: fixed; top: 10px; right: 20px; display: flex;
+  align-items: center; gap: 8px; z-index: 10000; }
+.top-controls .theme-btn { position: relative; top: auto; right: auto; margin: 0; }
+.github-btn { display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; background: #ffffff; border: 1px solid #ccc;
+  border-radius: 4px; text-decoration: none; box-sizing: border-box; }
 .theme-btn { position: fixed; top: 10px; right: 20px; padding: 3px 3px 3px 3px;
   cursor: pointer; z-index: 10000; background: #ffffff; border: 1px solid #ccc; border-radius: 4px; display: flex; }
 .layout-switch {
