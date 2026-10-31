@@ -103,6 +103,7 @@ https://yarbp.tech/
 | `protobuf` | Protobuf |
 | `xpo` | XPO, full example |
 | `bpmn` | BPMN |
+| `openapi` | OpenAPI 3 |
 | `tsd-form` | Форма ТСД |
 
 Принимается и id примера (`?example=builtin-3`), и hash-форма

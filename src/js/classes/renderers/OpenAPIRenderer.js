@@ -64,9 +64,19 @@ export class OpenAPIRenderer extends YarbpBasicRenderer {
     this.statusBox.title = items.map(label).join('\n');
   }
 
-  /** Контейнер панели — родитель области результата. */
+  /** Контейнер панели — тот же, что у BPMN: там есть position для строки. */
   panelHost() {
-    const box = this.renderHighlightDiv;
-    return box ? box.parentElement : null;
+    return this.renderTextarea.closest('.editor-container') ||
+      this.renderTextarea.closest('#render-pane');
+  }
+
+  /** Смена флейвора: убираем строку диагностики, чтобы не висела. */
+  destroy() {
+    const host = this.panelHost();
+    if (host) {
+      host.querySelectorAll('.openapi-status').forEach(element => element.remove());
+    }
+    this.statusBox = null;
+    this.lastSpec = null;
   }
 }

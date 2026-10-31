@@ -956,6 +956,57 @@
       !!openApiFlavor.flavorData.renderer, String(openApiFlavor.flavorName));
     check('флейвор: «! AS Open-API» — тот же флейвор',
       new YarbpFlavor('as Open-API').flavorName === openApiFlavor.flavorName);
+
+    // панель как у BPMN: строка диагностики живёт в контейнере редактора
+    const apiPane = document.createElement('div');
+    apiPane.className = 'editor-container';
+    apiPane.style.position = 'relative';
+    const apiTextarea = document.createElement('textarea');
+    const apiPreview = document.createElement('div');
+    apiPane.appendChild(apiTextarea);
+    apiPane.appendChild(apiPreview);
+    document.body.appendChild(apiPane);
+
+    const apiAst = buildAST(apiSource).ast;
+    const apiRenderer = new openApiFlavor.flavorData.renderer(
+      { text: apiSource, tokens: [], setObserver() {}, callRendererObserver() {} },
+      { getAST: () => apiAst },
+      apiTextarea,
+      apiPreview,
+      () => {},
+    );
+    apiRenderer.render();
+    check('OpenAPI: панель показывает контракт', apiTextarea.value.includes('"openapi": "3.0.3"'));
+    check('OpenAPI: строка диагностики скрыта на корректном контракте',
+      !!apiRenderer.statusBox && apiRenderer.statusBox.hidden === true);
+    apiRenderer.destroy();
+    check('OpenAPI: destroy убирает строку диагностики',
+      apiPane.querySelectorAll('.openapi-status').length === 0);
+    apiPane.remove();
+
+    // встроенный пример в папке «Примеры» — должен собираться без предупреждений
+    const builtinApi = new FileManager().data.files.find(file => file.id === 'builtin-10');
+    check('OpenAPI: встроенный пример найден', !!builtinApi,
+      new FileManager().data.files.map(file => file.id).join(','));
+
+    if (builtinApi) {
+      const builtinConverter = new YarbpOpenAPIConverter(
+        buildAST(builtinApi.content).ast, { source: builtinApi.content });
+      const builtinSpec = builtinConverter.convert();
+
+      check('OpenAPI: встроенный пример без предупреждений',
+        builtinConverter.warnings.length === 0, JSON.stringify(builtinConverter.warnings));
+      check('OpenAPI: встроенный пример проходит структурную проверку',
+        validateOpenApi(builtinSpec).length === 0, validateOpenApi(builtinSpec).join('; '));
+      check('OpenAPI: встроенный пример — два пути и две схемы',
+        Object.keys(builtinSpec.paths).length === 2 &&
+        Object.keys(builtinSpec.components.schemas).length === 2,
+        Object.keys(builtinSpec.paths).join(','));
+      const foundByKey = new FileManager()._findBuiltinByKey('openapi');
+      check('OpenAPI: ссылка ?example=openapi ведёт на встроенный пример',
+        !!foundByKey && foundByKey.id === 'builtin-10',
+        String(foundByKey && foundByKey.id));
+    }
   }
 
   /* ------------------------------------------------------------------ */
