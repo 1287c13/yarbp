@@ -12,14 +12,35 @@ import {
   TASK_TAG_MAP, DEFAULT_TASK_TAG,
   GATEWAY_TAG_MAP, DEFAULT_GATEWAY_TAG,
   LOCATION, LOOP, ARTIFACT_OFFSETS,
+  KNOWN_NODE_KEYS,
   isFlowNode, isArtifact,
 } from './definitions.js';
 
-export function buildModel(ast) {
+/** Номер строки по смещению в исходном тексте (для предупреждений). */
+function lineAt(source, offset) {
+  if (!source || !Number.isFinite(offset)) return 0;
+
+  let line = 1;
+  const limit = Math.min(offset, source.length);
+  for (let index = 0; index < limit; index++) {
+    if (source[index] === '\n') line++;
+  }
+  return line;
+}
+
+/** Предупреждение сборки: строка исходника + понятный текст (B-1). */
+function warn(ctx, node, message) {
+  const start = node && node.position ? node.position.start : undefined;
+  ctx.warnings.push({ line: lineAt(ctx.source, start), message });
+}
+
+export function buildModel(ast, options = {}) {
   const ctx = {
     idGen:       new IdGenerator(),
     nodesById:   new Map(),
     nodesByName: new Map(),
+    source:      options.source || '',
+    warnings:    [],
   };
 
   const definitions = new BpmnDefinitions();
@@ -66,7 +87,51 @@ export function buildModel(ast) {
     definitions.collaboration = collab;
   }
 
+  validateModel(definitions, ctx);
+  definitions.warnings = ctx.warnings;
+
   return definitions;
+}
+
+/**
+ * Проверки «а схема получилась осмысленной» (B-1).
+ *
+ * Конвертер и раньше молча выкидывал то, что не понял: здесь мы собираем это в
+ * предупреждения со строками, чтобы редактор мог их показать.
+ */
+function validateModel(definitions, ctx) {
+  for (const process of definitions.processes) {
+    const starts = process.flowNodes.filter(node => node.tag === 'startEvent');
+    if (!starts.length) {
+      warn(ctx, process,
+        'в процессе «' + (process.name || process.id) + '» нет стартового события');
+    }
+
+    checkIncoming(process.flowNodes, ctx);
+  }
+
+  if (definitions.collaboration) {
+    for (const flow of definitions.collaboration.messageFlows) {
+      const known = ctx.nodesById.has(flow.sourceRef) && ctx.nodesById.has(flow.targetRef);
+      if (!known) {
+        warn(ctx, null, 'связь ссылается на неизвестный узел: ' +
+          flow.sourceRef + ' → ' + flow.targetRef);
+      }
+    }
+  }
+}
+
+/** У каждого узла, кроме стартовых и boundary, должен быть входящий поток. */
+function checkIncoming(nodes, ctx) {
+  for (const node of nodes || []) {
+    if (node.tag !== 'startEvent' && node.tag !== 'boundaryEvent' && !node.incoming.length) {
+      warn(ctx, node, 'у узла «' + (node.name || node.tag) + '» нет входящего потока');
+    }
+
+    if (Array.isArray(node.children) && node.children.length) {
+      checkIncoming(node.children, ctx);
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -77,6 +142,7 @@ function buildProcess(node, ctx) {
   process.name = node.value;
   process.isExecutable = false;
   process.bounds = readBounds(node);
+  process.position = node.position;
   process._pendingArtifacts = {
     textAnnotations: [],
     associations:    [],
@@ -120,6 +186,12 @@ function buildChainOfNodes(nodes, ctx, process, opts) {
 
   for (const node of nodes) {
     if (!isFlowNode(node)) continue;
+
+    // Опечатка в ключе (`задачя`) или чужое слово: узел раньше исчезал молча.
+    if (!KNOWN_NODE_KEYS.has(node.key)) {
+      warn(ctx, node, 'неизвестный узел «' + node.key + '» — пропущен');
+      continue;
+    }
 
     const built = buildNode(node, ctx, process, {
       isFirst: first,
@@ -183,6 +255,7 @@ function buildEvent(node, ctx, process, opts) {
   const id = explicitId || ctx.idGen.next(idPrefixForEvent(tag));
   const self = new BpmnFlowNode({ id, tag, name });
   self.bounds = readBounds(node);
+  self.position = node.position;
   registerNode(self, name, ctx, process, opts);
 
   if (tag === 'endEvent') {
@@ -231,6 +304,12 @@ function buildTask(node, ctx, process, opts) {
   const typeValue  = childValue(node, 'тип');
   const tag        = TASK_TAG_MAP[typeValue] || DEFAULT_TASK_TAG;
 
+  // Имя задачи берётся из значения после «=»; `.имя` внутри узла не читается,
+  // но выглядит правдоподобно — поэтому предупреждаем, а не молчим.
+  if (childValue(node, 'имя') !== null) {
+    warn(ctx, node, 'имя задачи берётся из значения после «=»: .имя игнорируется');
+  }
+
   const roleValue = childValue(node, 'роль');
   if (roleValue !== null) {
     const lane = process.lanes.find(l => l.name === roleValue);
@@ -240,6 +319,7 @@ function buildTask(node, ctx, process, opts) {
   const id = explicitId || ctx.idGen.next('Activity');
   const self = new BpmnFlowNode({ id, tag, name });
   self.bounds = readBounds(node);
+  self.position = node.position;
   self.loopCharacteristics = readLoopCharacteristics(node);
   registerNode(self, name, ctx, process, opts);
 
@@ -377,6 +457,7 @@ function buildBoundaryBranches(node, parentTask, ctx, process, opts) {
     const id = explicitId || ctx.idGen.next('BoundaryEvent');
     const boundary = new BpmnFlowNode({ id, tag: 'boundaryEvent', name });
     boundary.bounds = readBounds(boundaryNode);
+    boundary.position = boundaryNode.position;
     boundary.attachedToRef = parentTask.id;
     registerNode(boundary, null, ctx, process, opts);
 
@@ -414,6 +495,7 @@ function buildGateway(node, ctx, process, opts) {
   const id = explicitId || ctx.idGen.next('Gateway');
   const fork = new BpmnFlowNode({ id, tag, name });
   fork.bounds = readBounds(node);
+  fork.position = node.position;
   registerNode(fork, name, ctx, process, opts);
 
   const allChildren = (node.children || []).filter(c => c.nodeType === nodeTypes.MEANING);
@@ -468,6 +550,7 @@ function buildGateway(node, ctx, process, opts) {
       name: null,
     });
     join.bounds = readJoinBounds(node);
+    join.position = node.position;
     registerNode(join, null, ctx, process, opts);
 
     for (const tail of openTails) {
@@ -505,6 +588,7 @@ function buildSubProcess(node, ctx, process, opts) {
   const id = explicitId || ctx.idGen.next('Activity');
   const self = new BpmnFlowNode({ id, tag: 'subProcess', name });
   self.bounds = readBounds(node);
+  self.position = node.position;
   self.isExpanded = true;
   self.loopCharacteristics = readLoopCharacteristics(node);
   registerNode(self, name, ctx, process, opts);
@@ -533,6 +617,11 @@ function buildSubProcess(node, ctx, process, opts) {
 
 function registerNode(node, name, ctx, process, opts) {
   const container = (opts && opts.container) || process;
+
+  // Дубль `.ид` раньше молча перетирал предыдущий узел в карте идентификаторов.
+  if (ctx.nodesById.has(node.id)) {
+    warn(ctx, node, 'идентификатор «' + node.id + '» уже занят — узел перезаписан');
+  }
 
   if (container === process) {
     process.flowNodes.push(node);

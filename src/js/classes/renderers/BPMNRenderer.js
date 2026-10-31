@@ -26,6 +26,7 @@ export class BPMNRenderer extends YarbpBasicRenderer {
     this.actions = null;
     this.downloadButton = null;
     this.refreshButton = null;
+    this.statusBox = null;
     this.ticker = new Ticker(BPMN_RENDER_DELAY_MS);
     this.lastXML = '';
     this.lastTokens = null;
@@ -60,11 +61,15 @@ export class BPMNRenderer extends YarbpBasicRenderer {
 
   performRender() {
     const AST = this.parser.getAST();
-    const XML = new YarbpBPMNConverter(AST).convert();
+    const converter = new YarbpBPMNConverter(AST, {
+      source: this.lexer && typeof this.lexer.text === 'string' ? this.lexer.text : '',
+    });
+    const XML = converter.convert();
 
     this.rendered = true;
     this.lastTokens = this.lexer ? this.lexer.tokens : null;
     this.markStale(false);
+    this.showWarnings(converter.warnings);
 
     // Тот же результат — не трогаем DOM: каретка, прокрутка и выделение
     // в панели результата остаются на месте.
@@ -75,6 +80,43 @@ export class BPMNRenderer extends YarbpBasicRenderer {
     this.renderHighlightDiv.innerHTML = new XMLHighlighter(XML).highlight();
     this.syncRenderScroll();
     this.mountButtons();
+  }
+
+  /**
+   * Строка диагностики панели BPMN (B-1).
+   *
+   * Конвертер сообщает, что не понял (неизвестный узел, дубль id, узел без
+   * входящего потока, процесс без старта). Показываем первые три строки и
+   * счётчик остальных; полный список — в `title`.
+   */
+  showWarnings(warnings) {
+    const host = this.buttonHost();
+    if (!host) return;
+
+    if (!this.statusBox || !this.statusBox.isConnected) {
+      const box = document.createElement('div');
+      box.className = 'bpmn-status';
+      box.setAttribute('role', 'status');
+      box.hidden = true;
+      host.appendChild(box);
+      this.statusBox = box;
+    }
+
+    const items = (warnings || []).filter(Boolean);
+    this.statusBox.hidden = !items.length;
+
+    if (!items.length) {
+      this.statusBox.textContent = '';
+      this.statusBox.title = '';
+      return;
+    }
+
+    const label = (item) => (item.line ? 'строка ' + item.line + ': ' : '') + item.message;
+    const shown = items.slice(0, 3).map(label);
+    const rest = items.length - shown.length;
+
+    this.statusBox.textContent = shown.join('; ') + (rest > 0 ? '; и ещё ' + rest : '');
+    this.statusBox.title = items.map(label).join('\n');
   }
 
   /* ------------------------------------------------------------------ */
@@ -153,10 +195,15 @@ export class BPMNRenderer extends YarbpBasicRenderer {
       this.actions = null;
     }
 
+    if (this.statusBox) {
+      this.statusBox.remove();
+      this.statusBox = null;
+    }
+
     const host = this.buttonHost();
     if (host) {
-      host.querySelectorAll('.bpmn-actions, .bpmn-download-btn, .bpmn-refresh-btn')
-        .forEach(btn => btn.remove());
+      host.querySelectorAll('.bpmn-actions, .bpmn-download-btn, .bpmn-refresh-btn, .bpmn-status')
+        .forEach(element => element.remove());
     }
 
     this.downloadButton = null;

@@ -549,6 +549,79 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* 12. B-1: диагностика сборки BPMN                                    */
+  /*     Конвертер сообщает, что не понял: неизвестный узел, дубль id,    */
+  /*     узел без входящего потока, процесс без старта, «.имя» у задачи.  */
+  /* ------------------------------------------------------------------ */
+  const warningsOf = (code) => {
+    const converter = new YarbpBPMNConverter(buildAST(code).ast, { source: code });
+    converter.convert();
+    return converter.warnings;
+  };
+
+  const cleanDoc = ['! как бпмн', 'процесс = П', '  событие = Старт',
+    '  задача = Дело', '  событие .расположение конец'].join('\n');
+  const cleanWarnings = warningsOf(cleanDoc);
+  check('B-1: у корректной схемы предупреждений нет', cleanWarnings.length === 0,
+    JSON.stringify(cleanWarnings));
+
+  const typoWarnings = warningsOf(['! как бпмн', 'процесс = П', '  событие = Старт',
+    '  задачя = Опечатка'].join('\n'));
+  check('B-1: неизвестный узел назван и со строкой',
+    typoWarnings.some(item => /неизвестный узел «задачя»/.test(item.message) && item.line === 4),
+    JSON.stringify(typoWarnings));
+
+  const dupWarnings = warningsOf(['! как бпмн', 'процесс = П', '  событие = Старт',
+    '  задача = А .ид same', '  задача = Б .ид same'].join('\n'));
+  check('B-1: дубль идентификатора виден',
+    dupWarnings.some(item => /уже занят/.test(item.message)), JSON.stringify(dupWarnings));
+
+  const noStartWarnings = warningsOf(['! как бпмн', 'процесс = П', '  задача = Дело'].join('\n'));
+  check('B-1: процесс без старта виден',
+    noStartWarnings.some(item => /нет стартового события/.test(item.message)),
+    JSON.stringify(noStartWarnings));
+  check('B-1: узел без входящего потока виден',
+    noStartWarnings.some(item => /нет входящего потока/.test(item.message)),
+    JSON.stringify(noStartWarnings));
+
+  const nameWarnings = warningsOf(['! как бпмн', 'процесс = П', '  событие = Старт',
+    '  задача = Дело', '    .имя Из ребёнка'].join('\n'));
+  check('B-1: подсказка про «.имя» у задачи',
+    nameWarnings.some(item => /\.имя игнорируется/.test(item.message)),
+    JSON.stringify(nameWarnings));
+
+  /* Панель показывает диагностику строкой под схемой. */
+  const warnPane = document.createElement('div');
+  warnPane.id = 'render-pane';
+  const warnHost = document.createElement('div');
+  warnHost.className = 'editor-container';
+  const warnTextarea = document.createElement('textarea');
+  const warnHighlight = document.createElement('div');
+  warnHost.append(warnHighlight, warnTextarea);
+  warnPane.append(warnHost);
+  document.body.append(warnPane);
+
+  const badCode = ['! как бпмн', 'процесс = П', '  событие = Старт', '  задачя = Опечатка'].join('\n');
+  const warnLexer = new YarbpLexer();
+  warnLexer.setInitialState(badCode);
+  warnLexer.tokenize();
+  const warnRenderer = new BPMNRenderer(
+    warnLexer, new YarbpParser(warnLexer), warnTextarea, warnHighlight, () => {});
+  warnRenderer.render();
+
+  const statusBox = warnPane.querySelector('.bpmn-status');
+  check('B-1: панель показывает диагностику со строкой',
+    !!statusBox && statusBox.hidden === false &&
+    /неизвестный узел «задачя»/.test(statusBox.textContent) &&
+    /строка 4/.test(statusBox.textContent),
+    statusBox ? statusBox.textContent : 'нет строки статуса');
+
+  warnRenderer.destroy();
+  check('B-1: destroy убирает строку статуса',
+    warnPane.querySelectorAll('.bpmn-status').length === 0);
+  warnPane.remove();
+
+  /* ------------------------------------------------------------------ */
   resultBox.textContent = lines.join('\n') + '\n';
   document.title = UPDATE ? 'CONVERTERS UPDATE'
     : (failed ? 'CONVERTERS FAIL' : 'CONVERTERS PASS');

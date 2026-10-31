@@ -287,6 +287,25 @@ body.dark .bpmn-refresh-btn:hover { background: rgba(128, 128, 128, 0.18); }
 body.dark .bpmn-refresh-btn.is-stale { color: #ff8a80; border-color: rgba(255, 138, 128, 0.5); }
 .bpmn-refresh-btn svg { display: block; }
 
+/* Диагностика сборки BPMN (B-1): что конвертер не понял. */
+.bpmn-status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  padding: 4px 12px;
+  font: 11px/1.4 'JetBrains Mono', monospace;
+  color: #7a4a00;
+  background: #fff4d6;
+  border-top: 1px solid #e6cf94;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bpmn-status[hidden] { display: none; }
+body.dark .bpmn-status { color: #ffd79a; background: #3a3020; border-top-color: #5a4a2a; }
+
 /* Автодополнение */
 .suggestion-popup {
   position: absolute;
