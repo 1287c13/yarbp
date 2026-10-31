@@ -966,6 +966,38 @@
         noRespond.warnings.some(item => /200 по умолчанию/.test(item.message)));
     }
 
+    /* Круговой рейс: spec.json → (python tools/openapi2yarbp.py) → кейс в
+       cases/openapi_imported.yarbp → наш конвертер → снова контракт. Если
+       импорт и экспорт разъедутся, здесь это видно сразу. */
+    let importedSource = '';
+    let specSource = null;
+    try {
+      importedSource = await fetchText('cases/openapi_imported.yarbp');
+      specSource = JSON.parse(await fetchText('../openapi2yarbp/spec.json'));
+    } catch (e) { /* ниже */ }
+
+    if (importedSource && specSource) {
+      const canonical = (value) => {
+        if (Array.isArray(value)) return value.map(canonical);
+        if (!value || typeof value !== 'object') return value;
+        const sorted = {};
+        for (const key of Object.keys(value).sort()) sorted[key] = canonical(value[key]);
+        return sorted;
+      };
+
+      const importedConverter = new YarbpOpenAPIConverter(
+        buildAST(importedSource).ast, { source: importedSource });
+      const importedSpec = importedConverter.convert();
+
+      check('OpenAPI: импортированный кейс собирается без предупреждений',
+        importedConverter.warnings.length === 0, JSON.stringify(importedConverter.warnings));
+
+      const left = JSON.stringify(canonical(importedSpec));
+      const right = JSON.stringify(canonical(specSource));
+      check('OpenAPI: круговой рейс spec → ЯРБП → spec совпадает', left === right,
+        left === right ? '' : ('получено ' + left.slice(0, 160) + ' … ожидалось ' + right.slice(0, 160)));
+    }
+
     const openApiFlavor = new YarbpFlavor('как openapi');
     check('флейвор: «! как openapi» находит рендерер', !!openApiFlavor.flavorData &&
       !!openApiFlavor.flavorData.renderer, String(openApiFlavor.flavorName));

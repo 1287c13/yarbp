@@ -654,6 +654,21 @@ api = Заказы .версия 1.0.0 .описание "API заказов"
 несуществующую схему, неизвестный узел - всё попадает в строку диагностики под
 панелью (как в BPMN). Если у метода не указан `.ответ`, подставляется `200`.
 
+**Обратный импорт.** Чужой контракт можно затащить в разметку отдельным
+инструментом (не в редакторе — редактор принимает только разметку):
+
+```powershell
+python tools/openapi2yarbp.py spec.json                # разметка в stdout
+python tools/openapi2yarbp.py spec.json -o case.yarbp   # в файл
+python tools/openapi2yarbp.py spec.json --check case.yarbp   # сверить, что не разъехалось
+```
+
+Поддерживается то же, что умеет конвертер в обратную сторону (`info`, `servers`,
+`paths` с методами/ответами/`requestBody`, `components.schemas`); остальное
+(`parameters`, `security`, `oneOf`, тело ответа) печатается предупреждением в
+stderr. Круговой рейс `spec → разметка → spec` проверяется тестами
+(`tests/openapi2yarbp` + браузерный набор).
+
 <a id="json-schema"></a>
 
 #### Конвертер JSON Schema (схема)
