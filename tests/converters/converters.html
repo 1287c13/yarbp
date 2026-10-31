@@ -40,6 +40,8 @@
   import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
   import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
+  import { BPMNRenderer } from '../../src/js/classes/renderers/BPMNRenderer.js';
+  import { XMLHighlighter } from '../../src/js/classes/highlighters/XMLHighlighter.js';
   import { FileManager } from '../../src/js/modules/FileManager.js';
 
   const resultBox = document.getElementById('result');
@@ -273,6 +275,143 @@
     flavorName('assert json') === undefined);
   check('флейвор: директива без имени не распознаётся',
     flavorName('as') === undefined);
+
+  /* ------------------------------------------------------------------ */
+  /* 8. Рендерер BPMN: тикер вместо рендера на каждый ввод + кнопки      */
+  /* ------------------------------------------------------------------ */
+  const renderPane = document.createElement('div');
+  renderPane.id = 'render-pane';
+  const renderHost = document.createElement('div');
+  renderHost.className = 'editor-container';
+  const renderTextarea = document.createElement('textarea');
+  const renderHighlight = document.createElement('div');
+  renderHost.append(renderHighlight, renderTextarea);
+  renderPane.append(renderHost);
+  document.body.append(renderPane);
+
+  const bpmnCode = [
+    '! как бпмн',
+    'процесс = Заказ',
+    '  событие = Начало',
+    '  задача = Подобрать товар',
+    '  задача = Подтвердить'
+  ].join('\n');
+
+  const bpmnLexer = new YarbpLexer();
+  bpmnLexer.setInitialState(bpmnCode);
+  bpmnLexer.tokenize();
+  const bpmnParser = new YarbpParser(bpmnLexer);
+  const bpmnRenderer = new BPMNRenderer(
+    bpmnLexer, bpmnParser, renderTextarea, renderHighlight, () => {});
+
+  bpmnRenderer.render();
+  check('BPMN: первая отрисовка сразу (панель не пустует)',
+    renderTextarea.value.includes('<bpmn:process') &&
+    renderTextarea.value.includes('Подобрать товар'),
+    renderTextarea.value.slice(0, 60));
+
+  const refreshBtn = renderPane.querySelector('.bpmn-refresh-btn');
+  const downloadBtn = renderPane.querySelector('.bpmn-download-btn');
+  check('BPMN: кнопки «обновить» и «скачать» на месте',
+    !!refreshBtn && !!downloadBtn &&
+    refreshBtn.getAttribute('aria-label') === 'Обновить схему BPMN');
+  check('BPMN: кнопки не дублируются при повторной отрисовке',
+    (bpmnRenderer.renderNow(), renderPane.querySelectorAll('.bpmn-refresh-btn').length === 1 &&
+      renderPane.querySelectorAll('.bpmn-download-btn').length === 1));
+
+  // Меняем документ: теперь перерисовка должна ждать паузу (2 с), а не идти
+  // на каждое изменение.
+  const firstXML = renderTextarea.value;
+  bpmnLexer.setInitialState(bpmnCode.replace('Подтвердить', 'Подтвердить заказ'));
+  bpmnLexer.tokenize();
+  bpmnRenderer.render();
+
+  check('BPMN: по вводу схема сразу не пересобирается',
+    renderTextarea.value === firstXML);
+  check('BPMN: кнопка обновления помечает устаревшую схему',
+    !!refreshBtn && refreshBtn.classList.contains('is-stale'));
+
+  bpmnRenderer.renderNow();
+  check('BPMN: кнопка обновления пересобирает схему немедленно',
+    renderTextarea.value.includes('Подтвердить заказ'));
+  check('BPMN: метка устаревания снимается после отрисовки',
+    !!refreshBtn && !refreshBtn.classList.contains('is-stale'));
+
+  // Клик по кнопке — не только вид: он должен снять ожидание и пересобрать.
+  bpmnLexer.setInitialState(bpmnCode.replace('Подобрать товар', 'Подобрать товар (клик)'));
+  bpmnLexer.tokenize();
+  bpmnRenderer.render();
+  refreshBtn.click();
+  check('BPMN: клик по «обновить» пересобирает схему сразу',
+    renderTextarea.value.includes('Подобрать товар (клик)'),
+    renderTextarea.value.slice(0, 80));
+
+  // Тема/раскладка просят перерисовку без нового документа — работы быть не
+  // должно: массив токенов тот же.
+  const stableXML = renderTextarea.value;
+  bpmnRenderer.render();
+  check('BPMN: перерисовка без изменения документа ничего не планирует',
+    renderTextarea.value === stableXML && !refreshBtn.classList.contains('is-stale'));
+
+  bpmnRenderer.destroy();
+  check('BPMN: destroy убирает кнопки',
+    renderPane.querySelectorAll('.bpmn-refresh-btn, .bpmn-download-btn, .bpmn-actions')
+      .length === 0);
+
+  renderPane.remove();
+
+  /* ------------------------------------------------------------------ */
+  /* 9. Бенчмарк конвертера: как растёт время с размером схемы           */
+  /* ------------------------------------------------------------------ */
+  function bigBpmnDoc(stepCount) {
+    const lines = ['! как бпмн', 'процесс = Большой', '  событие = Начало'];
+    for (let index = 0; index < stepCount; index++) {
+      lines.push('  задача = Шаг ' + (index + 1));
+      if (index % 5 === 4) {
+        lines.push('  шлюз = Развилка ' + (index + 1));
+        lines.push('    ветка = А');
+        lines.push('      задача = Вариант А' + (index + 1));
+        lines.push('    ветка = Б');
+        lines.push('      задача = Вариант Б' + (index + 1));
+      }
+    }
+    return lines.join('\n');
+  }
+
+  const timings = [];
+  for (const size of [10, 20, 40, 80]) {
+    const code = bigBpmnDoc(size);
+    const ast = buildAST(code).ast;
+    const started = performance.now();
+    const xml = new YarbpBPMNConverter(ast).convert();
+    const elapsed = performance.now() - started;
+
+    const highlightStarted = performance.now();
+    new XMLHighlighter(xml).highlight();
+    const highlightElapsed = performance.now() - highlightStarted;
+
+    timings.push(size + ' шагов: сборка ' + elapsed.toFixed(0) +
+      ' мс, подсветка ' + highlightElapsed.toFixed(0) + ' мс');
+    check('бенчмарк BPMN (' + size + ' шагов): схема собрана',
+      xml.includes('<bpmn:process') && xml.includes('Шаг ' + size) &&
+      xml.length > 500,
+      xml.length + ' символов');
+
+    // Очень щедрый предел: ловим не «медленно», а катастрофу (квадратичный
+    // обрыв или бесконечный цикл в раскладке).
+    check('бенчмарк BPMN (' + size + ' шагов): уложились в 5 с',
+      elapsed < 5000, elapsed.toFixed(0) + ' мс');
+  }
+
+  lines.push('info замеры конвертера — ' + timings.join('; '));
+
+  // Наблюдение: имя процесса/узла берётся из значения после «=»; без него
+  // модель собирается, но имена теряются молча.
+  const noEqXml = new YarbpBPMNConverter(
+    buildAST(['! как бпмн', 'процесс П', '  задача X'].join('\n')).ast).convert();
+  if (!noEqXml.includes('name="П"')) {
+    lines.push('info BPMN: без «=» имена теряются молча (модель при этом собирается)');
+  }
 
   /* ------------------------------------------------------------------ */
   resultBox.textContent = lines.join('\n') + '\n';
