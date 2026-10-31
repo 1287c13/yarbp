@@ -245,13 +245,19 @@ body.dark .file-folder { border-top-color: #444; }
 body.dark .folder-content .file-item.active { color: #e3e3e3; }
 body.dark .folder-content .file-item.active { background: #1e5a7a; }
 /* Скачивание BPMN — та же компактная подпись, что у кнопок FlexForms
-   (JSON/HTML/мок-сервер), а не иконка в глобальной шапке. Кнопка живёт в
-   панели результата и удаляется вместе с BPMN-рендерером. */
-.bpmn-download-btn {
+   (JSON/HTML/мок-сервер), а не иконка в глобальной шапке. Кнопки живут в
+   панели результата и удаляются вместе с BPMN-рендерером. */
+.bpmn-actions {
   position: absolute;
   top: 12px;
   left: 16px;
   z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bpmn-download-btn,
+.bpmn-refresh-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -265,13 +271,21 @@ body.dark .folder-content .file-item.active { background: #1e5a7a; }
   line-height: 1;
   font: 400 10px/1 'JetBrains Mono', monospace;
 }
-.bpmn-download-btn:hover { background: rgba(128, 128, 128, 0.18); }
-body.dark .bpmn-download-btn {
+.bpmn-download-btn:hover,
+.bpmn-refresh-btn:hover { background: rgba(128, 128, 128, 0.18); }
+body.dark .bpmn-download-btn,
+body.dark .bpmn-refresh-btn {
   background: transparent;
   color: #8b93a7;
   border-color: rgba(128, 128, 128, 0.45);
 }
-body.dark .bpmn-download-btn:hover { background: rgba(128, 128, 128, 0.18); }
+body.dark .bpmn-download-btn:hover,
+body.dark .bpmn-refresh-btn:hover { background: rgba(128, 128, 128, 0.18); }
+
+/* Схема устарела: автообновление ждёт паузы в наборе (см. BPMNRenderer). */
+.bpmn-refresh-btn.is-stale { color: #b00020; border-color: rgba(176, 0, 32, 0.6); }
+body.dark .bpmn-refresh-btn.is-stale { color: #ff8a80; border-color: rgba(255, 138, 128, 0.5); }
+.bpmn-refresh-btn svg { display: block; }
 
 /* Автодополнение */
 .suggestion-popup {

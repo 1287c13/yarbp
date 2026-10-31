@@ -285,7 +285,7 @@ function cleanupRenderer() {
   // после смены флейвора в панели результата не должно остаться чужих действий.
   const renderPane = renderTextarea ? renderTextarea.closest('#render-pane') : null;
   if (renderPane) {
-    renderPane.querySelectorAll('.bpmn-download-btn, .ui-render-container')
+    renderPane.querySelectorAll('.bpmn-actions, .bpmn-download-btn, .ui-render-container')
       .forEach(element => element.remove());
   }
 }
