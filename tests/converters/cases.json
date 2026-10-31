@@ -8,6 +8,7 @@
     "bpmn_data",
     "bpmn_wide",
     "bpmn_fanout",
-    "bpmn_swimswitch"
+    "bpmn_swimswitch",
+    "bpmn_mixed"
   ]
 }

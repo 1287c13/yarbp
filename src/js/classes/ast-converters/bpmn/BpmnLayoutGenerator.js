@@ -473,7 +473,7 @@ export class BpmnLayoutGenerator {
       }
     }
 
-    const size = sizeFor(elem.tag);
+    const size = sizeFor(elem.tag, elem.name);
     const artifactsH = this.artifactsAboveTask.get(elem.id) || 0;
 
     const realH = subprocessHeight || size.height;
@@ -530,10 +530,13 @@ export class BpmnLayoutGenerator {
       const owner = this.elemParams.get(ownerId);
       if (!owner) continue;
       const ownerRealH = owner.realH || owner.h;
+      // Центр boundary-события — на нижней границе задачи (как в BPMN):
+      // раньше x считался «внутри», а y «снаружи», и кружок залезал в текст.
+      const half = LAYOUT.boundarySize / 2;
       this.elemParams.set(id, {
         id,
-        x: owner.x + owner.w - LAYOUT.boundarySize - LAYOUT.boundaryRightShift,
-        y: owner.y + ownerRealH - LAYOUT.boundaryBottomOffset,
+        x: owner.x + owner.w - half - LAYOUT.boundaryRightShift,
+        y: owner.y + ownerRealH - half,
         w: LAYOUT.boundarySize,
         h: LAYOUT.boundarySize,
         realH: LAYOUT.boundarySize,

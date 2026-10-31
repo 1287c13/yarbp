@@ -414,7 +414,7 @@ function serializeLaneShape(lane, lines, depth) {
 
 function serializeNodeShape(node, lines, depth) {
   const ind = INDENT.repeat(depth);
-  const size = sizeFor(node.tag);
+  const size = sizeFor(node.tag, node.name);
   const b = node.bounds || { x: 0, y: 0 };
   const width  = b.width  !== undefined ? b.width  : size.width;
   const height = b.height !== undefined ? b.height : size.height;

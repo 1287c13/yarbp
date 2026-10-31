@@ -404,9 +404,10 @@ function fixBoundaryBounds(process) {
     const owner = allNodes.find(n => n.id === node.attachedToRef);
     if (!owner || !owner.bounds) continue;
     const ob = owner.bounds;
+    const half = LAYOUT.boundarySize / 2;
     node.bounds = {
-      x: ob.x + ob.width - LAYOUT.boundarySize - LAYOUT.boundaryRightShift,
-      y: ob.y + ob.height - LAYOUT.boundaryBottomOffset,
+      x: ob.x + ob.width - half - LAYOUT.boundaryRightShift,
+      y: ob.y + ob.height - half,
       width: LAYOUT.boundarySize,
       height: LAYOUT.boundarySize,
     };

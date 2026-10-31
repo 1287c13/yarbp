@@ -16,7 +16,7 @@ export const LAYOUT = Object.freeze({
   dataObjectHeight:    50,
   dataObjectGap:       12.0,
   artifactLabelSpace:  20.0,
-  groupPadding:        12.0,
+  groupPadding:        26.0,
 
   dataStoreBelow:      30.0,
   dataStoreWidth:      50,

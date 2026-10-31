@@ -24,7 +24,21 @@ export const SIZES = Object.freeze({
   lane:           { width: 600, height: 250 },
 });
 
-export function sizeFor(tag) {
+/**
+ * Ширина задачи подгоняется под подпись: bpmn-io рисует текст с переносами, и на
+ * фиксированных 100px «Ждать подтверждения» ломалось на «Ждать подтверждени я».
+ * Оценка ширины символа — для 12px без засечек; ширину считаем только для задач
+ * (у событий подпись под кружком, у шлюзов — над ромбом, их размеры стандартные).
+ */
+export const LABEL_CHAR_WIDTH = 6.8;
+export const TASK_LABEL_PADDING = 24;
+
+const TASK_TAGS = new Set([
+  'task', 'manualTask', 'userTask', 'serviceTask', 'scriptTask',
+  'sendTask', 'receiveTask', 'businessRuleTask', 'callActivity',
+]);
+
+export function sizeFor(tag, name) {
   if (tag === 'startEvent' || tag === 'endEvent' ||
       tag === 'intermediateThrowEvent' || tag === 'intermediateCatchEvent' ||
       tag === 'boundaryEvent') return SIZES.event;
@@ -34,7 +48,13 @@ export function sizeFor(tag) {
   if (tag === 'dataObjectReference') return SIZES.dataObjectRef;
   if (tag === 'dataStoreReference') return SIZES.dataStoreRef;
   if (tag === 'textAnnotation') return SIZES.textAnnotation;
-  return SIZES.task;
+
+  const base = SIZES.task;
+  if (!name || !TASK_TAGS.has(tag)) return base;
+
+  const needed = Math.ceil(String(name).length * LABEL_CHAR_WIDTH) + TASK_LABEL_PADDING;
+  if (needed <= base.width) return base;
+  return { width: needed, height: base.height };
 }
 
 export const TASK_TAG_MAP = Object.freeze({

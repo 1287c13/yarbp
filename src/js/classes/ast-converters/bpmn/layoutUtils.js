@@ -86,7 +86,7 @@ export function findAssocOwnerAll(model, targetRef) {
 /* ---------------- геометрия ---------------- */
 
 export function boundsOf(node) {
-  const size = sizeFor(node.tag);
+  const size = sizeFor(node.tag, node.name);
   const b = node.bounds || { x: 0, y: 0 };
   return {
     x: b.x, y: b.y,
