@@ -1272,6 +1272,30 @@
     check('Mermaid: на схеме с ветками предупреждений нет',
       branchConverter.warnings.length === 0, JSON.stringify(branchConverter.warnings));
 
+    // условие и поток «по умолчанию» видны на стрелке
+    const condSource = [
+      '! как мермейд',
+      'процесс = Условия',
+      '  событие = Старт',
+      '    шлюз = Проверка',
+      '      ветка = да .условие код = 200',
+      '        задача = Идти',
+      '      ветка = иначе .по-умолчанию да',
+      '        задача = Ждать',
+      '    событие .расположение конец',
+    ].join('\n');
+    const condConverter = new YarbpMermaidConverter(buildAST(condSource).ast);
+    const cond = condConverter.convert();
+
+    check('Mermaid: условие ветки на пунктирной стрелке',
+      /Gateway_1 -\.->\|"да: код = 200"\| Activity_1/.test(cond),
+      cond.split('\n').filter(line => line.includes('-.->')).join(' / '));
+    check('Mermaid: поток по умолчанию подписан',
+      /Gateway_1 -\.->\|"иначе: по умолчанию"\| Activity_2/.test(cond),
+      cond.split('\n').filter(line => line.includes('-.->')).join(' / '));
+    check('Mermaid: названия потоков не потерялись',
+      !/undefined/.test(cond), cond);
+
     // кавычки и переносы в подписях не должны ломать разметку
     const quotesSource = [
       '! как мермейд',

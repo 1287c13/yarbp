@@ -147,7 +147,8 @@ export class YarbpMermaidConverter {
       }));
     }
 
-    this.emitEdges(process.sequenceFlows, lines, depth + 1);
+    this.emitEdges(process.sequenceFlows, lines, depth + 1,
+      this.defaultFlowIds(process.flowNodes));
     this.emitArtifactEdges(process.flowNodes, lines, depth + 1);
     this.emitGroupEdges(process, lines, depth + 1);
 
@@ -171,7 +172,8 @@ export class YarbpMermaidConverter {
         this.emitSubProcess(child, lines, depth + 1);
       }
     }
-    this.emitEdges(node.sequenceFlows || [], lines, depth + 1);
+    this.emitEdges(node.sequenceFlows || [], lines, depth + 1,
+      this.defaultFlowIds(node.children));
     this.emitArtifactEdges(node.children, lines, depth + 1);
 
     lines.push(ind + 'end');
@@ -203,15 +205,39 @@ export class YarbpMermaidConverter {
 
   /* ---------------- рёбра ---------------- */
 
-  emitEdges(flows, lines, depth) {
+  emitEdges(flows, lines, depth, defaults) {
     const ind = INDENT.repeat(depth);
 
     for (const flow of flows) {
-      const name = flow.name || flow.condition;
-      const arrow = flow.condition ? '-.->' : '-->';
+      const isDefault = defaults && defaults.has(flow.id);
+      const condition = flow.condition ? label(flow.condition) : '';
+      const name = flow.name ? label(flow.name) : '';
+
+      // Поток по умолчанию и поток с условием — пунктиром: по ним видно, какие
+      // ветки шлюза решаются выражением, а какая срабатывает «иначе».
+      let arrow = '-->';
+      let text = name;
+
+      if (isDefault) {
+        arrow = '-.->';
+        text = name ? name + ': по умолчанию' : 'по умолчанию';
+      } else if (condition) {
+        arrow = '-.->';
+        text = name ? name + ': ' + condition : condition;
+      }
+
       lines.push(ind + safeId(flow.sourceRef) + ' ' + arrow +
-        edgeLabel(name) + ' ' + safeId(flow.targetRef));
+        edgeLabel(text) + ' ' + safeId(flow.targetRef));
     }
+  }
+
+  /** Идентификаторы потоков «по умолчанию» среди узлов контейнера. */
+  defaultFlowIds(nodes) {
+    const ids = new Set();
+    for (const node of nodes) {
+      if (node.defaultFlowId) ids.add(node.defaultFlowId);
+    }
+    return ids;
   }
 
   /** Boundary-события и данные: пунктиром, чтобы не путать с потоком работ. */
