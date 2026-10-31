@@ -423,6 +423,15 @@ function readLoopCharacteristics(node) {
 function buildArtifacts(node, task, ctx, process, opts) {
   const artifacts = (node.children || []).filter(isArtifact);
   for (const art of artifacts) {
+    // Значение у артефакта обязательно, но `данные Товар` без «=» разбирается
+    // как узел без значения, а слово «Товар» вообще не попадает в AST
+    // (дефект §17.5 №13). Показать это в предупреждении — единственное, что
+    // можно сделать на уровне конвертера, не трогая парсер.
+    if (art.value === undefined || art.value === null) {
+      warn(ctx, art, 'у артефакта «' + art.key + '» нет значения — ' +
+        'пишите «' + art.key + ' = <значение>»');
+    }
+
     switch (art.key) {
       case 'комментарий':  buildComment(art, task, ctx, process); break;
       case 'данные':
