@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>converters cases</title>
+  <style>
+    body { margin: 0; padding: 16px; background: #ffffff; color: #111111;
+      font: 12px/1.5 'JetBrains Mono', Consolas, monospace; }
+    #result { margin: 0; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<pre id="result">running...</pre>
+
+<script>
+  /* Диагностика: ошибка модуля (синтаксис/импорт) видна в дампе страницы. */
+  window.addEventListener('error', (event) => {
+    const box = document.getElementById('result');
+    if (!box) return;
+    box.textContent = 'LOAD ERROR: ' + (event.message || '') +
+      ' @ ' + (event.filename || '') + ':' + (event.lineno || '');
+  });
+</script>
+
+<script type="module">
+  /*
+   * Smoke-тесты конвертеров: разметка → AST → артефакт.
+   *
+   * Проверяется не побайтовое совпадение, а контракт: конвертер не падает,
+   * отдаёт непустой результат ожидаемого вида и не теряет значения из
+   * разметки. До этого набора конвертеры (в том числе ~1900 строк BPMN и
+   * 1700 строк XPM) не проверялись ничем, кроме глаз.
+   */
+  import { YarbpLexer } from '../../src/js/classes/YarbpLexer.js';
+  import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
+  import { YarbpJSONConverter } from '../../src/js/classes/ast-converters/JSONConvertor.js';
+  import { YarbpXMLConverter } from '../../src/js/classes/ast-converters/XMLConvertor.js';
+  import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
+  import { YarbpBPMNConverter } from '../../src/js/classes/ast-converters/bpmn/YarbpBPMNConverter.js';
+  import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
+  import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
+  import { FileManager } from '../../src/js/modules/FileManager.js';
+
+  const resultBox = document.getElementById('result');
+  const lines = [];
+  let failed = 0;
+
+  function check(name, ok, detail = '') {
+    if (!ok) failed++;
+    lines.push((ok ? 'ok   ' : 'FAIL ') + name + (ok || !detail ? '' : ' — ' + detail));
+  }
+
+  function buildAST(code) {
+    const lexer = new YarbpLexer();
+    lexer.setInitialState(code);
+    lexer.tokenize();
+    return { ast: new YarbpParser(lexer).getAST(), tokens: lexer.tokens };
+  }
+
+  function parseXml(text) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    return { doc, error: doc.querySelector('parsererror') };
+  }
+
+  /* Данные заказа: та же разметка, что во встроенном примере «JSON». */
+  const ORDER = [
+    '! as json',
+    ':',
+    '  .order_id 12345',
+    '  .status "new"',
+    '  .is_active yes',
+    "  :client .first_name Jack .last_name White .id '54312'",
+    '  ..items',
+    '    : .sku ART-001 .price 1299.99'
+  ].join('\n');
+
+  const orderAST = buildAST(ORDER).ast;
+
+  /* ------------------------------------------------------------------ */
+  /* 1. JSON                                                             */
+  /* ------------------------------------------------------------------ */
+  let json = null;
+  try {
+    json = new YarbpJSONConverter(orderAST).convert();
+  } catch (e) {
+    check('json: конвертер не падает', false, String(e && e.message || e));
+  }
+
+  check('json: результат — объект', !!json && typeof json === 'object');
+  check('json: числа остаются числами',
+    !!json && json.order_id === 12345 && typeof json.order_id === 'number',
+    json ? typeof json.order_id : 'нет');
+  check('json: булево из «yes»', !!json && json.is_active === true);
+  check('json: вложенный объект',
+    !!json && !!json.client && json.client.first_name === 'Jack' &&
+    json.client.id === '54312');
+  check('json: массив из вложенного объекта',
+    !!json && Array.isArray(json.items) && json.items.length === 1 &&
+    json.items[0].sku === 'ART-001' && json.items[0].price === 1299.99);
+
+  let jsonGuard = false;
+  try { new YarbpJSONConverter(null).convert(); } catch (e) { jsonGuard = true; }
+  check('json: пустой AST отклоняется', jsonGuard);
+
+  /* ------------------------------------------------------------------ */
+  /* 2. XML                                                              */
+  /*    Корень именованный: у анонимного (`:` сверху) корневого тега нет,   */
+  /*    и текст получается из нескольких элементов — это не документ.      */
+  /* ------------------------------------------------------------------ */
+  const XML_DOC = [
+    '! as xml',
+    'order',
+    '  .order_id 12345',
+    '  .status "new"',
+    '  .client',
+    '    .first_name Jack'
+  ].join('\n');
+
+  let xml = '';
+  let xmlError = '';
+  try {
+    xml = new YarbpXMLConverter(buildAST(XML_DOC).ast).convert();
+  } catch (e) {
+    xmlError = String(e && e.message || e);
+  }
+
+  check('xml: конвертер не падает', !xmlError, xmlError);
+  check('xml: результат не пустой', typeof xml === 'string' && xml.length > 0);
+  check('xml: корень из разметки на месте',
+    xml.includes('<order') && xml.includes('12345') && xml.includes('Jack'),
+    xml.slice(0, 160));
+
+  const xmlParsed = xml ? parseXml(xml) : { error: 'нет результата' };
+  check('xml: разбирается XML-парсером без ошибки',
+    !xmlParsed.error,
+    xmlParsed.error ? String(xmlParsed.error.textContent || '').slice(0, 120) : '');
+
+  /* ------------------------------------------------------------------ */
+  /* 3. Protobuf                                                         */
+  /* ------------------------------------------------------------------ */
+  const PROTO_DOC = [
+    '! as proto',
+    'client',
+    '  .first_name Jack',
+    '  .last_name White',
+    '  .id 54312'
+  ].join('\n');
+
+  let proto = '';
+  let protoError = '';
+  try {
+    proto = new YarbpProtoConverter(buildAST(PROTO_DOC).ast).convert();
+  } catch (e) {
+    protoError = String(e && e.message || e);
+  }
+
+  check('proto: конвертер не падает', !protoError, protoError);
+  check('proto: результат не пустой', typeof proto === 'string' && proto.length > 0);
+  check('proto: поля объекта описаны в схеме',
+    proto.includes('first_name') && proto.includes('last_name'),
+    proto.slice(0, 160));
+
+  // Наблюдение (не требование): у массива объектов элементы описываются
+  // пустым message — поля элемента в схему не попадают. Требование не
+  // выставляем: неясно, задумано ли так, вопрос к владельцу.
+  let orderProto = '';
+  try { orderProto = new YarbpProtoConverter(orderAST).convert(); } catch (e) { /* пусто */ }
+  if (/message\s+\w+\s*\{\s*\}/.test(orderProto)) {
+    lines.push('skip proto: поля элемента массива не попадают в схему (message пустой) — наблюдение для владельца');
+  } else {
+    check('proto: поля элемента массива описаны', orderProto.length > 0);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 4. UI-макет                                                         */
+  /* ------------------------------------------------------------------ */
+  let uiHTML = '';
+  let uiError = '';
+  try {
+    uiHTML = new UIGenerator(false).generateHTML(orderAST);
+  } catch (e) {
+    uiError = String(e && e.message || e);
+  }
+
+  check('ui: генератор не падает', !uiError, uiError);
+  check('ui: результат не пустой и без «undefined»',
+    typeof uiHTML === 'string' && uiHTML.length > 0 && !uiHTML.includes('undefined'),
+    String(uiHTML).slice(0, 120));
+
+  /* ------------------------------------------------------------------ */
+  /* 5. BPMN                                                             */
+  /* ------------------------------------------------------------------ */
+  const bpmnDoc = [
+    '! как бпмн',
+    ':',
+    '  .имя Заказ',
+    '  операция',
+    '    .имя Подобрать товар',
+    '    .исполнитель Кладовщик',
+    '  операция',
+    '    .имя Подтвердить',
+    '    .исполнитель Менеджер'
+  ].join('\n');
+
+  let bpmn = '';
+  let bpmnError = '';
+  try {
+    bpmn = new YarbpBPMNConverter(buildAST(bpmnDoc).ast).convert();
+  } catch (e) {
+    bpmnError = String(e && e.message || e);
+  }
+
+  check('bpmn: конвертер не падает', !bpmnError, bpmnError);
+  check('bpmn: результат — XML-документ',
+    typeof bpmn === 'string' && bpmn.length > 0 && bpmn.includes('definitions'),
+    String(bpmn).slice(0, 120));
+
+  const bpmnParsed = bpmn ? parseXml(bpmn) : { error: 'нет результата' };
+  check('bpmn: разбирается XML-парсером без ошибки',
+    !bpmnParsed.error,
+    bpmnParsed.error ? String(bpmnParsed.error.textContent || '').slice(0, 120) : '');
+
+  /* ------------------------------------------------------------------ */
+  /* 6. Форма-ТСД: разметка встроенного примера → IR                     */
+  /* ------------------------------------------------------------------ */
+  const defaults = new FileManager('yarbp_converters_test')._getDefaultData();
+  const tsdExample = defaults.files.find(file => file.id === 'builtin-9');
+
+  check('flexforms: встроенный пример найден', !!tsdExample,
+    defaults.files.map(file => file.id).join(','));
+
+  if (tsdExample) {
+    let ir = null;
+    let irError = '';
+    try {
+      ir = new YarbpFlexFormsConverter(buildAST(tsdExample.content).ast).convert();
+    } catch (e) {
+      irError = String(e && e.message || e);
+    }
+
+    check('flexforms: конвертер не падает', !irError, irError);
+    check('flexforms: корень IR — форма', !!ir && ir.type === 'форма',
+      ir ? String(ir.type) : 'нет IR');
+    check('flexforms: операции на месте',
+      !!ir && Array.isArray(ir.children) && ir.children.length > 0,
+      ir ? String((ir.children || []).length) : '');
+    check('flexforms: у операции есть поля',
+      !!ir && !!ir.children && Array.isArray(ir.children[0].children) &&
+      ir.children[0].children.length > 0);
+  }
+
+  /* ------------------------------------------------------------------ */
+  resultBox.textContent = lines.join('\n') + '\n';
+  document.title = failed ? 'CONVERTERS FAIL' : 'CONVERTERS PASS';
+</script>
+</body>
+</html>

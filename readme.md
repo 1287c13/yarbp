@@ -734,6 +734,7 @@ headless Chrome/Edge. Node не нужен.
 python tests/lexer/run_tests.py       # 31 golden-кейс лексера/парсера
 python tests/security/run_tests.py    # регрессии безопасности (экранирование)
 python tests/files/run_tests.py       # localStorage и экспорт/импорт файлов
+python tests/converters/run_tests.py  # smoke: json, xml, proto, ui, bpmn, форма
 python tests/flexforms/run_tests.py   # флейвор «форма-ТСД»
 ```
 
