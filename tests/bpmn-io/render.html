@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>bpmn-io render</title>
+  <!-- bpmn-js лежит в vendor/ и в репозиторий не попадает (см. .gitignore). -->
+  <link rel="stylesheet" href="vendor/bpmn-js.css">
+  <style>
+    html, body { margin: 0; height: 100%; background: #ffffff; }
+    #canvas { width: 100%; height: 100vh; }
+    #result {
+      position: fixed; left: 8px; bottom: 8px; margin: 0; padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.92); border: 1px solid #ccc;
+      white-space: pre-wrap; font: 11px/1.35 'JetBrains Mono', monospace;
+      color: #111; max-width: 90vw;
+    }
+  </style>
+</head>
+<body>
+<div id="canvas"></div>
+<pre id="result">running...</pre>
+
+<script src="vendor/bpmn-viewer.js"></script>
+<script type="module">
+  /*
+   * Визуальная проверка автораскладки: кейс ЯРБП → наш BPMN → bpmn-io.
+   *
+   * Ничего не проверяет по значениям — это «глаза»: раннер снимает скриншот и
+   * печатает предупреждения конвертера и самого bpmn-io (например, элементы
+   * без DI или битые ссылки). Репозиторий не трогает: vendor/ и out/ в
+   * .gitignore.
+   */
+  import { YarbpLexer } from '../../src/js/classes/YarbpLexer.js';
+  import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
+  import { YarbpBPMNConverter } from '../../src/js/classes/ast-converters/bpmn/YarbpBPMNConverter.js';
+
+  const params = new URLSearchParams(location.search);
+  const caseName = params.get('case') || '';
+  const resultBox = document.getElementById('result');
+
+  function fail(message) {
+    resultBox.textContent = 'FAIL ' + message;
+    document.title = 'BPMNIO FAIL';
+  }
+
+  async function main() {
+    if (!caseName) return fail('не задан ?case=<имя>');
+
+    const response = await fetch('../converters/cases/' + caseName + '.yarbp', { cache: 'no-store' });
+    if (!response.ok) return fail('кейс не найден: ' + caseName);
+
+    const source = (await response.text()).replace(/\r\n?/g, '\n');
+
+    const lexer = new YarbpLexer();
+    lexer.setInitialState(source);
+    lexer.tokenize();
+
+    const converter = new YarbpBPMNConverter(new YarbpParser(lexer).getAST());
+    const xml = converter.convert();
+
+    const viewer = new BpmnJS({ container: '#canvas' });
+    const imported = await viewer.importXML(xml);
+    const warnings = (imported && imported.warnings) || [];
+    viewer.get('canvas').zoom('fit-viewport', 'auto');
+
+    const registry = viewer.get('elementRegistry');
+    let nodes = 0;
+    let flows = 0;
+    registry.getAll().forEach(element => {
+      if (Array.isArray(element.waypoints)) flows++;
+      else if (!element.labelTarget) nodes++;
+    });
+
+    const lines = [
+      'case ' + caseName,
+      'xml ' + xml.length + ' chars',
+      'elements ' + registry.getAll().length + ' (nodes ' + nodes + ', flows ' + flows + ')',
+      'converter warnings: ' + converter.warnings.length,
+      'bpmn-io warnings: ' + warnings.length
+    ];
+
+    converter.warnings.slice(0, 5).forEach(item => lines.push(
+      '  conv: ' + (item.line ? 'строка ' + item.line + ': ' : '') + item.message));
+    warnings.slice(0, 5).forEach(item => lines.push(
+      '  bpmn-io: ' + (item && item.message ? item.message : String(item))));
+
+    resultBox.textContent = lines.join('\n');
+    document.title = (warnings.length || converter.warnings.length) ? 'BPMNIO WARN' : 'BPMNIO PASS';
+  }
+
+  main().catch(error => fail(String(error && error.message || error)));
+</script>
+</body>
+</html>

@@ -35,6 +35,9 @@ python tests/converters/run_tests.py
 python tests/converters/run_tests.py --update
 ```
 
+Визуально посмотреть, как схему видит bpmn-io (и увидеть наложения, которые
+счётчики не ловят): `tests/bpmn-io/README.md`.
+
 Документы в наборе:
 
 | Файл | Что фиксирует |

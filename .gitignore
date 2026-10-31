@@ -8,3 +8,9 @@ dist/
 build/
 __pycache__/
 *.pyc
+
+# bpmn-io для проверки раскладки (визуальный рендер схем).
+# В репозиторий НЕ попадает: ни сам бандл, ни скриншоты, ни node_modules.
+tests/bpmn-io/vendor/
+tests/bpmn-io/out/
+tests/bpmn-io/node_modules/
