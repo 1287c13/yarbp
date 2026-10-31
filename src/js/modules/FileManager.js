@@ -7,6 +7,17 @@ import { clearStored, removeStored, readStored, storedKeys, writeStored } from '
 
 const EXAMPLE_PARAM = 'example';
 
+/**
+ * Текст из файла или хранилища → нормальные переводы строк.
+ *
+ * Лексер работает с LF: `\r` из чужого файла (Windows-выгрузка, «Загрузить из
+ * файла») попадает в токены и ломает отступы. Поэтому нормализуем на входе, а
+ * не в лексере — иначе поехали бы позиции подсветки.
+ */
+function normalizeText(text) {
+  return String(text ?? '').replace(/\r\n?/g, '\n');
+}
+
 export class FileManager {
   /** Версия формата экспорта: 1 — без id/slug (читается), 2 — с ними. */
   static EXPORT_VERSION = 2;
@@ -495,7 +506,7 @@ Order
   _loadActiveFile() {
     const activeFile = this.data.files.find(f => f.id === this.data.activeFileId);
     if (activeFile && this.editor) {
-      this.editor.value = activeFile.content;
+      this.editor.value = normalizeText(activeFile.content);
       if (this.onContentChange) this.onContentChange();
     }
     this._highlightActiveInUI();
@@ -894,7 +905,7 @@ Order
         userFiles.push({
           id,
           name,
-          content: hasContent ? raw.content : '',
+          content: hasContent ? normalizeText(raw.content) : '',
           isBuiltin: false,
           lastModified: Number.isFinite(raw.lastModified) ? raw.lastModified : now
         });

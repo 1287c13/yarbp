@@ -326,7 +326,34 @@ function buildTask(node, ctx, process, opts) {
   const branches = buildBoundaryBranches(node, self, ctx, process, opts);
   buildArtifacts(node, self, ctx, process, opts);
 
-  return { head: self, tail: self, branches };
+  const children = (node.children || []).filter(isFlowNode);
+  if (!children.length) {
+    return { head: self, tail: self, branches };
+  }
+
+  // Вложенные потоковые узлы задачи (кроме `событие` — это boundary) образуют
+  // цепочку после задачи. Пример из readme ставит `шлюз` внутрь задачи, и
+  // раньше развилка просто выпадала из схемы.
+  const nested = children.filter(child => child.key !== 'событие');
+  if (!nested.length) {
+    return { head: self, tail: self, branches };
+  }
+
+  const inner = buildChainOfNodes(nested, ctx, process, {
+    isFirst: false,
+    laneState: opts.laneState,
+    container: opts.container,
+  });
+
+  if (inner.head) {
+    addSequenceFlow(self, inner.head, ctx, opts.container || process);
+  }
+
+  return {
+    head: self,
+    tail: inner.tails.length ? inner.tails[inner.tails.length - 1] : self,
+    branches: [...branches, ...inner.tails.slice(0, -1)],
+  };
 }
 
 function readLoopCharacteristics(node) {

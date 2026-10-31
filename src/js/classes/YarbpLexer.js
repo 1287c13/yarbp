@@ -543,8 +543,19 @@ export class YarbpLexer {
     const S = YarbpLexer.states;
 
     switch (this.state) {
-      case S.WAITING_AFTER_NEWLINE:
       case S.WAITING:
+      case S.WAITING_AFTER_NEWLINE:
+        // Пустая строка ничего не значит: ни отступа, ни области. Раньше её
+        // `\n` попадал в накопитель, `calcTrailingSpaces` давал отступ 0 и
+        // текущий блок закрывался — из-за этого документ с пустой строкой
+        // терял структуру (B-0 в refactoring.md).
+        if (char === '\n' && this.currentToken.trim() === '') {
+          this.currentToken = '';
+          return;
+        }
+        this.addCharToToken(char);
+        return;
+
       case S.IN_PREFIX:
       case S.IN_DIRECTIVE:
       case S.IN_OBJECT:

@@ -424,7 +424,9 @@
   async function fetchText(url) {
     const response = await fetch(url, { cache: 'no-store' });
     if (!response.ok) throw new Error(response.status + ' ' + response.statusText + ': ' + url);
-    return response.text();
+    // Кейсы в репозитории могут быть с CRLF (git autocrlf): лексер ждёт LF,
+    // иначе `\r` попадает в токены. Приводим к LF, как это делают раннеры.
+    return (await response.text()).replace(/\r\n?/g, '\n');
   }
 
   /** Сколько чего в документе: и в модели, и в DI. */
@@ -525,10 +527,9 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* 11. B-0: пример из readme — наблюдение, ждёт решения по ядру        */
-  /*     Пустая строка внутри документа и шлюз, вложенный в задачу,       */
-  /*     меняют результат: см. refactoring.md §17.9. Когда ядро или       */
-  /*     пример поправят, проверка станет обычной (без skip).            */
+  /* 11. Пример из readme — целиком (B-0)                                */
+  /*     Пустые строки и CRLF во входных данных больше не ломают         */
+  /*     документ, а шлюз внутри задачи разбирается как цепочка.         */
   /* ------------------------------------------------------------------ */
   let readmeSource = '';
   try {
@@ -539,13 +540,10 @@
     const readmeXml = new YarbpBPMNConverter(buildAST(readmeSource).ast).convert();
     const readmeStats = bpmnStats(readmeXml);
 
-    if (readmeStats.processes === 0) {
-      lines.push('skip B-0: пример из readme даёт пустую модель — ' +
-        'пустая строка после директивы рвёт документ (ядро, нужно решение)');
-    } else {
-      check('B-0: пример из readme собирается',
-        readmeStats.tasks > 0 && readmeStats.flows > 0, JSON.stringify(readmeStats));
-    }
+    check('B-0: пример из readme собирается целиком',
+      readmeStats.processes === 1 && readmeStats.tasks >= 2 &&
+      readmeStats.gateways === 1 && readmeStats.flows >= 4,
+      JSON.stringify(readmeStats));
   }
 
   /* ------------------------------------------------------------------ */

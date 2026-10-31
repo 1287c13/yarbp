@@ -176,6 +176,28 @@
     legacyUsers.map(file => file.id).join(','));
 
   /* ------------------------------------------------------------------ */
+  /* 3б. CRLF из чужого файла не должен доезжать до лексера (B-0)         */
+  /* ------------------------------------------------------------------ */
+  const crlfManager = makeManager('yarbp_files_test_g');
+  const crlfEditor = document.createElement('textarea');
+  crlfManager.editor = crlfEditor;
+
+  crlfManager.importFromJSON(JSON.stringify({
+    version: 2,
+    files: [{ id: 'crlf', name: 'CRLF', content: '! как json\r\n:\r\n  .a 1\r\n' }]
+  }));
+  const crlfFile = crlfManager.data.files.find(file => file.id === 'crlf');
+
+  check('B-0: импорт сохраняет текст с LF',
+    !!crlfFile && crlfFile.content.indexOf('\r') === -1,
+    crlfFile ? JSON.stringify(crlfFile.content) : 'нет файла');
+
+  crlfManager.switchTo('crlf');
+  check('B-0: в поле редактора нет CR',
+    crlfEditor.value.length > 0 && crlfEditor.value.indexOf('\r') === -1,
+    JSON.stringify(crlfEditor.value.slice(0, 40)));
+
+  /* ------------------------------------------------------------------ */
   /* 4. Ошибки импорта                                                   */
   /* ------------------------------------------------------------------ */
   const before = JSON.stringify(target.data);
@@ -536,7 +558,7 @@
   /* ------------------------------------------------------------------ */
   ['yarbp_files_test_a', 'yarbp_files_test_b', 'yarbp_files_test_c',
    'yarbp_files_test_d', 'yarbp_files_test_e', 'yarbp_files_test_f',
-   'yarbp_files_test_blocked', 'yarbp_files_test_key',
+   'yarbp_files_test_g', 'yarbp_files_test_blocked', 'yarbp_files_test_key',
    'yarbp_builtin_folder_expanded']
     .forEach(key => removeStored(key));
 
