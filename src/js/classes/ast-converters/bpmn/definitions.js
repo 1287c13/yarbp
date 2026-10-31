@@ -49,8 +49,41 @@ export const DEFAULT_TASK_TAG = 'manualTask';
 
 export const GATEWAY_TAG_MAP = Object.freeze({
   'параллельный': 'parallelGateway',
+  'инклюзивный': 'inclusiveGateway',
+  'событийный':  'eventBasedGateway',
 });
 export const DEFAULT_GATEWAY_TAG = 'exclusiveGateway';
+
+/**
+ * Определения событий BPMN 2.0: `событие = X .тип <вид>`.
+ *
+ * Неизвестный вид — предупреждение сборки, а не молчание.
+ */
+export const EVENT_DEFINITION_MAP = Object.freeze({
+  'сообщение':   'messageEventDefinition',
+  'таймер':      'timerEventDefinition',
+  'ошибка':      'errorEventDefinition',
+  'сигнал':      'signalEventDefinition',
+  'эскалация':   'escalationEventDefinition',
+  'условие':     'conditionalEventDefinition',
+  'компенсация': 'compensateEventDefinition',
+  'завершение':  'terminateEventDefinition',
+  'ссылка':      'linkEventDefinition',
+});
+
+/** Виды, которые ловят событие (для промежуточных — intermediateCatchEvent). */
+export const CATCH_EVENT_DEFINITIONS = Object.freeze(new Set([
+  'messageEventDefinition',
+  'timerEventDefinition',
+  'signalEventDefinition',
+  'conditionalEventDefinition',
+]));
+
+/** `.направление` у промежуточного события. */
+export const EVENT_DIRECTION = Object.freeze({
+  CATCH: 'ловящее',
+  THROW: 'бросающее',
+});
 
 export const LOCATION = Object.freeze({
   START:        'начало',
@@ -86,6 +119,11 @@ export const ATTRIBUTE_KEYS = Object.freeze(new Set([
   'в-закр',
   'расположение',
   'повторение',
+  /* Спека BPMN (B-3/B-4): определения событий, boundary, потоки. */
+  'направление',
+  'прерывающее',
+  'условие',
+  'по-умолчанию',
 ]));
 
 /** Ключи — дочерние сущности (артефакты и связи). */

@@ -11,6 +11,7 @@ import {
 import {
   TASK_TAG_MAP, DEFAULT_TASK_TAG,
   GATEWAY_TAG_MAP, DEFAULT_GATEWAY_TAG,
+  EVENT_DEFINITION_MAP, CATCH_EVENT_DEFINITIONS, EVENT_DIRECTION,
   LOCATION, LOOP, ARTIFACT_OFFSETS,
   KNOWN_NODE_KEYS,
   isFlowNode, isArtifact,
@@ -32,6 +33,21 @@ function lineAt(source, offset) {
 function warn(ctx, node, message) {
   const start = node && node.position ? node.position.start : undefined;
   ctx.warnings.push({ line: lineAt(ctx.source, start), message });
+}
+
+/**
+ * Значение-флаг из разметки.
+ *
+ * Лексер превращает литералы `да`/`нет` в boolean, поэтому проверять только
+ * строку нельзя — иначе `.прерывающее нет` и `.по-умолчанию да` молча не
+ * срабатывают.
+ */
+function isFlagOn(value) {
+  return value === true || value === 'да' || value === 'yes';
+}
+
+function isFlagOff(value) {
+  return value === false || value === 'нет' || value === 'no';
 }
 
 export function buildModel(ast, options = {}) {
@@ -240,20 +256,33 @@ function buildEvent(node, ctx, process, opts) {
   const name       = node.value || null;
   const explicitId = extractExplicitId(node);
   const location   = childValue(node, 'расположение');
+  const typeValue  = childValue(node, 'тип');
+  const direction  = childValue(node, 'направление');
+
+  // B-3: определение события (`сообщение`, `таймер`, `ошибка`, …).
+  let definition = null;
+  if (typeValue !== null) {
+    definition = EVENT_DEFINITION_MAP[typeValue] || null;
+    if (!definition) {
+      warn(ctx, node, 'неизвестный тип события «' + typeValue + '» — без определения');
+    }
+  }
 
   let tag;
   if (location === LOCATION.END) {
     tag = 'endEvent';
-  } else if (location === LOCATION.INTERMEDIATE) {
-    tag = 'intermediateThrowEvent';
-  } else if (opts.isFirst) {
+  } else if (opts.isFirst && location !== LOCATION.INTERMEDIATE) {
     tag = 'startEvent';
   } else {
-    tag = 'intermediateThrowEvent';
+    // Промежуточное: ловящее, если это явно сказано или вид события ловящий.
+    const catching = direction === EVENT_DIRECTION.CATCH
+      || (direction !== EVENT_DIRECTION.THROW && CATCH_EVENT_DEFINITIONS.has(definition));
+    tag = catching ? 'intermediateCatchEvent' : 'intermediateThrowEvent';
   }
 
   const id = explicitId || ctx.idGen.next(idPrefixForEvent(tag));
   const self = new BpmnFlowNode({ id, tag, name });
+  self.eventDefinition = definition;
   self.bounds = readBounds(node);
   self.position = node.position;
   registerNode(self, name, ctx, process, opts);
@@ -486,6 +515,18 @@ function buildBoundaryBranches(node, parentTask, ctx, process, opts) {
     boundary.bounds = readBounds(boundaryNode);
     boundary.position = boundaryNode.position;
     boundary.attachedToRef = parentTask.id;
+
+    // B-3: определение и «прерывающее» у boundary-события.
+    const boundaryType = childValue(boundaryNode, 'тип');
+    if (boundaryType !== null) {
+      boundary.eventDefinition = EVENT_DEFINITION_MAP[boundaryType] || null;
+      if (!boundary.eventDefinition) {
+        warn(ctx, boundaryNode, 'неизвестный тип boundary-события «' + boundaryType + '»');
+      }
+    }
+
+    const cancelling = childValue(boundaryNode, 'прерывающее');
+    if (isFlagOff(cancelling)) boundary.cancelActivity = false;
     registerNode(boundary, null, ctx, process, opts);
 
     const rest = segment.slice(1);
@@ -518,6 +559,11 @@ function buildGateway(node, ctx, process, opts) {
   const explicitId = extractExplicitId(node);
   const typeValue  = childValue(node, 'тип');
   const tag        = GATEWAY_TAG_MAP[typeValue] || DEFAULT_GATEWAY_TAG;
+
+  // B-4: `параллельный`, `инклюзивный`, `событийный`; остальное — исключающий.
+  if (typeValue !== null && tag === DEFAULT_GATEWAY_TAG) {
+    warn(ctx, node, 'неизвестный тип шлюза «' + typeValue + '» — исключающий по умолчанию');
+  }
 
   const id = explicitId || ctx.idGen.next('Gateway');
   const fork = new BpmnFlowNode({ id, tag, name });
@@ -554,6 +600,14 @@ function buildGateway(node, ctx, process, opts) {
     const flow = addSequenceFlow(fork, inner.head, ctx, opts.container || process);
     flow.name = branchName;
 
+    // B-4: условие на потоке и поток по умолчанию (`ветка = да .условие …`).
+    const condition = childValue(branchNode, 'условие');
+    if (condition !== null) flow.condition = String(condition);
+
+    if (isFlagOn(childValue(branchNode, 'по-умолчанию'))) {
+      fork.defaultFlowId = flow.id;
+    }
+
     branchTails.push({
       head: inner.head,
       tail: inner.tails.length ? inner.tails[inner.tails.length - 1] : null,
@@ -570,6 +624,9 @@ function buildGateway(node, ctx, process, opts) {
     gatewayTail = null;
   } else if (openTails.length === 1) {
     gatewayTail = openTails[0];
+  } else if (tag === 'eventBasedGateway') {
+    // Событийный шлюз не сходится: ветки ведут в разные ловящие события.
+    gatewayTail = null;
   } else {
     const join = new BpmnFlowNode({
       id: ctx.idGen.next('Gateway'),

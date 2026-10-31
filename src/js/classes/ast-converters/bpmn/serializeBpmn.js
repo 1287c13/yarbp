@@ -130,6 +130,9 @@ function serializeFlowNode(node, lines, depth) {
   if (node.tag === 'boundaryEvent' && node.attachedToRef) {
     attrs.push(`attachedToRef="${escapeHtml(node.attachedToRef)}"`);
   }
+  // B-3/B-4: «непрерывающее» boundary и поток по умолчанию у шлюза.
+  if (node.cancelActivity === false) attrs.push('cancelActivity="false"');
+  if (node.defaultFlowId) attrs.push(`default="${escapeHtml(node.defaultFlowId)}"`);
 
   const loopXml = loopCharacteristicsXml(node.loopCharacteristics);
   const hasInner = node.children && node.children.length;
@@ -138,6 +141,7 @@ function serializeFlowNode(node, lines, depth) {
   const hasBody =
     node.incoming.length ||
     node.outgoing.length ||
+    node.eventDefinition ||
     loopXml ||
     hasInner ||
     hasAssocs;
@@ -151,6 +155,10 @@ function serializeFlowNode(node, lines, depth) {
 
   for (const id of node.incoming) lines.push(`${ind}${INDENT}<bpmn:incoming>${escapeHtml(id)}</bpmn:incoming>`);
   for (const id of node.outgoing) lines.push(`${ind}${INDENT}<bpmn:outgoing>${escapeHtml(id)}</bpmn:outgoing>`);
+
+  if (node.eventDefinition) {
+    lines.push(`${ind}${INDENT}<bpmn:${node.eventDefinition} />`);
+  }
 
   if (loopXml) {
     lines.push(`${ind}${INDENT}${loopXml}`);
@@ -191,7 +199,17 @@ function serializeSequenceFlow(flow, lines, depth) {
     `targetRef="${escapeHtml(flow.targetRef)}"`,
   ];
   if (flow.name) attrs.splice(1, 0, `name="${escapeHtml(flow.name)}"`);
-  lines.push(`${ind}<bpmn:sequenceFlow ${attrs.join(' ')} />`);
+
+  // B-4: условие ветки — дочерний conditionExpression, а не атрибут.
+  if (!flow.condition) {
+    lines.push(`${ind}<bpmn:sequenceFlow ${attrs.join(' ')} />`);
+    return;
+  }
+
+  lines.push(`${ind}<bpmn:sequenceFlow ${attrs.join(' ')}>`);
+  lines.push(`${ind}${INDENT}<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">` +
+    escapeHtml(flow.condition) + '</bpmn:conditionExpression>');
+  lines.push(`${ind}</bpmn:sequenceFlow>`);
 }
 
 /* ------------------------------------------------------------------ */

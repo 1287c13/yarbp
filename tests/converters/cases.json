@@ -3,6 +3,7 @@
     "bpmn_readme_example",
     "bpmn_lanes_gateway",
     "bpmn_branches_artifacts",
-    "bpmn_subprocess"
+    "bpmn_subprocess",
+    "bpmn_features"
   ]
 }

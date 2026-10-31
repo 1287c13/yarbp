@@ -620,6 +620,57 @@
   warnPane.remove();
 
   /* ------------------------------------------------------------------ */
+  /* 13. B-3/B-4: спека BPMN — определения событий, шлюзы, условия        */
+  /* ------------------------------------------------------------------ */
+  let featuresSource = '';
+  try {
+    featuresSource = await fetchText('cases/bpmn_features.yarbp');
+  } catch (e) { /* ниже */ }
+
+  if (featuresSource) {
+    const featuresXml = new YarbpBPMNConverter(buildAST(featuresSource).ast).convert();
+
+    check('B-3: стартовое событие с таймером',
+      /<bpmn:startEvent[\s\S]{0,400}<bpmn:timerEventDefinition \/>/.test(featuresXml));
+
+    check('B-3: промежуточное ловящее событие (сообщение)',
+      /<bpmn:intermediateCatchEvent[\s\S]{0,400}<bpmn:messageEventDefinition \/>/.test(featuresXml));
+
+    check('B-3: промежуточное бросающее событие (сигнал)',
+      /<bpmn:intermediateThrowEvent[\s\S]{0,400}<bpmn:signalEventDefinition \/>/.test(featuresXml));
+
+    check('B-3: boundary-событие с определением и «непрерывающее»',
+      /<bpmn:boundaryEvent [^>]*attachedToRef="[^"]+"[^>]*cancelActivity="false"[\s\S]{0,400}<bpmn:messageEventDefinition \/>/
+        .test(featuresXml));
+
+    check('B-3: конечное событие «завершение»',
+      /<bpmn:endEvent[\s\S]{0,400}<bpmn:terminateEventDefinition \/>/.test(featuresXml));
+
+    check('B-4: инклюзивный шлюз',
+      featuresXml.includes('<bpmn:inclusiveGateway'));
+
+    check('B-4: поток по умолчанию у шлюза',
+      /<bpmn:inclusiveGateway [^>]*default="Flow_\d+"/.test(featuresXml),
+      (featuresXml.match(/<bpmn:inclusiveGateway [^>]*>/) || ['нет'])[0]);
+
+    check('B-4: условие ветки в conditionExpression',
+      /<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">код = 200<\/bpmn:conditionExpression>/
+        .test(featuresXml));
+
+    const featureWarnings = warningsOf(featuresSource);
+    check('B-3/B-4: на корректной схеме с новой спекой предупреждений нет',
+      featureWarnings.length === 0, JSON.stringify(featureWarnings));
+
+    check('B-3: неизвестный тип события — предупреждение',
+      warningsOf(['! как бпмн', 'процесс = П', '  событие = С .тип телепорт'].join('\n'))
+        .some(item => /неизвестный тип события/.test(item.message)));
+
+    check('B-4: неизвестный тип шлюза — предупреждение',
+      warningsOf(['! как бпмн', 'процесс = П', '  событие = С', '  шлюз = Г .тип хитрый'].join('\n'))
+        .some(item => /неизвестный тип шлюза/.test(item.message)));
+  }
+
+  /* ------------------------------------------------------------------ */
   resultBox.textContent = lines.join('\n') + '\n';
   document.title = UPDATE ? 'CONVERTERS UPDATE'
     : (failed ? 'CONVERTERS FAIL' : 'CONVERTERS PASS');

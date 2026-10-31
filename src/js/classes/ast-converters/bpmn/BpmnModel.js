@@ -89,6 +89,9 @@ export class BpmnFlowNode {
     this.outgoing = [];
 
     this.attachedToRef       = null;
+    this.cancelActivity      = null;   // boundary: false → cancelActivity="false"
+    this.eventDefinition     = null;   // message/timer/error/signal/…
+    this.defaultFlowId       = null;   // шлюз: id потока по умолчанию
     this.loopCharacteristics = null;
     this.children            = [];
     this.sequenceFlows       = [];
@@ -108,6 +111,7 @@ export class BpmnSequenceFlow {
     this.sourceRef = sourceRef;
     this.targetRef = targetRef;
     this.name      = name || null;
+    this.condition = null;   // <bpmn:conditionExpression> у ветки
     this.waypoints = null;
     this.labelPos  = null;
   }
