@@ -20,12 +20,18 @@
    * настоящем localStorage (этот origin), экспорт перехватывается на уровне
    * Blob, а запрет хранилища имитируется подменой свойства window.
    */
-  import { readStored, writeStored, removeStored } from '../../src/js/storage.js';
+  import { readStored, writeStored, removeStored, storedKeys } from '../../src/js/storage.js';
   import { FileManager } from '../../src/js/modules/FileManager.js';
 
   const resultBox = document.getElementById('result');
   const lines = [];
   let failed = 0;
+
+  // Диалоги в headless-браузере могут блокировать страницу, поэтому
+  // подтверждения не показываем: запоминаем текст вопроса и отвечаем «да».
+  // Проверки D-08 смотрят на текст и умеют временно отвечать «нет».
+  let confirmMessage = '';
+  window.confirm = (message) => { confirmMessage = String(message); return true; };
 
   function check(name, ok, detail = '') {
     if (!ok) failed++;
@@ -188,6 +194,61 @@
   check('D-16: файл без массива files отклонён', noFiles === false);
 
   /* ------------------------------------------------------------------ */
+  /* 4б. D-08: подтверждение с числами и резервная копия                 */
+  /* ------------------------------------------------------------------ */
+  const STORAGE_F = 'yarbp_files_test_f';
+  const guarded = makeManager(STORAGE_F, [...builtins, ...userFiles], 'user-a');
+  const applyPayload = JSON.stringify({
+    version: 2,
+    files: [{ id: 'imported-1', name: 'Импортированный', content: '.x 1' }],
+    activeFileId: 'imported-1'
+  });
+
+  const backupKeysOf = () => storedKeys()
+    .filter(key => key.startsWith(FileManager.BACKUP_PREFIX));
+
+  confirmMessage = '';
+  const applied = guarded.importFromJSON(applyPayload);
+
+  check('D-08: импорт подтверждается', applied === true);
+  check('D-08: в подтверждении есть числа файлов',
+    /сейчас 2/.test(confirmMessage) && /в файле 1/.test(confirmMessage),
+    confirmMessage.replace(/\n/g, ' '));
+
+  const firstBackups = backupKeysOf();
+  check('D-08: резервная копия создана', firstBackups.length === 1,
+    String(firstBackups.length));
+
+  let backupData = null;
+  try { backupData = JSON.parse(readStored(firstBackups[0])); } catch (e) { /* ниже */ }
+  check('D-08: в копии лежат прежние файлы',
+    !!backupData && backupData.files.length === 2 &&
+    backupData.files[0].id === 'user-a' && backupData.activeFileId === 'user-a',
+    backupData ? JSON.stringify(backupData.files.map(file => file.id)) : 'нет копии');
+
+  const beforeDecline = JSON.stringify(guarded.data);
+  const realConfirm = window.confirm;
+  window.confirm = () => false;
+  const declined = guarded.importFromJSON(applyPayload);
+  window.confirm = realConfirm;
+
+  check('D-08: отказ отменяет импорт',
+    declined === false && JSON.stringify(guarded.data) === beforeDecline);
+  check('D-08: отказ не создаёт резервную копию', backupKeysOf().length === 1,
+    String(backupKeysOf().length));
+
+  // Подрезка копий: пять копий подряд при «сдвинутых» часах.
+  const realNow = Date.now;
+  let fakeNow = 1761000000000;
+  Date.now = () => (fakeNow += 1000);
+  for (let index = 0; index < 5; index++) guarded._backupBeforeImport();
+  Date.now = realNow;
+
+  check('D-08: старые копии подрезаются',
+    backupKeysOf().length === FileManager.BACKUP_LIMIT,
+    String(backupKeysOf().length));
+
+  /* ------------------------------------------------------------------ */
   /* 5. Запрет хранилища (D-15) и метка «не сохранено» (D-12)            */
   /* ------------------------------------------------------------------ */
   const ownDescriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
@@ -286,9 +347,71 @@
   appFrame.remove();
 
   /* ------------------------------------------------------------------ */
+  /* 7. D-05: ошибки разбора видны в строке статуса под редактором        */
+  /*    (лексер всё считал и раньше — не хватало только вывода)           */
+  /* ------------------------------------------------------------------ */
+  const errFrame = document.createElement('iframe');
+  errFrame.style.cssText = 'position:fixed;left:-9999px;top:0;width:1024px;height:768px;border:0';
+  errFrame.src = '../../src/index.html';
+
+  const errLoaded = waitForLoad(errFrame);
+  document.body.appendChild(errFrame);
+  const errOk = await errLoaded;
+
+  check('D-05: редактор открылся для проверки ошибок', errOk);
+
+  if (errOk) {
+    const doc = errFrame.contentDocument;
+    const view = errFrame.contentWindow;
+    const errEditor = doc.getElementById('code-textarea');
+    const status = doc.getElementById('editor-status');
+
+    const typeCode = (value) => {
+      errEditor.value = value;
+      errEditor.dispatchEvent(new view.Event('input', { bubbles: true }));
+    };
+
+    check('D-05: строка статуса есть в разметке', !!status);
+    check('D-05: на исходном примере статус скрыт', !!status && status.hidden === true);
+
+    typeCode('! as json\n:\n  .a 1');
+    check('D-05: корректный текст ошибки не показывает',
+      !!status && status.hidden === true);
+
+    typeCode("! as json\n.a 'b");
+    check('D-05: незакрытая кавычка видна',
+      !!status && status.hidden === false && /незакрытая кавычка/.test(status.textContent),
+      status ? status.textContent : 'нет статуса');
+    check('D-05: в статусе есть строка и позиция',
+      !!status && /строка 2/.test(status.textContent) && /позиция \d/.test(status.textContent),
+      status ? status.textContent : '');
+    check('D-05: проблемный фрагмент подсвечен',
+      !!doc.querySelector('#highlight-div .ide-code-unparsed'));
+
+    // Значение вправе содержать `<` (`.a < b` — валидное значение), поэтому
+    // «недопустимый символ» берём в том виде, в каком он существует:
+    // строка без префикса, как в notes/cases/22_invalid_chars.txt.
+    typeCode('! as json\na < b\nc');
+    check('D-05: недопустимый фрагмент виден',
+      !!status && status.hidden === false &&
+      /недопустимый символ|не удалось разобрать/.test(status.textContent),
+      status ? status.textContent : '');
+
+    typeCode('! as json\n:\n  .a 1');
+    check('D-05: статус снова скрывается', !!status && status.hidden === true);
+  }
+
+  errFrame.remove();
+
+  /* ------------------------------------------------------------------ */
   ['yarbp_files_test_a', 'yarbp_files_test_b', 'yarbp_files_test_c',
-   'yarbp_files_test_d', 'yarbp_files_test_e', 'yarbp_files_test_blocked',
-   'yarbp_files_test_key', 'yarbp_builtin_folder_expanded']
+   'yarbp_files_test_d', 'yarbp_files_test_e', 'yarbp_files_test_f',
+   'yarbp_files_test_blocked', 'yarbp_files_test_key',
+   'yarbp_builtin_folder_expanded']
+    .forEach(key => removeStored(key));
+
+  storedKeys()
+    .filter(key => key.startsWith(FileManager.BACKUP_PREFIX))
     .forEach(key => removeStored(key));
 
   resultBox.textContent = lines.join('\n') + '\n';
