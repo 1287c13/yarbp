@@ -23,6 +23,7 @@ UI-макет, BPMN, форма-ТСД. Проверяется контракт,
 from __future__ import print_function
 
 import io
+import glob
 import json
 import os
 import re
@@ -32,6 +33,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from html import unescape as html_unescape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -40,6 +42,16 @@ REPO = os.path.dirname(ROOT)                      # корень репозит�
 PROJECT_NAME = os.path.basename(ROOT)
 PAGE_PATH = '%s/tests/converters/converters.html' % PROJECT_NAME
 GOLDEN_DIR = os.path.join(HERE, 'golden')
+
+DI_NS = '{http://www.omg.org/spec/BPMN/20100524/DI}'
+DC_NS = '{http://www.omg.org/spec/DD/20100524/DC}'
+MODEL_NS = '{http://www.omg.org/spec/BPMN/20100524/MODEL}'
+
+# Не проверяем на наложения: граничное событие по стандарту стоит на рамке
+# задачи, артефакты и дорожки лежат поверх/за узлами по своему смыслу.
+LAYOUT_SKIP_TAGS = ('boundaryEvent', 'textAnnotation', 'dataObjectReference',
+                    'dataStoreReference', 'lane', 'laneSet', 'participant',
+                    'association', 'group')
 
 BROWSERS = [
     r'C:\Program Files\Google\Chrome\Application\chrome.exe',
@@ -200,6 +212,136 @@ def write_snapshots(output):
     return 0
 
 
+def model_elements(root):
+    """{id: (тег, имя)} по элементам модели BPMN."""
+    elements = {}
+    for elem in root.iter():
+        if not elem.tag.startswith(MODEL_NS):
+            continue
+        element_id = elem.get('id')
+        if not element_id:
+            continue
+        elements[element_id] = (elem.tag[len(MODEL_NS):], elem.get('name') or '')
+    return elements
+
+
+def di_rects(root):
+    """{bpmnElement: (x, y, w, h)} по bpmndi:BPMNShape."""
+    rects = {}
+    for shape in root.iter(DI_NS + 'BPMNShape'):
+        element_id = shape.get('bpmnElement')
+        bounds = shape.find(DC_NS + 'Bounds')
+        if not element_id or bounds is None:
+            continue
+        rects[element_id] = (float(bounds.get('x', 0) or 0),
+                             float(bounds.get('y', 0) or 0),
+                             float(bounds.get('width', 0) or 0),
+                             float(bounds.get('height', 0) or 0))
+    return rects
+
+
+def container_of(element_id, rect, rects, elements):
+    """Ближайший подпроцесс, внутри которого лежит узел ('' — уровень процесса)."""
+    x, y, width, height = rect
+    cx, cy = x + width / 2.0, y + height / 2.0
+
+    best = None
+    for other_id, other in rects.items():
+        if other_id == element_id:
+            continue
+        if (elements.get(other_id) or ('', ''))[0] != 'subProcess':
+            continue
+        ox, oy, ow, oh = other
+        if ox < cx < ox + ow and oy < cy < oy + oh:
+            if best is None or ow * oh < best[1]:
+                best = (other_id, ow * oh)
+    return best[0] if best else ''
+
+
+def overlap_area(first, second):
+    """Площадь пересечения двух прямоугольников (0 — только касание)."""
+    ax, ay, aw, ah = first
+    bx, by, bw, bh = second
+    dx = min(ax + aw, bx + bw) - max(ax, bx)
+    dy = min(ay + ah, by + bh) - max(ay, by)
+    if dx <= 0.5 or dy <= 0.5:
+        return 0.0
+    return dx * dy
+
+
+def describe(element_id, elements):
+    tag, name = elements.get(element_id) or ('?', '')
+    return '%s %s%s' % (tag, element_id, ' «%s»' % name if name else '')
+
+
+def layout_problems(xml):
+    """Наложения узлов одного контейнера: [(описание, описание)]."""
+    root = ET.fromstring(xml.encode('utf-8'))
+    elements = model_elements(root)
+    rects = di_rects(root)
+
+    groups = {}
+    for element_id, rect in rects.items():
+        tag = (elements.get(element_id) or ('', ''))[0]
+        if not tag or tag in LAYOUT_SKIP_TAGS:
+            continue
+        container = container_of(element_id, rect, rects, elements)
+        groups.setdefault(container, []).append((element_id, rect))
+
+    problems = []
+    for items in groups.values():
+        for i in range(len(items)):
+            for j in range(i + 1, len(items)):
+                if overlap_area(items[i][1], items[j][1]) > 0:
+                    problems.append((describe(items[i][0], elements),
+                                     describe(items[j][0], elements)))
+    return problems, sum(len(items) for items in groups.values())
+
+
+def check_layout():
+    """Раскладка golden-снимков: узлы одного контейнера не должны накладываться.
+
+    bpmn-io такие схемы открывает молча (наложения не его забота), поэтому
+    проверка живёт здесь: именно так выглядел баг с содержимым подпроцесса —
+    обе задачи стояли в одной точке, и на картинке была видна только одна.
+    """
+    print('')
+    print('2. раскладка BPMN: узлы в DI не наложены')
+
+    paths = sorted(glob.glob(os.path.join(GOLDEN_DIR, '*.json')))
+    if not paths:
+        print('  FAIL нет golden-снимков: сначала запустите с --update')
+        return 1
+
+    failed = 0
+    for path in paths:
+        name = os.path.splitext(os.path.basename(path))[0]
+        with io.open(path, encoding='utf-8') as handle:
+            xml = (json.load(handle) or {}).get('xml') or ''
+
+        try:
+            problems, nodes = layout_problems(xml)
+        except ET.ParseError as error:
+            failed += 1
+            print('  FAIL %s: XML не разбирается (%s)' % (name, error))
+            continue
+
+        if problems:
+            failed += 1
+            print('  FAIL %s: наложены узлы (%d):' % (name, len(problems)))
+            for first, second in problems[:5]:
+                print('        %s ↔ %s' % (first, second))
+            if len(problems) > 5:
+                print('        … и ещё %d' % (len(problems) - 5))
+        else:
+            print('  ok   %s: узлов %d, наложений нет' % (name, nodes))
+
+    if failed:
+        print('  FAIL есть схемы с наложениями')
+        return 1
+    return 0
+
+
 def main(argv):
     prepare_stdout()
 
@@ -237,7 +379,9 @@ def main(argv):
             print('  FAIL страница не сняла снимки (нет итогового title)')
             print(output[-800:])
             return 1
-        return write_snapshots(output)
+        if write_snapshots(output):
+            return 1
+        return check_layout()
 
     lines = result_lines(output)
     if lines is None:
@@ -262,6 +406,10 @@ def main(argv):
 
     print('')
     print('ВСЁ ЗЕЛЁНОЕ (проверок: %d)' % len(lines))
+
+    if check_layout():
+        return 1
+
     return 0
 
 

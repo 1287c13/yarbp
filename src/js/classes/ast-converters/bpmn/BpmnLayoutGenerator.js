@@ -21,7 +21,7 @@ export class BpmnLayoutGenerator {
     this.elemParams      = new Map();
     this.edgesParams     = new Map();
     this.grid            = { cols: [], rows: [] };
-    this.startEventsIds  = [];
+    this.entryNodesIds   = [];
     this.nodesToVisitIds = [];
     this.lanesCache      = new Map();
     this.boundaryOwners  = new Set();
@@ -42,7 +42,7 @@ export class BpmnLayoutGenerator {
     this.elemParams = new Map();
     this.edgesParams = new Map();
     this.grid = { cols: [], rows: [] };
-    this.startEventsIds = [];
+    this.entryNodesIds = [];
     this.nodesToVisitIds = [];
     this.lanesCache = new Map();
     this.boundaryOwners = new Set();
@@ -65,6 +65,9 @@ export class BpmnLayoutGenerator {
     this.calcElemsCoords(this.repr, this.grid);
     for (const sp of this.subprocesses) {
       this.calcElemsCoords(sp.repr, sp.grid, sp.id);
+      const parent = this.elemParams.get(sp.id);
+      sp.originX = parent ? parent.x : 0;
+      sp.originY = parent ? parent.y : 0;
     }
 
     this.attachBoundaryParams(this.repr);
@@ -89,6 +92,8 @@ export class BpmnLayoutGenerator {
 
     this.calcEdges(this.repr);
     for (const sp of this.subprocesses) this.calcEdges(sp.repr);
+
+    this.syncSubprocessContents();
 
     this.updatePool(process);
 
@@ -182,9 +187,9 @@ export class BpmnLayoutGenerator {
 
   addStructureAttrs(repr) {
     this.branchCounter = 1;
-    this.startEventsIds = this.getStartEventsIds(repr);
+    this.entryNodesIds = this.getEntryNodesIds(repr);
 
-    for (const startId of this.startEventsIds) {
+    for (const startId of this.entryNodesIds) {
       this.traverseAndAssignBranchNumbers(startId, repr);
     }
 
@@ -240,6 +245,31 @@ export class BpmnLayoutGenerator {
     return result;
   }
 
+  /**
+   * Узлы, с которых начинается сетка.
+   *
+   * Раньше это были только startEvent. Но содержимое подпроцесса сплошь и рядом
+   * пишут без внутреннего стартового события (`процесс: ... подпроцесс ...`),
+   * и тогда сетка оставалась пустой: всем узлам доставалась одна ячейка, и они
+   * рисовались друг поверх друга. Поэтому, если стартовых событий нет, входными
+   * считаем узлы без входящих потоков (граничные события не в счёт — они стоят
+   * на задаче, а не начинают ветку).
+   */
+  getEntryNodesIds(repr) {
+    const starts = this.getStartEventsIds(repr);
+    if (starts.length) return starts;
+
+    const entries = [];
+    for (const [id, elem] of repr) {
+      if (elem.tag === 'sequenceFlow' || elem.tag === 'laneSet') continue;
+      if (elem.tag === 'incoming' || elem.tag === 'outgoing') continue;
+      if (elem.tag === 'boundaryEvent') continue;
+      if (elem.incoming && elem.incoming.length) continue;
+      entries.push(id);
+    }
+    return entries;
+  }
+
   traverseAndAssignBranchNumbers(initialElemId, repr) {
     const elem = repr.get(initialElemId);
     if (!elem || elem.branch !== undefined) return;
@@ -293,7 +323,7 @@ export class BpmnLayoutGenerator {
   /* ---------------- 2. calc_grid_structure ---------------- */
 
   calcGridStructure(repr) {
-    const currentColElemsIds = this.getStartEventsIds(repr);
+    const currentColElemsIds = this.getEntryNodesIds(repr);
     const delayedProcessingQueue = new Set();
     const sourceNodesIdsCache = new Map();
     const targetNodesIdsCache = new Map();
@@ -834,7 +864,10 @@ export class BpmnLayoutGenerator {
       const converted = this.getConvertedWaypoints();
       const virtual   = this.getVirtualWaypoints(axis);
       return [
-        ...[...this.elemParams.values()].filter(match),
+        // Содержимое подпроцесса живёт в координатах своего контейнера: его
+        // двигает не общая сетка процесса, а syncSubprocessContents — иначе
+        // рамка уезжает, а узлы внутри остаются на месте.
+        ...[...this.elemParams.values()].filter(p => !p.p).filter(match),
         ...converted.filter(match),
         ...virtual.filter(match),
       ];
@@ -1003,6 +1036,70 @@ export class BpmnLayoutGenerator {
       width: gridW + LAYOUT.poolElemShift,
       height: gridH,
     };
+  }
+
+  /* ---------------- 6.7. sync_subprocess_contents ---------------- */
+
+  /**
+   * Держит содержимое подпроцесса внутри его рамки.
+   *
+   * Между расчётом координат содержимого и этим местом рамку ещё двигают
+   * (`optimizeLayout`, `realignByLogicalColumns`, `resolveColumnOverlaps`),
+   * поэтому узлы внутри переносим на ту же дельту, что уехала рамка, и
+   * подращиваем рамку, если содержимое в неё не влезло.
+   */
+  syncSubprocessContents() {
+    for (const sp of this.subprocesses) {
+      const parent = this.elemParams.get(sp.id);
+      if (!parent) continue;
+
+      const dx = parent.x - (sp.originX || 0);
+      const dy = parent.y - (sp.originY || 0);
+
+      if (dx || dy) {
+        for (const id of sp.repr.keys()) {
+          const p = this.elemParams.get(id);
+          if (p && p.x !== undefined) { p.x += dx; p.y += dy; }
+
+          const elem = sp.repr.get(id);
+          if (elem && elem.node && elem.node.labelPos) {
+            elem.node.labelPos.x += dx;
+            elem.node.labelPos.y += dy;
+          }
+        }
+        sp.originX = parent.x;
+        sp.originY = parent.y;
+      }
+
+      // граничные события и стрелки считаем заново — они зависят от координат
+      this.attachBoundaryParams(sp.repr);
+      this.calcEdges(sp.repr);
+
+      this.fitSubprocessFrame(sp, parent);
+    }
+  }
+
+  fitSubprocessFrame(sp, parent) {
+    const content = [];
+    for (const id of sp.repr.keys()) {
+      const p = this.elemParams.get(id);
+      if (p && p.x !== undefined) content.push(p);
+    }
+    if (!content.length) return;
+
+    const right  = Math.max(...content.map(p => p.x + (p.w || 0)));
+    const bottom = Math.max(...content.map(p => p.y + (p.realH || p.h || 0)));
+
+    const needW = right - parent.x + LAYOUT.subProcessPaddingRight;
+    const needH = bottom - parent.y + LAYOUT.subProcessPaddingBottom;
+
+    if (needW > parent.w) parent.w = needW;
+
+    const realH = parent.realH || parent.h;
+    if (needH > realH) {
+      parent.realH = needH;
+      parent.h = needH + (parent.artifactsH || 0);
+    }
   }
 
   applyToModel(process) {
