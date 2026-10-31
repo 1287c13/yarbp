@@ -39,6 +39,7 @@
   import { YarbpBPMNConverter } from '../../src/js/classes/ast-converters/bpmn/YarbpBPMNConverter.js';
   import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
+  import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   import { FileManager } from '../../src/js/modules/FileManager.js';
 
   const resultBox = document.getElementById('result');
@@ -248,6 +249,30 @@
       !!ir && !!ir.children && Array.isArray(ir.children[0].children) &&
       ir.children[0].children.length > 0);
   }
+
+  /* ------------------------------------------------------------------ */
+  /* 7. Директивы флейвора: регистр, пробелы, дефисы (D-06)               */
+  /* ------------------------------------------------------------------ */
+  const flavorName = (directive) => new YarbpFlavor(directive).flavorName;
+
+  check('флейвор: регистр не важен («! как JSON» перестал быть неизвестным)',
+    flavorName('как JSON') === 'json', String(flavorName('как JSON')));
+  check('флейвор: «! AS xml»',
+    flavorName(' AS  xml ') === 'xml', String(flavorName(' AS  xml ')));
+  check('флейвор: дефис вместо пробела',
+    flavorName('as-proto') === 'proto', String(flavorName('as-proto')));
+  check('флейвор: «! как  Форма-ТСД» находит рендерер',
+    flavorName('как  Форма-ТСД') === 'форматсд' &&
+    !!new YarbpFlavor('как  Форма-ТСД').flavorData,
+    String(flavorName('как  Форма-ТСД')));
+  check('флейвор: подчёркивание в имени',
+    flavorName('как_бпмн') === 'бпмн', String(flavorName('как_бпмн')));
+  check('флейвор: без «as/как» — не флейвор',
+    flavorName('json') === undefined);
+  check('флейвор: «assert» не считается «as»',
+    flavorName('assert json') === undefined);
+  check('флейвор: директива без имени не распознаётся',
+    flavorName('as') === undefined);
 
   /* ------------------------------------------------------------------ */
   resultBox.textContent = lines.join('\n') + '\n';

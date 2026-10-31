@@ -148,9 +148,21 @@ export class YarbpFlavor {
     this.flavorData = FlavorMap.get(this.flavorName);
   };
 
+  /**
+   * Директива → «сплющенное» имя флейвора: `! как Форма-ТСД` → `форматсд`.
+   *
+   * Директива не чувствительна к регистру, лишним пробелам, дефисам и
+   * подчёркиваниям: `! AS json`, `! as-json`, `! как  JSON` — одно и то же.
+   * Без ведущего `as`/`как` директива флейвором не считается (undefined).
+   *
+   * Граница после `as`/`как` проверяется lookahead-ом, а не `\b`: в JS `\b`
+   * опирается на ASCII-`\w`, поэтому для «как» он не срабатывает.
+   */
   normalizeFlavorName(directive) {
-    let flavourDirectiveParts = directive.split(' ');
-    if (flavourDirectiveParts[0] !== 'as' && flavourDirectiveParts[0] !== 'как') return undefined;
-    return directive.replace('as', '').replace('как', '').replaceAll(/[-_ ()]/g, '').toLowerCase();
+    const match = String(directive ?? '').match(/^\s*(?:as|как)(?=[\s\-_]|$)\s*(.+)$/i);
+    if (!match) return undefined;
+
+    const name = match[1].replaceAll(/[\s\-_()]/g, '').toLowerCase();
+    return name || undefined;
   };
 }
