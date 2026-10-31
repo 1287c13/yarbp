@@ -269,6 +269,34 @@ def overlap_area(first, second):
     return dx * dy
 
 
+# Теги, у которых подпись рисуется внутри фигуры: у событий — под кружком,
+# у шлюзов — над ромбом, поэтому их ширины не зависят от текста.
+LABEL_TAGS = ('task', 'manualTask', 'userTask', 'serviceTask', 'scriptTask',
+              'sendTask', 'receiveTask', 'businessRuleTask', 'callActivity')
+
+# Оценка ширины символа и обязательный запас внутри фигуры (как в
+# definitions.js: LABEL_CHAR_WIDTH / TASK_LABEL_PADDING).
+LABEL_CHAR_WIDTH = 6.8
+LABEL_MIN_MARGIN = 8
+
+
+def label_problems(xml):
+    """Подписи, которые не влезают в свою фигуру: [(id, имя, ширина, нужно)]."""
+    root = ET.fromstring(xml.encode('utf-8'))
+    elements = model_elements(root)
+    rects = di_rects(root)
+
+    problems = []
+    for element_id, rect in rects.items():
+        tag, name = elements.get(element_id) or ('', '')
+        if tag not in LABEL_TAGS or not name:
+            continue
+        needed = len(name) * LABEL_CHAR_WIDTH + LABEL_MIN_MARGIN
+        if needed > rect[2]:
+            problems.append((element_id, name, rect[2], needed))
+    return problems
+
+
 def describe(element_id, elements):
     tag, name = elements.get(element_id) or ('?', '')
     return '%s %s%s' % (tag, element_id, ' «%s»' % name if name else '')
@@ -338,6 +366,45 @@ def check_layout():
 
     if failed:
         print('  FAIL есть схемы с наложениями')
+        return 1
+
+    return check_labels(paths)
+
+
+def check_labels(paths):
+    """Подписи задач должны влезать в свои фигуры.
+
+    bpmn-io переносит текст по словам и может «сломать» слово
+    («Ждать подтверждени я») — глазами это видно, счётчиками нет. Оценка ширины
+    та же, что в definitions.js, поэтому проверка ловит регрессию раскладки.
+    """
+    print('')
+    print('3. подписи BPMN влезают в задачи')
+
+    failed = 0
+    for path in paths:
+        name = os.path.splitext(os.path.basename(path))[0]
+        with io.open(path, encoding='utf-8') as handle:
+            xml = (json.load(handle) or {}).get('xml') or ''
+
+        try:
+            problems = label_problems(xml)
+        except ET.ParseError as error:
+            failed += 1
+            print('  FAIL %s: XML не разбирается (%s)' % (name, error))
+            continue
+
+        if problems:
+            failed += 1
+            print('  FAIL %s: подписи не влезают (%d):' % (name, len(problems)))
+            for element_id, text, width, needed in problems[:5]:
+                print('        %s «%s»: ширина %.0f, нужно %.0f' %
+                      (element_id, text, width, needed))
+        else:
+            print('  ok   %s: подписи влезают' % name)
+
+    if failed:
+        print('  FAIL есть задачи с обрезанными подписями')
         return 1
     return 0
 

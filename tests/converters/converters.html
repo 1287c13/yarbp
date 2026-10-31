@@ -1183,6 +1183,13 @@
       /%% группа "Финансовый блок"/.test(mermaid));
     check('Mermaid: на корректной схеме предупреждений нет',
       mermaidConverter.warnings.length === 0, JSON.stringify(mermaidConverter.warnings));
+    check('Mermaid: subgraph и end сбалансированы',
+      (mermaid.match(/^\s*subgraph /gm) || []).length ===
+      (mermaid.match(/^\s*end$/gm) || []).length,
+      (mermaid.match(/^\s*subgraph /gm) || []).length + ' / ' +
+      (mermaid.match(/^\s*end$/gm) || []).length);
+    check('Mermaid: нет «битых» конструкций (двойные кавычки в id)',
+      !/^\s*["']/.test(mermaid) && !/\[\s*\]/.test(mermaid));
 
     // ветки шлюза подписываются, условия — пунктиром
     const branchSource = [
