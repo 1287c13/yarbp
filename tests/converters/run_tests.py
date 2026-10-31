@@ -49,7 +49,7 @@ MODEL_NS = '{http://www.omg.org/spec/BPMN/20100524/MODEL}'
 
 # Не проверяем на наложения: граничное событие по стандарту стоит на рамке
 # задачи, дорожки лежат поверх узлов по своему смыслу.
-LAYOUT_SKIP_TAGS = ('boundaryEvent', 'textAnnotation',
+LAYOUT_SKIP_TAGS = ('boundaryEvent',
                     'lane', 'laneSet', 'participant',
                     'association', 'group')
 

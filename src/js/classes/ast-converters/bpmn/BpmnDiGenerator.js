@@ -196,7 +196,7 @@ export function recalculateDi(model) {
   // сначала артефакты: они могут поднять верхнюю границу пула,
   // и участник должен получить уже итоговые размеры
   for (const process of model.processes) {
-    applyArtifactBounds(process);
+    applyArtifactBounds(model, process);
   }
 
   syncParticipantBounds(model);
@@ -238,9 +238,22 @@ function syncParticipantBounds(model) {
 
 /* ---------------- артефакты процесса ---------------- */
 
-function applyArtifactBounds(process) {
+function applyArtifactBounds(model, process) {
   const nodesById = new Map();
   collectNodesById(process.flowNodes, nodesById);
+
+  // у каких задач есть текстовая аннотация: объекты данных ставим выше неё,
+  // иначе «Накладная» и «Заказ собран по накладной» рисуются друг на друге
+  const annotatedOwners = new Set();
+  const collab = model.collaboration;
+  if (collab) {
+    for (const assoc of collab.associations) {
+      if (collab.textAnnotations.some(ta => ta.id === assoc.targetRef)) {
+        annotatedOwners.add(assoc.sourceRef);
+      }
+    }
+  }
+  const annotationSpace = LAYOUT.textAnnotationHeight + LAYOUT.textAnnotationAbove;
 
   // Несколько артефактов над одной задачей встают в ряд: иначе `.данные Товар`
   // и `.данные Накладная` оказываются в одной точке и вторая рисуется поверх.
@@ -262,7 +275,8 @@ function applyArtifactBounds(process) {
     const gap = LAYOUT.dataObjectGap;
     const rowWidth = refs.length * width + (refs.length - 1) * gap;
     const startX = owner.bounds.x + owner.bounds.width / 2 - rowWidth / 2;
-    const top = owner.bounds.y - LAYOUT.dataObjectAbove - LAYOUT.dataObjectHeight;
+    const extra = annotatedOwners.has(ownerId) ? annotationSpace : 0;
+    const top = owner.bounds.y - extra - LAYOUT.dataObjectAbove - LAYOUT.dataObjectHeight;
 
     refs.forEach((ref, index) => {
       ref.bounds = {
