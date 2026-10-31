@@ -9,6 +9,7 @@ import { SuggestionProvider } from './SuggestionProvider.js';
 import { SuggestionUI } from './SuggestionUI.js';
 import { Ticker } from './Ticker.js';
 import { IndentGuides } from './IndentGuides.js';
+import { readStored, writeStored } from './storage.js';
 
 const MIN_SIZE_PERCENT = 1;
 const MAX_SIDEBAR_PERCENT = 80;
@@ -22,11 +23,8 @@ const STORAGE_LAYOUT_MODE = 'layoutMode';
 const LAYOUT_MODES = ['auto', 'horizontal', 'vertical'];
 
 function getSavedLayoutMode() {
-  try {
-    const saved = localStorage.getItem(STORAGE_LAYOUT_MODE);
-    if (LAYOUT_MODES.includes(saved)) return saved;
-  } catch (e) { /* приватный режим / quota */ }
-  return 'auto';
+  const saved = readStored(STORAGE_LAYOUT_MODE);
+  return LAYOUT_MODES.includes(saved) ? saved : 'auto';
 }
 
 let layoutMode = getSavedLayoutMode();
@@ -108,9 +106,7 @@ function createResizer(config) {
     element.style.flex = `0 0 ${percent}%`;
 
     if (onResize) onResize(percent);
-    if (storageKey) {
-      localStorage.setItem(storageKey, percent);
-    }
+    if (storageKey) writeStored(storageKey, percent);
   };
 
   const onMouseMove = (e) => {
@@ -149,7 +145,7 @@ function createResizer(config) {
       const percent = (finalSize / parentSize) * 100;
 
       if (storageKey) {
-        localStorage.setItem(storageKey, Math.round(percent * 100) / 100);
+        writeStored(storageKey, Math.round(percent * 100) / 100);
       }
     }
   };
@@ -170,7 +166,7 @@ function createResizer(config) {
 
   const loadSavedSize = () => {
     if (!storageKey) return;
-    const saved = localStorage.getItem(storageKey);
+    const saved = readStored(storageKey);
 
     if (saved !== null) {
       const parsed = parseFloat(saved);
@@ -363,14 +359,14 @@ function toggleTheme() {
   const btn = document.querySelector('.theme-btn');
   document.getElementById('night-icon').src = document.body.classList.contains('dark') ? 'static/night-white.svg' : 'static/night-black.svg';
   document.getElementById('day-icon').src = document.body.classList.contains('dark') ? 'static/day-white.svg' : 'static/day-black.svg';
-  localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+  writeStored('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
   YarbpAppGlobals.lexer.callRendererObserver();
   YarbpAppGlobals.suggestionUI.refresh();
 }
 
 themeBtn.addEventListener('click', toggleTheme);
 
-if (localStorage.getItem('theme') === 'dark') {
+if (readStored('theme') === 'dark') {
   document.body.classList.add('dark');
   document.getElementById('night-icon').src = 'static/night-white.svg';
   document.getElementById('day-icon').src = 'static/day-white.svg';
@@ -390,9 +386,7 @@ function setLayoutMode(mode) {
   layoutMode = LAYOUT_MODES.includes(mode) ? mode : 'auto';
 
   if (workArea) workArea.dataset.layout = layoutMode;
-  try {
-    localStorage.setItem(STORAGE_LAYOUT_MODE, layoutMode);
-  } catch (e) { /* приватный режим / quota */ }
+  writeStored(STORAGE_LAYOUT_MODE, layoutMode);
 
   updateLayoutSwitch();
   setupPaneResizer();
