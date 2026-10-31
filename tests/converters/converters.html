@@ -818,7 +818,47 @@
     check('B-7: на схеме с новой моделью предупреждений нет',
       warningsOf(wideSource).length === 0, JSON.stringify(warningsOf(wideSource)));
 
-    // §17.5 №13: без «=» значение артефакта не доезжает до AST — теперь это видно
+    // §17.5 №9: message flow между пулами — можно, внутри пула — предупреждение
+    let messageSource = '';
+    try {
+      messageSource = await fetchText('cases/bpmn_message.yarbp');
+    } catch (e) { /* ниже */ }
+
+    if (messageSource) {
+      const messageXml = new YarbpBPMNConverter(buildAST(messageSource).ast).convert();
+
+      check('связь между пулами стала messageFlow',
+        /<bpmn:messageFlow [^>]*sourceRef="Task_Send"[^>]*targetRef="Task_Accept"/
+          .test(messageXml),
+        (messageXml.match(/<bpmn:messageFlow [^>]*>/) || ['нет'])[0]);
+      check('связь между пулами предупреждений не даёт',
+        warningsOf(messageSource).length === 0, JSON.stringify(warningsOf(messageSource)));
+
+      const samePool = warningsOf([
+        '! как бпмн',
+        'процесс = Один пул',
+        '  событие = Начало',
+        '    задача = Первая .ид Task_A',
+        '      связь = --> Task_B',
+        '    задача = Вторая .ид Task_B',
+        '    событие .расположение конец',
+      ].join('\n'));
+      check('связь внутри одного пула — предупреждение',
+        samePool.some(item => /связь соединяет узлы одного пула/.test(item.message)),
+        JSON.stringify(samePool));
+
+      const unknownTarget = warningsOf([
+        '! как бпмн',
+        'процесс = П',
+        '  событие = Начало',
+        '    задача = Первая',
+        '      связь = --> НетТакого',
+        '    событие .расположение конец',
+      ].join('\n'));
+      check('связь на неизвестный узел — предупреждение',
+        unknownTarget.some(item => /связь ссылается на неизвестный узел/.test(item.message)),
+        JSON.stringify(unknownTarget));
+    }
     const noEqArtifact = warningsOf([
       '! как бпмн',
       'процесс = П',

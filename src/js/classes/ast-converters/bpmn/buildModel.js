@@ -133,11 +133,32 @@ function validateModel(definitions, ctx) {
   }
 
   if (definitions.collaboration) {
+    // Кто в каком процессе: нужно, чтобы понять, соединяет ли message flow
+    // разные пулы (только так он валиден по BPMN).
+    const ownerByNodeId = new Map();
+    const collectOwners = (nodes, process) => {
+      for (const node of nodes || []) {
+        ownerByNodeId.set(node.id, process);
+        if (node.children && node.children.length) collectOwners(node.children, process);
+      }
+    };
+    for (const process of definitions.processes) collectOwners(process.flowNodes, process);
+
     for (const flow of definitions.collaboration.messageFlows) {
+      const where = { position: flow.position };
       const known = ctx.nodesById.has(flow.sourceRef) && ctx.nodesById.has(flow.targetRef);
       if (!known) {
-        warn(ctx, null, 'связь ссылается на неизвестный узел: ' +
+        warn(ctx, where, 'связь ссылается на неизвестный узел: ' +
           flow.sourceRef + ' → ' + flow.targetRef);
+        continue;
+      }
+
+      const sourceProcess = ownerByNodeId.get(flow.sourceRef);
+      const targetProcess = ownerByNodeId.get(flow.targetRef);
+      if (sourceProcess && sourceProcess === targetProcess) {
+        warn(ctx, where, 'связь соединяет узлы одного пула «' +
+          (sourceProcess.name || sourceProcess.id) + '»: по BPMN message flow ' +
+          'идёт между пулами, внутри пула нужен sequence flow');
       }
     }
   }
@@ -577,6 +598,12 @@ function buildMessageFlow(node, task, ctx, process) {
 
   const id = ctx.idGen.next('Flow');
   const mf = new BpmnMessageFlow({ id, sourceRef, targetRef });
+  mf.position = node.position;
+
+  // По BPMN message flow соединяет **разные** пулы. Внутри одного пула нужен
+  // sequence flow, иначе схема формально невалидна (bpmn-io рисует молча, а
+  // валидаторы и моделлер — нет). Проверить это можно только после сборки всех
+  // процессов, поэтому проверка живёт в validateModel.
   process._pendingArtifacts.messageFlows.push(mf);
 }
 

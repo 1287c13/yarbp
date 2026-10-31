@@ -31,6 +31,7 @@ export class BpmnMessageFlow {
     this.sourceRef = sourceRef;
     this.targetRef = targetRef;
     this.name      = name || null;
+    this.position  = null;   // строка исходника — для предупреждений
     this.waypoints = null;
     this.labelPos  = null;   // ← ИЗМЕНЕНО
   }
