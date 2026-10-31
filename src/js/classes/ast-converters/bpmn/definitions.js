@@ -130,6 +130,8 @@ export const ATTRIBUTE_KEYS = Object.freeze(new Set([
 export const ENTITY_KEYS = Object.freeze(new Set([
   'комментарий',
   'данные',
+  'данные-вход',
+  'данные-выход',
   'база-данных',
   'связь',
 ]));

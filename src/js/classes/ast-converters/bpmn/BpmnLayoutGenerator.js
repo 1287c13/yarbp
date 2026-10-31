@@ -116,14 +116,16 @@ export class BpmnLayoutGenerator {
   }
 
   collectArtifactsAbove(process) {
-    const ARTIFACT_H = LAYOUT.textAnnotationHeight;
-    const GAP = LAYOUT.textAnnotationAbove;
+    const DATA_H = LAYOUT.dataObjectHeight;
+    const DATA_GAP = LAYOUT.dataObjectAbove;
+    const TA_H = LAYOUT.textAnnotationHeight;
+    const TA_GAP = LAYOUT.textAnnotationAbove;
 
     for (const ref of process.dataObjectRefs) {
       const owner = findAssocOwner(process, ref.id);
       if (!owner) continue;
       const cur = this.artifactsAboveTask.get(owner.id) || 0;
-      this.artifactsAboveTask.set(owner.id, cur + ARTIFACT_H + GAP);
+      this.artifactsAboveTask.set(owner.id, cur + DATA_H + DATA_GAP);
     }
 
     const collab = this.model.collaboration;
@@ -134,7 +136,7 @@ export class BpmnLayoutGenerator {
         const owner = this.nodesById.get(assoc.sourceRef);
         if (!owner) continue;
         const cur = this.artifactsAboveTask.get(owner.id) || 0;
-        this.artifactsAboveTask.set(owner.id, cur + ARTIFACT_H + GAP);
+        this.artifactsAboveTask.set(owner.id, cur + TA_H + TA_GAP);
       }
     }
   }
@@ -567,6 +569,16 @@ export class BpmnLayoutGenerator {
       }
     }
 
+    // Ряды, где у кого-то есть артефакты: весь ряд выравниваем по низу,
+    // чтобы события и задачи стояли на одной линии, а не «лесенкой».
+    const rowsWithArtifacts = new Set();
+    for (const p of this.elemParams.values()) {
+      if (!p.artifactsH) continue;
+      if ((p.p || null) !== (processId || null)) continue;
+      if (!repr.has(p.id)) continue;
+      rowsWithArtifacts.add(p.r);
+    }
+
     for (const [id, elem] of repr) {
       if (elem.tag === 'sequenceFlow' || elem.tag === 'laneSet') continue;
       if (elem.tag === 'incoming' || elem.tag === 'outgoing') continue;
@@ -582,8 +594,15 @@ export class BpmnLayoutGenerator {
 
       const taskH = params.realH || params.h;
 
+      // в ряду с артефактами всё резервированное место отдаём наверх,
+      // иначе половина уйдёт вниз и подписи вылезут за рамку пула
+      const sortedToBottom = params.artifactsH || rowsWithArtifacts.has(params.r);
+      const verticalOffset = sortedToBottom
+        ? cellHeight - taskH
+        : (cellHeight - taskH) / 2;
+
       params.x = accumulatedWidth + (cellWidth - params.w) / 2 + subprocessShiftLeft;
-      params.y = accumulatedHeight + (cellHeight - taskH) / 2 + subprocessShiftTop;
+      params.y = accumulatedHeight + verticalOffset + subprocessShiftTop;
     }
   }
 

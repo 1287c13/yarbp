@@ -95,6 +95,7 @@ export class BpmnFlowNode {
     this.loopCharacteristics = null;
     this.children            = [];
     this.sequenceFlows       = [];
+    this.dataInputAssocs     = [];
     this.dataOutputAssocs    = [];
     this.isExpanded          = null;
     this.laneId              = null;
@@ -118,9 +119,23 @@ export class BpmnSequenceFlow {
 }
 
 export class BpmnDataOutputAssociation {
-  constructor({ id, targetRef }) {
+  constructor({ id, targetRef, name }) {
     this.id         = id;
     this.targetRef  = targetRef;
+    this.name       = name || null;
+    this.waypoints  = null;
+  }
+}
+
+/**
+ * Чтение данных задачей: источник — `dataObjectReference`, приёмник — задача.
+ * В XML это `<bpmn:dataInputAssociation><bpmn:sourceRef>…`.
+ */
+export class BpmnDataInputAssociation {
+  constructor({ id, sourceRef, name }) {
+    this.id         = id;
+    this.sourceRef  = sourceRef;
+    this.name       = name || null;
     this.waypoints  = null;
   }
 }

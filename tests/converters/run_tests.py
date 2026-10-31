@@ -48,9 +48,9 @@ DC_NS = '{http://www.omg.org/spec/DD/20100524/DC}'
 MODEL_NS = '{http://www.omg.org/spec/BPMN/20100524/MODEL}'
 
 # Не проверяем на наложения: граничное событие по стандарту стоит на рамке
-# задачи, артефакты и дорожки лежат поверх/за узлами по своему смыслу.
-LAYOUT_SKIP_TAGS = ('boundaryEvent', 'textAnnotation', 'dataObjectReference',
-                    'dataStoreReference', 'lane', 'laneSet', 'participant',
+# задачи, дорожки лежат поверх узлов по своему смыслу.
+LAYOUT_SKIP_TAGS = ('boundaryEvent', 'textAnnotation',
+                    'lane', 'laneSet', 'participant',
                     'association', 'group')
 
 BROWSERS = [

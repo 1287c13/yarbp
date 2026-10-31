@@ -4,6 +4,7 @@
     "bpmn_lanes_gateway",
     "bpmn_branches_artifacts",
     "bpmn_subprocess",
-    "bpmn_features"
+    "bpmn_features",
+    "bpmn_data"
   ]
 }

@@ -671,6 +671,61 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* 14. B-5: данные — дедупликация, ioSpecification, входные связи      */
+  /* ------------------------------------------------------------------ */
+  let dataSource = '';
+  try {
+    dataSource = await fetchText('cases/bpmn_data.yarbp');
+  } catch (e) { /* ниже */ }
+
+  if (dataSource) {
+    const dataXml = new YarbpBPMNConverter(buildAST(dataSource).ast).convert();
+
+    const dataObjects = dataXml.match(/<bpmn:dataObject id="/g) || [];
+    const dataRefs = dataXml.match(/<bpmn:dataObjectReference id="/g) || [];
+
+    check('B-5: общий dataObject на имя (четыре объявления → три объекта)',
+      dataObjects.length === 3, 'dataObject: ' + dataObjects.length);
+
+    check('B-5: своя ссылка у каждого объявления',
+      dataRefs.length === 4, 'dataObjectReference: ' + dataRefs.length);
+
+    check('B-5: имя данных доехало до XML',
+      /<bpmn:dataObject [^>]*name="Товар"/.test(dataXml));
+
+    const tovarRefs = new Set();
+    for (const match of dataXml.matchAll(/<bpmn:dataObjectReference [^>]*name="Товар"[^>]*dataObjectRef="([^"]+)"/g)) {
+      tovarRefs.add(match[1]);
+    }
+    check('B-5: ссылки «Товар» ведут на один объект данных',
+      tovarRefs.size === 1, [...tovarRefs].join(', '));
+
+    check('B-5: данные-вход → dataInputAssociation со sourceRef',
+      /<bpmn:dataInputAssociation id="[^"]+">\s*<bpmn:sourceRef>[^<]+<\/bpmn:sourceRef>/
+        .test(dataXml));
+
+    check('B-5: данные → dataOutputAssociation с targetRef',
+      /<bpmn:dataOutputAssociation id="[^"]+">\s*<bpmn:targetRef>[^<]+<\/bpmn:targetRef>/
+        .test(dataXml));
+
+    check('B-5: ioSpecification объявляет вход и выход задачи',
+      /<bpmn:ioSpecification>[\s\S]*<bpmn:dataInput [^>]*name="Товар"/.test(dataXml) &&
+      /<bpmn:ioSpecification>[\s\S]*<bpmn:dataOutput [^>]*name="Протокол"/.test(dataXml));
+
+    check('B-5: inputSet/outputSet ссылаются на объявленные данные',
+      /<bpmn:inputSet [^>]*>\s*<bpmn:dataInputRefs>[^<]+<\/bpmn:dataInputRefs>/.test(dataXml) &&
+      /<bpmn:outputSet [^>]*>\s*<bpmn:dataOutputRefs>[^<]+<\/bpmn:dataOutputRefs>/.test(dataXml));
+
+    check('B-5: у каждой ассоциации есть рёбра в DI',
+      (dataXml.match(/<bpmndi:BPMNEdge [^>]*bpmnElement="Data(Input|Output)Association/g) || []).length === 4,
+      (dataXml.match(/<bpmndi:BPMNEdge [^>]*bpmnElement="[^"]*Association[^"]*"/g) || []).length + ' рёбер');
+
+    const dataWarnings = warningsOf(dataSource);
+    check('B-5: на схеме с данными предупреждений нет',
+      dataWarnings.length === 0, JSON.stringify(dataWarnings));
+  }
+
+  /* ------------------------------------------------------------------ */
   resultBox.textContent = lines.join('\n') + '\n';
   document.title = UPDATE ? 'CONVERTERS UPDATE'
     : (failed ? 'CONVERTERS FAIL' : 'CONVERTERS PASS');

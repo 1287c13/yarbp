@@ -92,7 +92,8 @@ function serializeProcess(process, definitions, lines, depth) {
     );
   }
   for (const obj of process.dataObjects) {
-    lines.push(`${ind}${INDENT}<bpmn:dataObject id="${escapeHtml(obj.id)}" />`);
+    const name = obj.name ? ` name="${escapeHtml(obj.name)}"` : '';
+    lines.push(`${ind}${INDENT}<bpmn:dataObject id="${escapeHtml(obj.id)}"${name} />`);
   }
   for (const ref of process.dataStores) {
     lines.push(
@@ -136,7 +137,10 @@ function serializeFlowNode(node, lines, depth) {
 
   const loopXml = loopCharacteristicsXml(node.loopCharacteristics);
   const hasInner = node.children && node.children.length;
-  const hasAssocs = node.dataOutputAssocs && node.dataOutputAssocs.length;
+  const inputAssocs  = node.dataInputAssocs  || [];
+  const outputAssocs = node.dataOutputAssocs || [];
+  const hasAssocs = inputAssocs.length > 0 || outputAssocs.length > 0;
+  const ioSpecXml = ioSpecificationXml(node, inputAssocs, outputAssocs, ind + INDENT);
 
   const hasBody =
     node.incoming.length ||
@@ -164,8 +168,17 @@ function serializeFlowNode(node, lines, depth) {
     lines.push(`${ind}${INDENT}${loopXml}`);
   }
 
+  if (ioSpecXml) {
+    for (const line of ioSpecXml) lines.push(line);
+  }
+
   if (hasAssocs) {
-    for (const a of node.dataOutputAssocs) {
+    for (const a of inputAssocs) {
+      lines.push(`${ind}${INDENT}<bpmn:dataInputAssociation id="${escapeHtml(a.id)}">`);
+      lines.push(`${ind}${INDENT}${INDENT}<bpmn:sourceRef>${escapeHtml(a.sourceRef)}</bpmn:sourceRef>`);
+      lines.push(`${ind}${INDENT}</bpmn:dataInputAssociation>`);
+    }
+    for (const a of outputAssocs) {
       lines.push(`${ind}${INDENT}<bpmn:dataOutputAssociation id="${escapeHtml(a.id)}">`);
       lines.push(`${ind}${INDENT}${INDENT}<bpmn:targetRef>${escapeHtml(a.targetRef)}</bpmn:targetRef>`);
       lines.push(`${ind}${INDENT}</bpmn:dataOutputAssociation>`);
@@ -189,6 +202,54 @@ function loopCharacteristicsXml(kind) {
   if (kind === 'multiInstanceSequential')   return '<bpmn:multiInstanceLoopCharacteristics isSequential="true" />';
   if (kind === 'standardLoop')              return '<bpmn:standardLoopCharacteristics />';
   return null;
+}
+
+/**
+ * `ioSpecification` задачи: какие данные она принимает и отдаёт.
+ *
+ * Без него associations ссылаются в пустоту: по BPMN 2.0 у активности должны
+ * быть объявлены `dataInput`/`dataOutput` и их наборы. Идентификаторы выводим
+ * из id задачи — так они детерминированы и не конфликтуют между задачами.
+ */
+function ioSpecificationXml(node, inputAssocs, outputAssocs, ind) {
+  if (!inputAssocs.length && !outputAssocs.length) return null;
+
+  const outer = ind;
+  const level2 = ind + INDENT;
+  const level3 = level2 + INDENT;
+
+  const lines = [`${outer}<bpmn:ioSpecification>`];
+  const inputs = [];
+  const outputs = [];
+
+  inputAssocs.forEach((assoc, index) => {
+    const id = `${node.id}_dataInput_${index + 1}`;
+    inputs.push(id);
+    lines.push(`${level2}<bpmn:dataInput id="${escapeHtml(id)}" name="${escapeHtml(assoc.name || '')}" />`);
+  });
+  outputAssocs.forEach((assoc, index) => {
+    const id = `${node.id}_dataOutput_${index + 1}`;
+    outputs.push(id);
+    lines.push(`${level2}<bpmn:dataOutput id="${escapeHtml(id)}" name="${escapeHtml(assoc.name || '')}" />`);
+  });
+
+  if (inputs.length) {
+    lines.push(`${level2}<bpmn:inputSet id="${escapeHtml(node.id)}_inputSet">`);
+    for (const id of inputs) {
+      lines.push(`${level3}<bpmn:dataInputRefs>${escapeHtml(id)}</bpmn:dataInputRefs>`);
+    }
+    lines.push(`${level2}</bpmn:inputSet>`);
+  }
+  if (outputs.length) {
+    lines.push(`${level2}<bpmn:outputSet id="${escapeHtml(node.id)}_outputSet">`);
+    for (const id of outputs) {
+      lines.push(`${level3}<bpmn:dataOutputRefs>${escapeHtml(id)}</bpmn:dataOutputRefs>`);
+    }
+    lines.push(`${level2}</bpmn:outputSet>`);
+  }
+
+  lines.push(`${outer}</bpmn:ioSpecification>`);
+  return lines;
 }
 
 function serializeSequenceFlow(flow, lines, depth) {
@@ -274,6 +335,9 @@ function serializeFlowNodesShapes(nodes, lines, depth) {
 function serializeFlowNodesAssocs(nodes, lines, depth) {
   for (const node of nodes) {
     for (const a of node.dataOutputAssocs || []) {
+      serializeEdge(a.id, a.waypoints, lines, depth, false, null);
+    }
+    for (const a of node.dataInputAssocs || []) {
       serializeEdge(a.id, a.waypoints, lines, depth, false, null);
     }
     if (node.children && node.children.length) {

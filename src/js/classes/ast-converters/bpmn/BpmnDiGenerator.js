@@ -9,11 +9,14 @@ export function recalculateDi(model) {
   const layout = new BpmnLayoutGenerator(model);
   layout.generate();
 
-  syncParticipantBounds(model);
-
+  // сначала артефакты: они могут поднять верхнюю границу пула,
+  // и участник должен получить уже итоговые размеры
   for (const process of model.processes) {
     applyArtifactBounds(process);
   }
+
+  syncParticipantBounds(model);
+
   applyCollaborationArtifacts(model);
 
   for (const process of model.processes) {
@@ -55,21 +58,40 @@ function applyArtifactBounds(process) {
   const nodesById = new Map();
   collectNodesById(process.flowNodes, nodesById);
 
+  // Несколько артефактов над одной задачей встают в ряд: иначе `.данные Товар`
+  // и `.данные Накладная` оказываются в одной точке и вторая рисуется поверх.
+  const byOwner = new Map();
   for (const ref of process.dataObjectRefs) {
     const owner = findAssocOwner(process, ref.id);
     if (!owner || !owner.bounds) continue;
-    ref.bounds = {
-      x: owner.bounds.x + owner.bounds.width / 2 - LAYOUT.dataObjectWidth / 2,
-      y: owner.bounds.y - LAYOUT.dataObjectAbove - LAYOUT.dataObjectHeight,
-      width: LAYOUT.dataObjectWidth,
-      height: LAYOUT.dataObjectHeight,
-    };
-    // подпись сверху по центру
-    ref.labelPos = {
-      x: ref.bounds.x + ref.bounds.width / 2,
-      y: ref.bounds.y - 4,
-    };
-    nodesById.set(ref.id, { id: ref.id, tag: 'dataObjectReference', bounds: ref.bounds });
+    if (!byOwner.has(owner.id)) byOwner.set(owner.id, []);
+    byOwner.get(owner.id).push(ref);
+  }
+
+  let topMost = Infinity;
+
+  for (const [ownerId, refs] of byOwner) {
+    const owner = nodesById.get(ownerId);
+    if (!owner || !owner.bounds) continue;
+
+    const width = LAYOUT.dataObjectWidth;
+    const gap = LAYOUT.dataObjectGap;
+    const rowWidth = refs.length * width + (refs.length - 1) * gap;
+    const startX = owner.bounds.x + owner.bounds.width / 2 - rowWidth / 2;
+    const top = owner.bounds.y - LAYOUT.dataObjectAbove - LAYOUT.dataObjectHeight;
+
+    refs.forEach((ref, index) => {
+      ref.bounds = {
+        x: startX + index * (width + gap),
+        y: top,
+        width,
+        height: LAYOUT.dataObjectHeight,
+      };
+      // подпись не задаём: bpmn-io сам ставит её под объектом данных,
+      // а нулевой BPMNLabel рисовался прямо поверх рамки
+      nodesById.set(ref.id, { id: ref.id, tag: 'dataObjectReference', bounds: ref.bounds });
+      topMost = Math.min(topMost, ref.bounds.y);
+    });
   }
 
   for (const ref of process.dataStores) {
@@ -85,11 +107,42 @@ function applyArtifactBounds(process) {
     nodesById.set(ref.id, { id: ref.id, tag: 'dataStoreReference', bounds: ref.bounds });
   }
 
+  // Артефакты стоят над/под задачей, то есть за пределами пула: поднимаем рамку,
+  // иначе подпись «Товар» срезается верхней границей. Если дорожки нарисованы,
+  // видимая рамка — верхняя дорожка, её и тянем.
+  const topLane = process.lanes
+    .filter(lane => lane.bounds)
+    .sort((a, b) => a.bounds.y - b.bounds.y)[0];
+
+  const frameTop = topLane ? topLane.bounds.y
+    : (process.bounds ? process.bounds.y : null);
+
+  if (frameTop !== null && topMost !== Infinity) {
+    const neededTop = topMost - LAYOUT.artifactLabelSpace;
+    const extra = frameTop - neededTop;
+    if (extra > 0) {
+      if (process.bounds) {
+        process.bounds.y -= extra;
+        process.bounds.height += extra;
+      }
+      if (topLane) {
+        topLane.bounds.y -= extra;
+        topLane.bounds.height += extra;
+      }
+    }
+  }
+
   const allNodes = collectAllNodes(process.flowNodes);
   for (const node of allNodes) {
     for (const a of node.dataOutputAssocs || []) {
       const source = nodesById.get(node.id);
       const target = nodesById.get(a.targetRef);
+      if (!source || !target) continue;
+      a.waypoints = simpleWaypoints(source, target);
+    }
+    for (const a of node.dataInputAssocs || []) {
+      const source = nodesById.get(a.sourceRef);
+      const target = nodesById.get(node.id);
       if (!source || !target) continue;
       a.waypoints = simpleWaypoints(source, target);
     }
@@ -251,6 +304,11 @@ function shiftProcessBy(process, dx, dy) {
         a.waypoints = a.waypoints.map(([x, y2]) => [x + dx, y2 + dy]);
       }
     }
+    for (const a of node.dataInputAssocs || []) {
+      if (a.waypoints) {
+        a.waypoints = a.waypoints.map(([x, y2]) => [x + dx, y2 + dy]);
+      }
+    }
   }
 }
 
@@ -325,6 +383,12 @@ function refreshAssocWaypoints(process) {
     for (const a of node.dataOutputAssocs || []) {
       const source = nodesById.get(node.id);
       const target = nodesById.get(a.targetRef);
+      if (!source || !target || !source.bounds || !target.bounds) continue;
+      a.waypoints = simpleWaypoints(source, target);
+    }
+    for (const a of node.dataInputAssocs || []) {
+      const source = nodesById.get(a.sourceRef);
+      const target = nodesById.get(node.id);
       if (!source || !target || !source.bounds || !target.bounds) continue;
       a.waypoints = simpleWaypoints(source, target);
     }

@@ -3,7 +3,8 @@ import {
   BpmnDefinitions, BpmnCollaboration, BpmnParticipant,
   BpmnProcess, BpmnLane, BpmnFlowNode, BpmnSequenceFlow,
   BpmnMessageFlow, BpmnTextAnnotation, BpmnAssociation,
-  BpmnDataOutputAssociation, BpmnDataObjectReference, BpmnDataStoreReference,
+  BpmnDataInputAssociation, BpmnDataOutputAssociation,
+  BpmnDataObjectReference, BpmnDataStoreReference,
 } from './BpmnModel.js';
 import {
   IdGenerator, extractExplicitId, childValue, readBounds, readJoinBounds,
@@ -402,7 +403,9 @@ function buildArtifacts(node, task, ctx, process, opts) {
   for (const art of artifacts) {
     switch (art.key) {
       case 'комментарий':  buildComment(art, task, ctx, process); break;
-      case 'данные':       buildDataObject(art, task, ctx, process); break;
+      case 'данные':
+      case 'данные-выход': buildDataObject(art, task, ctx, process); break;
+      case 'данные-вход':  buildDataInput(art, task, ctx, process); break;
       case 'база-данных':  buildDataStore(art, task, ctx, process); break;
       case 'связь':        buildMessageFlow(art, task, ctx, process); break;
     }
@@ -426,10 +429,25 @@ function buildComment(node, task, ctx, process) {
   process._pendingArtifacts.associations.push(assoc);
 }
 
+/**
+ * Общий `dataObject` на имя: два `.данные Товар` в разных задачах — это один
+ * объект данных и две ссылки на него (в BPMN `dataObjectReference` — отдельная
+ * сущность со своим местом на схеме).
+ */
+function resolveDataObject(process, ctx, name) {
+  const key = name || null;
+  const existing = process.dataObjects.find(obj => (obj.name || null) === key);
+  if (existing) return existing.id;
+
+  const id = ctx.idGen.next('DataObject');
+  process.dataObjects.push({ id, name: key });
+  return id;
+}
+
 function buildDataObject(node, task, ctx, process) {
   const name = node.value || null;
+  const dataObjectId = resolveDataObject(process, ctx, name);
 
-  const dataObjectId = ctx.idGen.next('DataObject');
   const refId = ctx.idGen.next('DataObjectReference');
   const ref = new BpmnDataObjectReference({
     id: refId,
@@ -441,11 +459,34 @@ function buildDataObject(node, task, ctx, process) {
   const assoc = new BpmnDataOutputAssociation({
     id: assocId,
     targetRef: refId,
+    name,
   });
 
-  process.dataObjects.push({ id: dataObjectId });
   process.dataObjectRefs.push(ref);
   task.dataOutputAssocs.push(assoc);
+}
+
+/** `.данные-вход Товар` — задача читает данные (dataInputAssociation). */
+function buildDataInput(node, task, ctx, process) {
+  const name = node.value || null;
+  const dataObjectId = resolveDataObject(process, ctx, name);
+
+  const refId = ctx.idGen.next('DataObjectReference');
+  const ref = new BpmnDataObjectReference({
+    id: refId,
+    name,
+    dataObjectRef: dataObjectId,
+  });
+
+  const assocId = ctx.idGen.next('DataInputAssociation');
+  const assoc = new BpmnDataInputAssociation({
+    id: assocId,
+    sourceRef: refId,
+    name,
+  });
+
+  process.dataObjectRefs.push(ref);
+  task.dataInputAssocs.push(assoc);
 }
 
 function buildDataStore(node, task, ctx, process) {

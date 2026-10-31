@@ -50,6 +50,10 @@ export function findAssocOwner(process, targetRef) {
       for (const a of n.dataOutputAssocs || []) {
         if (a.targetRef === targetRef) return n;
       }
+      // данные-вход: ссылка — источник связи, владелец — сама задача (B-5)
+      for (const a of n.dataInputAssocs || []) {
+        if (a.sourceRef === targetRef) return n;
+      }
       if (n.children && n.children.length) {
         const r = check(n.children);
         if (r) return r;
