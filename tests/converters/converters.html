@@ -182,6 +182,7 @@
   /* ------------------------------------------------------------------ */
   let uiHTML = '';
   let uiError = '';
+  const uiASTBefore = JSON.stringify(orderAST);
   try {
     uiHTML = new UIGenerator(false).generateHTML(orderAST);
   } catch (e) {
@@ -192,6 +193,10 @@
   check('ui: результат не пустой и без «undefined»',
     typeof uiHTML === 'string' && uiHTML.length > 0 && !uiHTML.includes('undefined'),
     String(uiHTML).slice(0, 120));
+  check('ui: генератор не мутирует AST',
+    JSON.stringify(orderAST) === uiASTBefore);
+  check('AST: дерево заморожено',
+    Object.isFrozen(orderAST) && Object.isFrozen(orderAST.children[0]));
 
   /* ------------------------------------------------------------------ */
   /* 5. BPMN                                                             */

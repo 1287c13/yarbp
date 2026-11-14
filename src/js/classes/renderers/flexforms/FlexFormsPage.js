@@ -40,7 +40,7 @@ export { FLEX_FORMS_PHONE };
  * раз новый, поэтому снимок IR выбрасываем, а значения/uid оставляем — они
  * привязаны к `ид` полей и переживают правку разметки.
  */
-const PREVIEW_STATE_SCRIPT = `<script>
+export const PREVIEW_STATE_SCRIPT = `<script>
 /* ЯРБП: предпросмотр формы. Снимок localStorage не должен перекрывать IR,
    который только что собрал конвертер из разметки. */
 try {
@@ -72,7 +72,7 @@ try {
  * `DOMContentLoaded`, поэтому к первой отрисовке подмена уже сделана.
  * На странице для ТСД (её собирает расширение 1С) этот блок не появляется.
  */
-const PREVIEW_AUTOFOCUS_SCRIPT = `<script>
+export const PREVIEW_AUTOFOCUS_SCRIPT = `<script>
 /* ЯРБП: предпросмотр формы. Автофокус выключен: он выдёргивает фокус из
    редактора на каждой перерисовке. На странице для ТСД фокус остаётся —
    он нужен сканеру. */
@@ -88,7 +88,7 @@ window.setFocus = function () {};
  * снимок с IR, вшитым в страницу, и при расхождении выбрасываем только IR и
  * индекс; значения полей с совпадающими id остаются.
  */
-const STANDALONE_STATE_SCRIPT = `<script>
+export const STANDALONE_STATE_SCRIPT = `<script>
 /* ЯРБП: скачанная форма. Не даём старому снимку localStorage подменить IR. */
 try {
   var ffCurrent = JSON.parse(document.getElementById('form-params').textContent);

@@ -27,6 +27,8 @@
   import { YarbpHighlighter } from '../../src/js/classes/highlighters/YarbpHighlighter.js';
   import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   import { FileManager } from '../../src/js/modules/FileManager.js';
+  import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
+  import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
   import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
   import { FLEX_FORMS_RUNTIME } from '../../src/js/classes/renderers/flexforms/FlexFormsRuntime.js';
 
@@ -106,6 +108,63 @@
     FLEX_FORMS_RUNTIME.indexOf("${fieldParams['имя']}") === -1);
   check('D-02: опции выбора экранируются',
     FLEX_FORMS_RUNTIME.indexOf("${option['имя']}") === -1);
+  check('D-02: имя операции не подставляется сырым',
+    FLEX_FORMS_RUNTIME.indexOf("${operation['имя']}") === -1);
+  check('D-02: заголовок операции экранируется',
+    FLEX_FORMS_RUNTIME.indexOf('${title}</h3>') === -1);
+  check('D-02: шапка таблицы экранируется',
+    FLEX_FORMS_RUNTIME.indexOf('${cell}</th>') === -1);
+  check('D-02: сетка экранируется',
+    FLEX_FORMS_RUNTIME.indexOf("${params['сетка'] || ''}") === -1);
+
+  /* ------------------------------------------------------------------ */
+  /* 3a. UIGenerator: рантайм UI-макета не собирает HTML из ввода        */
+  /* ------------------------------------------------------------------ */
+  const uiRuntime = new UIGenerator(false).generateRuntimeJS();
+  check('UIGenerator: runtime не использует innerHTML',
+    uiRuntime.indexOf('innerHTML') === -1);
+
+  const uiHost = document.createElement('div');
+  uiHost.innerHTML = '<div class="fieldset-card"><div class="form-view">' +
+    '<div class="input-group"><label>Поле</label><input></div>' +
+    '<button type="button" class="submit-item"></button></div>' +
+    '<div class="list-view"><div class="items-list"></div></div></div>';
+  document.body.appendChild(uiHost);
+
+  const uiScript = document.createElement('script');
+  uiScript.textContent = uiRuntime;
+  document.body.appendChild(uiScript);
+
+  uiHost.querySelector('input').value = PAYLOAD;
+  uiHost.querySelector('.submit-item').click();
+
+  const uiItem = uiHost.querySelector('.list-item');
+  check('UIGenerator: значение не стало живым тегом',
+    uiHost.querySelector('img') === null);
+  check('UIGenerator: значение сохранилось текстом',
+    !!uiItem && uiItem.textContent.indexOf(PAYLOAD) !== -1,
+    uiItem ? '*' + uiItem.textContent + '*' : 'нет элемента');
+
+  uiHost.remove();
+
+  /* ------------------------------------------------------------------ */
+  /* 3b. D-22: CSP у выгруженной UI-страницы                             */
+  /* ------------------------------------------------------------------ */
+  const exportedUI = new HTMLExporter({ nodeType: 'ROOT', children: [] }, false)
+    .generateFullHTML();
+  const exportedDoc = asDocument(exportedUI);
+  const exportedCsp = exportedDoc.querySelector(
+    'meta[http-equiv="Content-Security-Policy"]');
+  const exportedPolicy = exportedCsp ? exportedCsp.getAttribute('content') : '';
+  const exportedNonce = (exportedPolicy.match(/script-src 'nonce-([^']+)'/) || [])[1];
+  const exportedScript = exportedDoc.querySelector('script');
+
+  check('D-22: выгруженная UI-страница объявляет CSP', !!exportedCsp);
+  check('D-22: script-src ограничен nonce', !!exportedNonce,
+    exportedPolicy || 'нет политики');
+  check('D-22: runtime помечен тем же nonce',
+    !!exportedScript && !!exportedNonce &&
+    exportedScript.getAttribute('nonce') === exportedNonce);
 
   /* ------------------------------------------------------------------ */
   /* 4. D-04: слой подсветки редактора                                   */
@@ -221,6 +280,25 @@
     victim['ид'] = 'evil" onmouseover="window.__xss=2';
     victim['имя'] = 'Поле ' + PAYLOAD;
 
+    /* D-18: те же данные в шапке операции, кнопке, заголовке экрана, шапке
+       таблицы и CSS-сетке. Раньше эти места подставлялись в шаблон сырыми. */
+    const hostileOp = ir.children[0];
+    const hostileOpId = 'op" onmouseover="window.__xss=4';
+    hostileOp['ид'] = hostileOpId;
+    hostileOp['имя'] = 'Операция ' + PAYLOAD;
+    hostileOp['имяКнопки'] = 'Кнопка ' + PAYLOAD;
+    hostileOp['заголовокФормы'] = 'Экран ' + PAYLOAD;
+
+    const hostileGrid = ir.children[1].children[1];
+    hostileGrid['сетка'] = 'grid-template-columns: 1fr;" onmouseover="window.__xss=5';
+    const hostileTable = hostileGrid.children[0];
+    hostileTable['шапка'][0] = 'Колонка ' + PAYLOAD;
+    // Шапка рисуется только у непустой таблицы (см. renderTable).
+    hostileTable['children'] = [{
+      'ид': 'row-1',
+      cells: [{ value: 'Товар' }, { value: 'Характеристика' }, { value: '1' }]
+    }];
+
     const frame = document.createElement('iframe');
     frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:356px;height:471px;border:0';
     frame.srcdoc = buildFormPage(ir);
@@ -249,6 +327,32 @@
       check('iframe: имя поля показано текстом',
         !!label && label.textContent === victim['имя'] + ':',
         label ? '*' + label.textContent + '*' : 'нет label');
+
+      const opTitle = doc && doc.querySelector('.op-title');
+      check('D-18: заголовок операции показан текстом',
+        !!opTitle && opTitle.textContent === hostileOp['заголовокФормы'],
+        opTitle ? '*' + opTitle.textContent + '*' : 'нет заголовка');
+
+      const opButton = doc && doc.querySelector('.operation-btn');
+      check('D-18: имя кнопки показано текстом',
+        !!opButton && opButton.textContent.trim() === hostileOp['имяКнопки'],
+        opButton ? '*' + opButton.textContent.trim() + '*' : 'нет кнопки');
+
+      const opOption = doc && doc.querySelector('#action-input option');
+      check('D-18: имя операции в селекте показано текстом',
+        !!opOption && opOption.textContent === hostileOp['имя'],
+        opOption ? '*' + opOption.textContent + '*' : 'нет опции');
+
+      const tableHead = doc && doc.querySelector('th');
+      check('D-18: шапка таблицы показана текстом',
+        !!tableHead && tableHead.textContent === hostileTable['шапка'][0],
+        tableHead ? '*' + tableHead.textContent + '*' : 'нет th');
+
+      check('D-18: id операции сохранён значением',
+        !!doc && !!doc.getElementById(hostileOpId));
+
+      check('D-18: сетка не добавила атрибут',
+        !!doc && doc.querySelector('[onmouseover]') === null);
     }
 
     frame.remove();

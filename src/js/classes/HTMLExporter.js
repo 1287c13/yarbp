@@ -1,5 +1,19 @@
 import { UIGenerator } from "./UIGenerator.js";
 
+/**
+ * Nonce для inline-runtime выгруженной страницы. CSP с nonce запрещает
+ * исполнять произвольные inline-скрипты, но разрешает ровно наш runtime.
+ */
+function createNonce() {
+  try {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  } catch (e) {
+    return 'yarbp-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+}
+
 export class HTMLExporter {
   constructor(ast, isDark = false) {
     this.ast = ast;
@@ -23,12 +37,14 @@ export class HTMLExporter {
     const runtimeJS = this.generator.generateRuntimeJS();
 
     const bgColor = this.isDark ? '#1a1a1a' : '#f3f4f6';
+    const nonce = createNonce();
 
     return `<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'">
   <title>ЯРБП Форма</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -53,7 +69,7 @@ export class HTMLExporter {
   <div class="yarbp-form-container">
     ${formHTML}
   </div>
-  <script>${runtimeJS}</script>
+  <script nonce="${nonce}">${runtimeJS}</script>
 </body>
 </html>`;
   }

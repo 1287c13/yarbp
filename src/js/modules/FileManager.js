@@ -512,13 +512,54 @@ Order
     this._highlightActiveInUI();
   }
 
+  /**
+   * Сохранить текущий файл.
+   *
+   * Встроенные примеры поставляются кодом и в localStorage не пишутся. Если
+   * пользователь начал их править, первая же правка создаёт пользовательскую
+   * копию: иначе изменения жили бы только до перезагрузки и терялись молча
+   * (в шапке при этом было бы «сохранено»).
+   */
   _saveCurrentContent() {
     const activeFile = this.data.files.find(f => f.id === this.data.activeFileId);
-    if (activeFile && this.editor) {
-      activeFile.content = this.editor.value;
-      activeFile.lastModified = Date.now();
-      this._saveData();
+    if (!activeFile || !this.editor) return;
+
+    if (activeFile.isBuiltin) {
+      if (this.editor.value === activeFile.content) return;
+      this._forkBuiltinFile(activeFile);
+      return;
     }
+
+    activeFile.content = this.editor.value;
+    activeFile.lastModified = Date.now();
+    this._saveData();
+  }
+
+  /** Правка встроенного примера → пользовательская копия с текущим текстом. */
+  _forkBuiltinFile(builtin) {
+    const baseName = builtin.name + ' (копия)';
+    let name = baseName;
+    let counter = 1;
+    while (this.data.files.some(file => file.name === name)) {
+      name = `${baseName} ${counter++}`;
+    }
+
+    const copy = {
+      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      content: this.editor.value,
+      isBuiltin: false,
+      lastModified: Date.now()
+    };
+
+    this.data.files.push(copy);
+    this.data.activeFileId = copy.id;
+    this._saveData();
+    if (this.uiContainer) this._renderFileList();
+    // Встроенный пример больше не активен: ?example= должен исчезнуть,
+    // иначе ссылка продолжит открывать исходный пример.
+    this._syncUrlWithActiveFile();
+    return copy;
   }
 
   // ---------------------------------------------
@@ -610,6 +651,11 @@ Order
    * ссылки вида `?example=` переставали работать.
    */
   exportAll() {
+    // Экспорт должен включать последний ввод, даже если автосохранение ещё
+    // не сработало (и особенно если правится встроенный пример: тогда
+    // _saveCurrentContent создаст пользовательскую копию).
+    this._saveCurrentContent();
+
     const exportData = {
       exportedAt: new Date().toISOString(),
       version: FileManager.EXPORT_VERSION,
@@ -833,21 +879,34 @@ Order
   _setupAutoSave() {
     if (!this.editor) return;
 
-    this.editor.addEventListener('input', () => {
-      if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
-      this.autoSaveTimer = setTimeout(() => {
-        this._saveCurrentContent();
-      }, this.autoSaveInterval);
-    });
-
-    // Сохраняем при потере фокуса (на всякий случай)
-    this.editor.addEventListener('blur', () => {
+    const flush = () => {
       if (this.autoSaveTimer) {
         clearTimeout(this.autoSaveTimer);
         this.autoSaveTimer = null;
       }
       this._saveCurrentContent();
+    };
+
+    this.editor.addEventListener('input', () => {
+      if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+      this.autoSaveTimer = setTimeout(flush, this.autoSaveInterval);
     });
+
+    // Потеря фокуса — обычный случай, когда пользователь уходит из редактора.
+    this.editor.addEventListener('blur', flush);
+
+    // Закрытие вкладки/уход со страницы и уход в фон на мобильном: 5-секундный
+    // таймер может не успеть, а ввод уже есть. pagehide/visibilitychange
+    // срабатывают до выгрузки документа и не показывают диалог, в отличие от
+    // beforeunload.
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pagehide', flush);
+    }
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') flush();
+      });
+    }
   }
 
   // Утилита

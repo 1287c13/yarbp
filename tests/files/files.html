@@ -25,7 +25,12 @@
   import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
   import { YarbpParser } from '../../src/js/core/YarbpParser.js';
   import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
-  import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
+  import {
+    buildFormPage,
+    PREVIEW_STATE_SCRIPT,
+    PREVIEW_AUTOFOCUS_SCRIPT,
+    STANDALONE_STATE_SCRIPT,
+  } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
 
   const resultBox = document.getElementById('result');
   const lines = [];
@@ -331,7 +336,70 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* 6. Смоук редактора: app.js инициализируется целиком                  */
+  /* 6. D-20: правка встроенного примера не теряется                     */
+  /* ------------------------------------------------------------------ */
+  const FORK_KEY = 'yarbp_files_test_builtin';
+  const builtinManager = new FileManager(FORK_KEY);
+  builtinManager.uiContainer = document.createElement('div');
+  builtinManager._renderUI();
+
+  const builtin = builtinManager.data.files.find(file => file.isBuiltin);
+  const editedText = builtin ? builtin.content + '\n.добавлено да' : '';
+  builtinManager.data.activeFileId = builtin ? builtin.id : null;
+  builtinManager.editor = { value: editedText };
+  builtinManager._saveCurrentContent();
+
+  const forked = builtinManager.data.files.find(file => !file.isBuiltin);
+  check('D-20: правка встроенного создаёт копию',
+    !!forked && forked.content === editedText,
+    forked ? String(forked.content.length) : 'нет копии');
+  check('D-20: активным стал пользовательский файл',
+    !!forked && builtinManager.data.activeFileId === forked.id,
+    builtinManager.data.activeFileId);
+  check('D-20: копия записана в хранилище',
+    !!forked && !!readStored(FORK_KEY) && readStored(FORK_KEY).indexOf(forked.id) !== -1);
+
+  const reloadedManager = new FileManager(FORK_KEY);
+  check('D-20: копия переживает перезагрузку',
+    reloadedManager.data.files.some(file =>
+      !file.isBuiltin && file.content === editedText) &&
+    !!reloadedManager.data.files.find(file => file.id === reloadedManager.data.activeFileId &&
+      !file.isBuiltin));
+
+  const untouchedManager = new FileManager('yarbp_files_test_builtin_untouched');
+  untouchedManager.uiContainer = document.createElement('div');
+  untouchedManager._renderUI();
+  const untouchedBuiltin = untouchedManager.data.files.find(file => file.isBuiltin);
+  untouchedManager.data.activeFileId = untouchedBuiltin ? untouchedBuiltin.id : null;
+  untouchedManager.editor = { value: untouchedBuiltin ? untouchedBuiltin.content : '' };
+  untouchedManager._saveCurrentContent();
+  check('D-20: без правки копия не создаётся',
+    untouchedManager.data.files.every(file => file.isBuiltin));
+
+  /* D-21: pagehide должен сохранить ввод, не дожидаясь 5-секундного таймера. */
+  const FLUSH_KEY = 'yarbp_files_test_pagehide';
+  const flushManager = new FileManager(FLUSH_KEY);
+  flushManager.uiContainer = document.createElement('div');
+  flushManager.editor = document.createElement('textarea');
+  flushManager.data = {
+    version: 1,
+    activeFileId: 'flush-user',
+    files: [{
+      id: 'flush-user', name: 'Flush', content: 'старое',
+      isBuiltin: false, lastModified: 1
+    }]
+  };
+  flushManager._setupAutoSave();
+  flushManager.editor.value = 'сохранено на pagehide';
+  window.dispatchEvent(new Event('pagehide'));
+
+  const flushed = readStored(FLUSH_KEY) || '';
+  check('D-21: pagehide сохраняет ввод',
+    flushed.indexOf('сохранено на pagehide') !== -1,
+    flushed.slice(0, 120));
+
+  /* ------------------------------------------------------------------ */
+  /* 7. Смоук редактора: app.js инициализируется целиком                  */
   /*    (проверка, что правки в хранилище не уронили запуск страницы)     */
   /* ------------------------------------------------------------------ */
   function waitForLoad(frame, timeout = 8000) {
@@ -489,14 +557,31 @@
 
   // Снимок localStorage формы не должен переезжать из одной проверки в другую.
   removeStored('tsd-form-state');
-  const previewRun = await renderFormPage(buildFormPage(parityIR, { preview: true }));
+  const previewPageHtml = buildFormPage(parityIR, { preview: true });
+  const previewRun = await renderFormPage(previewPageHtml);
   const previewFacts = formFacts(previewRun.frame.contentDocument);
   previewRun.frame.remove();
 
   removeStored('tsd-form-state');
-  const plainRun = await renderFormPage(buildFormPage(parityIR));
+  const plainPageHtml = buildFormPage(parityIR);
+  const plainRun = await renderFormPage(plainPageHtml);
   const plainFacts = formFacts(plainRun.frame.contentDocument);
   plainRun.frame.remove();
+
+  /* Единственное допустимое отличие предпросмотра от выкачанной страницы —
+     два служебных скрипта: сброс снимка IR и заглушка автофокуса. Всё
+     остальное (skeleton, CSS, движок, IR) обязано совпадать строкой. */
+  const withoutPreviewOnlyScripts = (html) => html
+    .replace(PREVIEW_STATE_SCRIPT, '')
+    .replace(PREVIEW_AUTOFOCUS_SCRIPT, '')
+    .replace(STANDALONE_STATE_SCRIPT, '')
+    .replace(/\n{2,}/g, '\n');
+
+  const standalonePageHtml = buildFormPage(parityIR, { standalone: true });
+  check('паритет: база страницы одна (preview = standalone = plain)',
+    withoutPreviewOnlyScripts(previewPageHtml) === withoutPreviewOnlyScripts(plainPageHtml) &&
+    withoutPreviewOnlyScripts(standalonePageHtml) === withoutPreviewOnlyScripts(plainPageHtml),
+    'отличается не только preview-скриптом');
 
   check('паритет: обе страницы загрузились', previewRun.ok && plainRun.ok);
   check('паритет: форма отрисована в предпросмотре и в выкачанной',
@@ -560,6 +645,8 @@
   ['yarbp_files_test_a', 'yarbp_files_test_b', 'yarbp_files_test_c',
    'yarbp_files_test_d', 'yarbp_files_test_e', 'yarbp_files_test_f',
    'yarbp_files_test_g', 'yarbp_files_test_blocked', 'yarbp_files_test_key',
+   'yarbp_files_test_builtin', 'yarbp_files_test_builtin_untouched',
+   'yarbp_files_test_pagehide',
    'yarbp_builtin_folder_expanded']
     .forEach(key => removeStored(key));
 

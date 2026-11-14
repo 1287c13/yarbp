@@ -14,8 +14,27 @@ export class UIGenerator {
     this.cardCounter = 0;
   }
 
+  /**
+   * AST — общий кэш парсера: его нельзя менять при рендере. UI-генератор
+   * исторически правил узлы (key/type/id/props/parsedValue) прямо в AST;
+   * теперь он работает с одноразовой копией, а исходное дерево остаётся
+   * пригодным для подсказок и других конвертеров.
+   */
+  cloneAST(value) {
+    if (Array.isArray(value)) return value.map(item => this.cloneAST(item));
+    if (value && typeof value === 'object') {
+      const copy = {};
+      Object.keys(value).forEach(key => {
+        copy[key] = this.cloneAST(value[key]);
+      });
+      return copy;
+    }
+    return value;
+  }
+
   generateHTML(ast) {
     if (!ast || !ast.children) return '';
+    const view = this.cloneAST(ast);
     return `
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -43,7 +62,7 @@ export class UIGenerator {
       <div class="form-container">
         <form>
           <div class="form-grid">
-            ${ast.children.map(child => this.renderNode(child)).join('')}
+            ${view.children.map(child => this.renderNode(child)).join('')}
           </div>
         </form>
       </div>
@@ -89,9 +108,11 @@ export class UIGenerator {
       // Создаем элемент списка
       const item = document.createElement('div');
       item.className = 'list-item';
-      item.innerHTML = data.map(d => 
-        '<span>' + d.label + ': ' + d.value + '</span>'
-      ).join('');
+      data.forEach(d => {
+        const span = document.createElement('span');
+        span.textContent = d.label + ': ' + d.value;
+        item.appendChild(span);
+      });
       
       itemsList.appendChild(item);
       

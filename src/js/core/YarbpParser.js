@@ -55,6 +55,19 @@ function withChildren(node) {
   return Array.isArray(node.children) ? node : { ...node, children: [] };
 }
 
+/**
+ * AST — общий кэш для подсказок и конвертеров. Ни один потребитель не должен
+ * его менять: иначе следующий рендер увидит уже испорченное дерево. Заморозка
+ * делает это правило явным — запись в узел в strict mode (ES-модули) падает.
+ */
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+
+  Object.freeze(value);
+  Object.keys(value).forEach(key => deepFreeze(value[key]));
+  return value;
+}
+
 export class YarbpParser {
   static QUOTES = ['"', "'", "(", ")"];
   static ARRAY_SEPARATOR = ' ';
@@ -326,6 +339,7 @@ export class YarbpParser {
       ? expandMacros(ast, diagnostics, this.lexer?.text || '')
       : withChildren(ast);
 
+    deepFreeze(result);
     this.cachedTokens = this.lexer.tokens;
     this.cachedAST = result;
     this.cachedDiagnostics = diagnostics;
