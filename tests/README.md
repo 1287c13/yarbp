@@ -3,6 +3,18 @@
 Все наборы запускаются из каталога, содержащего папку `yarbp`, и используют
 только Python 3 + Chrome/Edge; внешних пакетов нет.
 
+Один запуск всех наборов:
+
+```powershell
+python tests/run_all.py
+python tests/run_all.py --suite converters
+python tests/run_all.py --list
+```
+
+Браузер ищется в `YARBP_BROWSER`, затем в `PATH` (`google-chrome`,
+`chromium`, `chrome`, `msedge`), затем в стандартных путях Windows. В CI
+переменная задаётся workflow-файлом `.github/workflows/tests.yml`.
+
 | Папка | Что проверяет | Запуск |
 | --- | --- | --- |
 | `lexer/` | golden-снимки токенов, AST и рендера на кейсах из `notes/cases` | `python yarbp/tests/lexer/run_tests.py` |

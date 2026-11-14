@@ -57,6 +57,16 @@ def prepare_stdout():
 
 
 def find_browser():
+    env_browser = os.environ.get('YARBP_BROWSER')
+    if env_browser and os.path.isfile(env_browser):
+        return env_browser
+
+    for name in ('google-chrome', 'google-chrome-stable', 'chromium',
+                 'chromium-browser', 'chrome', 'msedge'):
+        path = shutil.which(name)
+        if path:
+            return path
+
     for path in BROWSERS:
         if path and os.path.isfile(path):
             return path
