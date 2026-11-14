@@ -8,7 +8,7 @@
  * строк — они появляются и исчезают вместе с линиями.
  */
 
-import { measureCharWidth } from './utils.js';
+import { measureCharWidth } from '../../utils.js';
 
 const MIN_GUTTER_WIDTH = 34;
 const GUTTER_LEFT_PADDING = 10;

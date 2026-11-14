@@ -71,6 +71,16 @@ pointer-events: none; z-index: 1; margin: 0; border: none; }
 .ide-code-body .code-str { color: #a31515; }
 .ide-code-body .code-num { color: #098658; }
 .ide-code-body .code-com { color: #6a737d; }
+/* Традиционная схема 1С: ключевые слова/операторы — красные, идентификаторы —
+   синие, строки/числа/даты — чёрные, комментарии — зелёные, препроцессор —
+   коричневый (Infostart 122391, Default colorschemes). */
+.ide-code-body .code-bsl-kw { color: #ff0000; }
+.ide-code-body .code-bsl-oper { color: #ff0000; }
+.ide-code-body .code-bsl-id { color: #0000ff; }
+.ide-code-body .code-bsl-str { color: #000000; }
+.ide-code-body .code-bsl-num { color: #000000; }
+.ide-code-body .code-bsl-com { color: #008000; }
+.ide-code-body .code-bsl-pre { color: #963200; }
 .special-symbols { color: #bec3c6; text-decoration: none; }
 .flavor { background-color: #ddffe9; color: #408055; border: none;
   outline: 1px solid #408055; outline-offset: 2px; border-radius: 5px;}
@@ -197,6 +207,14 @@ body.dark .ide-code-body .code-kw { color: #569cd6; }
 body.dark .ide-code-body .code-str { color: #ce9178; }
 body.dark .ide-code-body .code-num { color: #b5cea8; }
 body.dark .ide-code-body .code-com { color: #6a9955; }
+/* Тёмная адаптация традиционной схемы 1С: те же роли, но читаемо на тёмном. */
+body.dark .ide-code-body .code-bsl-kw { color: #ff6b6b; }
+body.dark .ide-code-body .code-bsl-oper { color: #ff6b6b; }
+body.dark .ide-code-body .code-bsl-id { color: #7fb3ff; }
+body.dark .ide-code-body .code-bsl-str { color: #e6e6e6; }
+body.dark .ide-code-body .code-bsl-num { color: #e6e6e6; }
+body.dark .ide-code-body .code-bsl-com { color: #5fbf5f; }
+body.dark .ide-code-body .code-bsl-pre { color: #d19a66; }
 
 body.dark .xml-special { color: #8d8d8d; text-decoration: none; }
 body.dark .xml-closing-tag { color: #8d8d8d; text-decoration: none; }

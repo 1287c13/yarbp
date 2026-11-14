@@ -1,5 +1,5 @@
-import { TokenTypes } from './YarbpLexer.js';
-import { escText, escAttr } from '../escape.js';
+import { TokenTypes } from '../YarbpLexer.js';
+import { escText, escAttr } from '../../escape.js';
 
 export class YarbpHighlighter {
 

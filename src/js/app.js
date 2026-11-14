@@ -1,7 +1,7 @@
 import { YarbpFlavor } from './classes/YarbpFlavor.js';
 import { YarbpLexer, TokenTypes } from './classes/YarbpLexer.js';
 import { YarbpParser } from './classes/YarbpParser.js';
-import { YarbpHighlighter } from './classes/YarbpHighlighter.js';
+import { YarbpHighlighter } from './classes/highlighters/YarbpHighlighter.js';
 import { CodeBlockHighlightPass } from './classes/highlighters/CodeBlockHighlightPass.js';
 import { FileManager } from './modules/FileManager.js';
 import { toggleLineComments } from './modules/CommentToggler.js';
@@ -9,7 +9,7 @@ import { toggleLineComments } from './modules/CommentToggler.js';
 import { SuggestionProvider } from './SuggestionProvider.js';
 import { SuggestionUI } from './SuggestionUI.js';
 import { Ticker } from './Ticker.js';
-import { IndentGuides } from './IndentGuides.js';
+import { IndentGuides } from './classes/highlighters/IndentGuides.js';
 import { readStored, writeStored } from './storage.js';
 
 const MIN_SIZE_PERCENT = 1;

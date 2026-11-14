@@ -27,7 +27,7 @@
   import { YarbpJSONConverter } from '../../src/js/classes/ast-converters/JSONConvertor.js';
   import { YarbpXMLConverter } from '../../src/js/classes/ast-converters/XMLConvertor.js';
   import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
-  import { YarbpHighlighter } from '../../src/js/classes/YarbpHighlighter.js';
+  import { YarbpHighlighter } from '../../src/js/classes/highlighters/YarbpHighlighter.js';
   import { CodeBlockHighlighter } from '../../src/js/classes/highlighters/CodeBlockHighlighter.js';
   import {
     CodeBlockHighlightPass,
@@ -387,16 +387,59 @@
     CODE_BLOCK_HIGHLIGHT_DELAY_MS >= 100 && CODE_BLOCK_HIGHLIGHT_DELAY_MS <= 200,
     String(CODE_BLOCK_HIGHLIGHT_DELAY_MS));
   check('подсветка: до кулдауна языковых классов нет',
-    !!body && body.querySelectorAll('.code-kw').length === 0,
+    !!body && body.querySelectorAll('.code-bsl-kw').length === 0,
     body ? body.innerHTML.slice(0, 80) : 'нет body');
 
   pass.highlightNow();
 
   check('подсветка BSL: ключевые слова найдены',
-    !!body && body.querySelectorAll('.code-kw').length > 0,
-    body ? String(body.querySelectorAll('.code-kw').length) : 'нет body');
+    !!body && body.querySelectorAll('.code-bsl-kw').length > 0,
+    body ? String(body.querySelectorAll('.code-bsl-kw').length) : 'нет body');
   check('подсветка BSL: комментарий и строка найдены',
-    !!body && !!body.querySelector('.code-com') && !!body.querySelector('.code-str'));
+    !!body && !!body.querySelector('.code-bsl-com') && !!body.querySelector('.code-bsl-str'));
+
+  const bslRichBody = highlightedBody('bsl', [
+    '#Область Тест',
+    '&НаКлиенте',
+    'Процедура Тест(Параметр = 0)',
+    '  Число = 123;',
+    '  Если Число > 0 Тогда',
+    '    Сообщить("ok"); // комментарий',
+    '  КонецЕсли;',
+    'КонецПроцедуры',
+    '#КонецОбласти'
+  ]);
+
+  check('подсветка BSL: традиционная схема 1С — все роли',
+    !!bslRichBody &&
+    !!bslRichBody.querySelector('.code-bsl-kw') &&
+    !!bslRichBody.querySelector('.code-bsl-id') &&
+    !!bslRichBody.querySelector('.code-bsl-str') &&
+    !!bslRichBody.querySelector('.code-bsl-num') &&
+    !!bslRichBody.querySelector('.code-bsl-com') &&
+    !!bslRichBody.querySelector('.code-bsl-pre') &&
+    !!bslRichBody.querySelector('.code-bsl-oper'),
+    bslRichBody ? bslRichBody.innerHTML.slice(0, 180) : 'нет body');
+
+  try {
+    const cssText = await (await fetch('../../src/css/editor.css')).text();
+    const expectedColors = [
+      ['code-bsl-kw', '#ff0000'],
+      ['code-bsl-oper', '#ff0000'],
+      ['code-bsl-id', '#0000ff'],
+      ['code-bsl-str', '#000000'],
+      ['code-bsl-num', '#000000'],
+      ['code-bsl-com', '#008000'],
+      ['code-bsl-pre', '#963200']
+    ];
+    const missing = expectedColors.filter(([cls, color]) =>
+      !new RegExp('\\.' + cls + '\\s*\\{[^}]*color:\\s*' + color, 'i').test(cssText));
+    check('подсветка BSL: CSS-цвета традиционной схемы 1С',
+      missing.length === 0,
+      missing.map(([cls, color]) => cls + '=' + color).join(', '));
+  } catch (error) {
+    check('подсветка BSL: CSS-цвета традиционной схемы 1С', false, String(error));
+  }
   check('подсветка: текст после прохода не изменился',
     !!body && body.textContent === codeText,
     body ? JSON.stringify(body.textContent) : 'нет body');
@@ -494,7 +537,7 @@
 
     check('редактор: отложенная подсветка сработала',
       !!layer && !!layer.querySelector('.ide-code-codeblock') &&
-      layer.querySelectorAll('.ide-code-body .code-kw').length > 0,
+      layer.querySelectorAll('.ide-code-body .code-bsl-kw').length > 0,
       layer ? layer.innerHTML.slice(0, 120) : 'нет слоя');
     check('редактор: курсор не сбит',
       editor.selectionStart === 5 && editor.selectionEnd === 5,
