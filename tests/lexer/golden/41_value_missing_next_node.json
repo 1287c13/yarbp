@@ -1,0 +1,123 @@
+{
+  "file": "41_value_missing_next_node.txt",
+  "flavor": "ast",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as ast",
+      "prefix": "!",
+      "start": 0,
+      "end": 8,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 9,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "пусто",
+      "prefix": ".",
+      "start": 9,
+      "end": 15,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "",
+      "start": 15,
+      "end": 15,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 16,
+      "end": 17,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "рядом",
+      "prefix": ".",
+      "start": 16,
+      "end": 22,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "1",
+      "start": 23,
+      "end": 24,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 24,
+      "end": 24,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as ast",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 8
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "пусто",
+        "prefix": ".",
+        "position": {
+          "start": 9,
+          "end": 15
+        },
+        "valueType": "STRING",
+        "value": ""
+      },
+      {
+        "nodeType": "MEANING",
+        "key": "рядом",
+        "prefix": ".",
+        "position": {
+          "start": 16,
+          "end": 22
+        },
+        "valueType": "NUMBER",
+        "value": 1
+      }
+    ]
+  },
+  "render": {
+    "kind": "ast",
+    "text": "{\n  \"nodeType\": \"ROOT\",\n  \"directives\": [\n    {\n      \"nodeType\": \"DIRECTIVE\",\n      \"value\": \"as ast\",\n      \"prefix\": \"!\",\n      \"position\": {\n        \"start\": 0,\n        \"end\": 8\n      }\n    }\n  ],\n  \"children\": [\n    {\n      \"nodeType\": \"MEANING\",\n      \"key\": \"пусто\",\n      \"prefix\": \".\",\n      \"position\": {\n        \"start\": 9,\n        \"end\": 15\n      },\n      \"valueType\": \"STRING\",\n      \"value\": \"\"\n    },\n    {\n      \"nodeType\": \"MEANING\",\n      \"key\": \"рядом\",\n      \"prefix\": \".\",\n      \"position\": {\n        \"start\": 16,\n        \"end\": 22\n      },\n      \"valueType\": \"NUMBER\",\n      \"value\": 1\n    }\n  ]\n}"
+  }
+}

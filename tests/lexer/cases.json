@@ -30,6 +30,20 @@
     "29_array_bare_comment_types.txt",
     "30_quoted_array_comment_types.txt",
     "31_quoted_array_after_bareword.txt",
-    "obj_after_nested_arr.txt"
+    "obj_after_nested_arr.txt",
+    "32_substitution_outside_macro.txt",
+    "33_substitution_multiple.txt",
+    "34_substitution_missing.txt",
+    "35_substitution_macro_orthogonal.txt",
+    "36_code_block_with_lang.txt",
+    "37_code_block_no_lang.txt",
+    "38_value_next_line_string.txt",
+    "39_value_next_line_scalars.txt",
+    "40_value_next_line_code.txt",
+    "41_value_missing_next_node.txt",
+    "42_substitution_object.txt",
+    "43_code_block_macro_param.txt",
+    "44a_bsl_markup.txt",
+    "44b_expected.txt"
   ]
 }

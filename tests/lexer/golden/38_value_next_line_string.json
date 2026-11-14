@@ -1,0 +1,90 @@
+{
+  "file": "38_value_next_line_string.txt",
+  "flavor": "ast",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as ast",
+      "prefix": "!",
+      "start": 0,
+      "end": 8,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 9,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "текст",
+      "prefix": ".",
+      "start": 9,
+      "end": 15,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "\"\nМногострочный\nТекст\n\"",
+      "start": 16,
+      "end": 39,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 39,
+      "end": 39,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as ast",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 8
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "текст",
+        "prefix": ".",
+        "position": {
+          "start": 16,
+          "end": 39
+        },
+        "valueType": "STRING",
+        "value": "Многострочный\nТекст"
+      }
+    ]
+  },
+  "render": {
+    "kind": "ast",
+    "text": "{\n  \"nodeType\": \"ROOT\",\n  \"directives\": [\n    {\n      \"nodeType\": \"DIRECTIVE\",\n      \"value\": \"as ast\",\n      \"prefix\": \"!\",\n      \"position\": {\n        \"start\": 0,\n        \"end\": 8\n      }\n    }\n  ],\n  \"children\": [\n    {\n      \"nodeType\": \"MEANING\",\n      \"key\": \"текст\",\n      \"prefix\": \".\",\n      \"position\": {\n        \"start\": 16,\n        \"end\": 39\n      },\n      \"valueType\": \"STRING\",\n      \"value\": \"Многострочный\\nТекст\"\n    }\n  ]\n}"
+  }
+}

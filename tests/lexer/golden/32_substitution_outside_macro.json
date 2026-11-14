@@ -1,0 +1,145 @@
+{
+  "file": "32_substitution_outside_macro.txt",
+  "flavor": "ast",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as ast",
+      "prefix": "!",
+      "start": 0,
+      "end": 8,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 9,
+      "end": 9,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "а",
+      "start": 9,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 11,
+      "end": 12,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "б",
+      "prefix": ".",
+      "start": 11,
+      "end": 13,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "(( с ))",
+      "start": 14,
+      "end": 21,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 22,
+      "end": 23,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "с",
+      "prefix": ".",
+      "start": 22,
+      "end": 24,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "д",
+      "start": 25,
+      "end": 26,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 26,
+      "end": 26,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 26,
+      "end": 26,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as ast",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 8
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "а",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 9,
+          "end": 10
+        },
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "б",
+            "prefix": ".",
+            "position": {
+              "start": 11,
+              "end": 13
+            },
+            "valueType": "STRING",
+            "value": "д"
+          }
+        ]
+      }
+    ]
+  },
+  "render": {
+    "kind": "ast",
+    "text": "{\n  \"nodeType\": \"ROOT\",\n  \"directives\": [\n    {\n      \"nodeType\": \"DIRECTIVE\",\n      \"value\": \"as ast\",\n      \"prefix\": \"!\",\n      \"position\": {\n        \"start\": 0,\n        \"end\": 8\n      }\n    }\n  ],\n  \"children\": [\n    {\n      \"nodeType\": \"MEANING\",\n      \"key\": \"а\",\n      \"valueType\": \"OBJECT\",\n      \"prefix\": \"\",\n      \"position\": {\n        \"start\": 9,\n        \"end\": 10\n      },\n      \"children\": [\n        {\n          \"nodeType\": \"MEANING\",\n          \"key\": \"б\",\n          \"prefix\": \".\",\n          \"position\": {\n            \"start\": 11,\n            \"end\": 13\n          },\n          \"valueType\": \"STRING\",\n          \"value\": \"д\"\n        }\n      ]\n    }\n  ]\n}"
+  }
+}

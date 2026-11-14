@@ -262,7 +262,7 @@
     },
     {
       "type": "KEY(OBJ)",
-      "value": "a(xx)",
+      "value": "xx(a)",
       "start": 148,
       "end": 153,
       "error": ""
@@ -484,7 +484,7 @@
     },
     {
       "type": "KEY(OBJ)",
-      "value": "a(yy)",
+      "value": "yy(a)",
       "start": 228,
       "end": 233,
       "error": ""

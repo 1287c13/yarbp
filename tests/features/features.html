@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>features cases</title>
+  <style>
+    body { margin: 0; padding: 16px; background: #ffffff; color: #111111;
+      font: 12px/1.5 'JetBrains Mono', Consolas, monospace; }
+    #result { margin: 0; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<pre id="result">running...</pre>
+
+<script>
+  window.addEventListener('error', (event) => {
+    const box = document.getElementById('result');
+    if (!box) return;
+    box.textContent = 'LOAD ERROR: ' + (event.message || '') +
+      ' @ ' + (event.filename || '') + ':' + (event.lineno || '');
+  });
+</script>
+
+<script type="module">
+  import { YarbpLexer, TokenTypes } from '../../src/js/classes/YarbpLexer.js';
+  import { YarbpParser, valueTypes } from '../../src/js/classes/YarbpParser.js';
+  import { YarbpJSONConverter } from '../../src/js/classes/ast-converters/JSONConvertor.js';
+  import { YarbpXMLConverter } from '../../src/js/classes/ast-converters/XMLConvertor.js';
+  import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
+  import { YarbpHighlighter } from '../../src/js/classes/YarbpHighlighter.js';
+  import { CodeBlockHighlighter } from '../../src/js/classes/highlighters/CodeBlockHighlighter.js';
+  import {
+    CodeBlockHighlightPass,
+    CODE_BLOCK_HIGHLIGHT_DELAY_MS
+  } from '../../src/js/classes/highlighters/CodeBlockHighlightPass.js';
+
+  const resultBox = document.getElementById('result');
+  const lines = [];
+  let failed = 0;
+
+  function check(name, ok, detail = '') {
+    if (!ok) failed++;
+    lines.push((ok ? 'ok   ' : 'FAIL ') + name + (ok || !detail ? '' : ' — ' + detail));
+  }
+
+  const join = (...parts) => parts.join('\n');
+
+  function build(code) {
+    const lexer = new YarbpLexer();
+    lexer.setInitialState(code);
+    lexer.tokenize();
+    const parser = new YarbpParser(lexer);
+    const ast = parser.getAST();
+    return { code, lexer, parser, ast, tokens: lexer.tokens };
+  }
+
+  function child(node, key) {
+    return (node && node.children || []).find(item => item.key === key);
+  }
+
+  function children(node) {
+    return (node && node.children) || [];
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 1. Подстановка (( имя )) вне макроса                                */
+  /* ------------------------------------------------------------------ */
+  const SUB = join('! as ast', 'а .б (( с ))', '.с д');
+  const sub = build(SUB);
+  const subA = child(sub.ast, 'а');
+  const subB = child(subA, 'б');
+
+  check('подстановка 2.3: значение из ключа нулевого уровня',
+    !!subB && subB.value === 'д', subB ? String(subB.value) : 'нет узла');
+  check('подстановка 2.3: ключ-источник убран из вывода',
+    child(sub.ast, 'с') === undefined);
+
+  const SUB_MULTI = join('! as ast', ': .x (( с )) .y (( с ))', '.с д');
+  const subMulti = build(SUB_MULTI);
+  const anon = children(subMulti.ast).find(item => item.valueType === valueTypes.OBJECT && !item.key);
+  const multiX = child(anon, 'x');
+  const multiY = child(anon, 'y');
+
+  check('подстановка: несколько использований',
+    !!multiX && !!multiY && multiX.value === 'д' && multiY.value === 'д',
+    String(multiX && multiX.value) + ' / ' + String(multiY && multiY.value));
+  check('подстановка: источник убран один раз',
+    child(subMulti.ast, 'с') === undefined);
+
+  const SUB_MISSING = join('! as ast', 'а .б (( нет ))');
+  const subMissing = build(SUB_MISSING);
+  const missingB = child(child(subMissing.ast, 'а'), 'б');
+
+  check('подстановка: отсутствующий ключ оставлен как есть',
+    !!missingB && missingB.value === '(( нет ))',
+    missingB ? String(missingB.value) : 'нет узла');
+  check('подстановка: отсутствующий ключ даёт понятную диагностику',
+    subMissing.parser.lastDiagnostics.some(item => /нет ключа/.test(item.message)),
+    JSON.stringify(subMissing.parser.lastDiagnostics));
+
+  const SUB_OBJECT = join(
+    '! as ast',
+    ':конфиг',
+    '  .а 1',
+    '  .б 2',
+    'пример',
+    '  .настройки (( конфиг ))'
+  );
+  const subObject = build(SUB_OBJECT);
+  const settings = child(child(subObject.ast, 'пример'), 'настройки');
+
+  check('подстановка: объект подставляется содержимым',
+    !!settings && settings.valueType === valueTypes.OBJECT &&
+    children(settings).length === 2 &&
+    !!child(settings, 'а') && !!child(settings, 'б'),
+    settings ? settings.valueType + ' / ' + children(settings).length : 'нет узла');
+  check('подстановка: объект-источник убран',
+    child(subObject.ast, 'конфиг') === undefined);
+
+  const MACRO = join(
+    '! as ast',
+    '.id root',
+    '@a',
+    '  .id item-(( id ))',
+    'k',
+    '  x(a)',
+    '    .id 1'
+  );
+  const macro = build(MACRO);
+  const macroX = child(child(macro.ast, 'k'), 'x');
+  const macroId = child(macroX, 'id');
+
+  check('макросы: параметр (( id )) раскрыт как раньше',
+    !!macroId && macroId.value === 'item-1',
+    macroId ? String(macroId.value) : 'нет узла');
+  check('макросы: ключ нулевого уровня с тем же именем не подменяет параметр',
+    !!child(macro.ast, 'id') && child(macro.ast, 'id').value === 'root',
+    JSON.stringify(child(macro.ast, 'id')));
+  /* ------------------------------------------------------------------ */
+  /* 2. Фрагмент кода                                                    */
+  /* ------------------------------------------------------------------ */
+  const CODE = join(
+    '! as ast',
+    '.код ```bsl',
+    'Процедура Тест()',
+    '  // комментарий',
+    '  Возврат "ok";',
+    'КонецПроцедуры',
+    '```'
+  );
+  const codeCase = build(CODE);
+  const codeNode = child(codeCase.ast, 'код');
+  const codeText = join(
+    'Процедура Тест()',
+    '  // комментарий',
+    '  Возврат "ok";',
+    'КонецПроцедуры'
+  );
+
+  check('код-блок: примитив с valueType CODE',
+    !!codeNode && codeNode.valueType === valueTypes.CODE,
+    codeNode ? codeNode.valueType : 'нет узла');
+  check('код-блок: язык сохранён',
+    !!codeNode && codeNode.language === 'bsl',
+    codeNode ? String(codeNode.language) : 'нет узла');
+  check('код-блок: сырой текст без изменений',
+    !!codeNode && codeNode.value === codeText,
+    codeNode ? JSON.stringify(codeNode.value) : 'нет узла');
+  check('код-блок: позиция указывает на содержимое',
+    !!codeNode && codeNode.position.start === CODE.indexOf('Процедура') &&
+    codeNode.position.end === CODE.indexOf('Процедура') + codeText.length,
+    codeNode ? JSON.stringify(codeNode.position) : 'нет узла');
+  check('код-блок: лексер не создал токенов внутри острова',
+    codeCase.tokens.filter(token => (token.value || '').includes('Процедура')).length === 1 &&
+    codeCase.tokens.find(token => (token.value || '').includes('Процедура')).type === TokenTypes.CODE_BLOCK,
+    codeCase.tokens.map(token => token.type).join(','));
+
+  const CODE_NO_LANG = join('! as ast', '.текст ```', 'просто текст', '<b>не тег</b>', '```');
+  const codeNoLang = build(CODE_NO_LANG);
+  const noLangNode = child(codeNoLang.ast, 'текст');
+
+  check('код-блок: язык опционален (null)',
+    !!noLangNode && noLangNode.valueType === valueTypes.CODE && noLangNode.language === null,
+    noLangNode ? String(noLangNode.language) : 'нет узла');
+  check('код-блок: без языка содержимое тоже сырое',
+    !!noLangNode && noLangNode.value === join('просто текст', '<b>не тег</b>'),
+    noLangNode ? JSON.stringify(noLangNode.value) : 'нет узла');
+
+  const CODE_IN_MACRO = join(
+    '! as ast',
+    '@a',
+    '  .код (( код ))',
+    'пример',
+    '  x(a)',
+    '    .код ```bsl',
+    '    Процедура Тест()',
+    '    КонецПроцедуры',
+    '    ```'
+  );
+  const codeMacro = build(CODE_IN_MACRO);
+  const codeMacroNode = child(child(child(codeMacro.ast, 'пример'), 'x'), 'код');
+
+  check('код-блок: работает параметром макроса',
+    !!codeMacroNode && codeMacroNode.valueType === valueTypes.CODE &&
+    codeMacroNode.language === 'bsl' &&
+    codeMacroNode.value.includes('Процедура Тест()'),
+    codeMacroNode ? codeMacroNode.valueType + '/' + codeMacroNode.language : 'нет узла');
+
+  /* ------------------------------------------------------------------ */
+  /* 3. Значение примитивного ключа с новой строки                       */
+  /* ------------------------------------------------------------------ */
+  const NEXT_LINE_STRING = join('! as ast', '.текст', '"', 'Многострочный', 'Текст', '"');
+  const nextString = build(NEXT_LINE_STRING);
+  const nextStringNode = child(nextString.ast, 'текст');
+
+  check('значение с новой строки: многострочная строка',
+    !!nextStringNode && nextStringNode.valueType === valueTypes.STRING &&
+    nextStringNode.value === 'Многострочный\nТекст',
+    nextStringNode ? JSON.stringify(nextStringNode.value) : 'нет узла');
+  check('значение с новой строки: позиция значения, не ключа',
+    !!nextStringNode && nextStringNode.position.start === NEXT_LINE_STRING.indexOf('\n"') + 1,
+    nextStringNode ? String(nextStringNode.position.start) : 'нет узла');
+
+  const NEXT_LINE_SCALARS = join(
+    '! as ast',
+    '.число', '42',
+    '.булево', 'да',
+    '.ничто', 'null',
+    '.строка', "'один'"
+  );
+  const scalars = build(NEXT_LINE_SCALARS);
+
+  check('значение с новой строки: число',
+    child(scalars.ast, 'число')?.valueType === valueTypes.NUMBER &&
+    child(scalars.ast, 'число')?.value === 42,
+    JSON.stringify(child(scalars.ast, 'число')));
+  check('значение с новой строки: булево',
+    child(scalars.ast, 'булево')?.valueType === valueTypes.BOOL &&
+    child(scalars.ast, 'булево')?.value === true,
+    JSON.stringify(child(scalars.ast, 'булево')));
+  check('значение с новой строки: null',
+    child(scalars.ast, 'ничто')?.valueType === valueTypes.NULL &&
+    child(scalars.ast, 'ничто')?.value === null,
+    JSON.stringify(child(scalars.ast, 'ничто')));
+  check('значение с новой строки: строка в кавычках',
+    child(scalars.ast, 'строка')?.valueType === valueTypes.STRING &&
+    child(scalars.ast, 'строка')?.value === 'один',
+    JSON.stringify(child(scalars.ast, 'строка')));
+
+  const NEXT_LINE_CODE = join('! as ast', '.код', '```js', 'const x = 1;', '```');
+  const nextCode = build(NEXT_LINE_CODE);
+  const nextCodeNode = child(nextCode.ast, 'код');
+
+  check('значение с новой строки: фрагмент кода',
+    !!nextCodeNode && nextCodeNode.valueType === valueTypes.CODE &&
+    nextCodeNode.language === 'js' && nextCodeNode.value === 'const x = 1;',
+    nextCodeNode ? nextCodeNode.valueType + '/' + nextCodeNode.language : 'нет узла');
+
+  const VALUE_MISSING = join('! as ast', '.пусто', '.рядом 1');
+  const valueMissing = build(VALUE_MISSING);
+  const emptyNode = child(valueMissing.ast, 'пусто');
+
+  check('значение отсутствует: AST не изменился (совместимость)',
+    !!emptyNode && emptyNode.valueType === valueTypes.STRING && emptyNode.value === '',
+    JSON.stringify(emptyNode));
+  check('значение отсутствует: диагностика «ожидалось значение»',
+    valueMissing.lexer.diagnostics.some(item => item.message === 'expected value'),
+    JSON.stringify(valueMissing.lexer.diagnostics));
+  check('значение отсутствует: следующий узел разобран отдельно',
+    child(valueMissing.ast, 'рядом')?.value === 1,
+    JSON.stringify(child(valueMissing.ast, 'рядом')));
+
+  const CODE_UNCLOSED = join('! as ast', '.код ```bsl', 'Процедура Тест()');
+  const codeUnclosed = build(CODE_UNCLOSED);
+  check('код-блок: незакрытый блок — понятная ошибка',
+    codeUnclosed.tokens.some(token =>
+      token.type === TokenTypes.UNPARSED && token.error === 'unterminated code block'),
+    JSON.stringify(codeUnclosed.tokens.filter(token => token.error)));
+
+  /* ------------------------------------------------------------------ */
+  /* 4. Конвертеры не падают на фрагменте кода                           */
+  /* ------------------------------------------------------------------ */
+  const codeJson = new YarbpJSONConverter(codeCase.ast).convert();
+  check('json: фрагмент кода отдаётся сырым текстом',
+    !!codeJson && typeof codeJson.код === 'string' && codeJson.код === codeText,
+    JSON.stringify(codeJson));
+
+  let codeXml = '';
+  let codeXmlError = '';
+  try { codeXml = new YarbpXMLConverter(codeCase.ast).convert(); }
+  catch (error) { codeXmlError = String(error && error.message || error); }
+  check('xml: конвертер не падает на фрагменте кода',
+    !codeXmlError && codeXml.includes('Процедура Тест()'), codeXmlError);
+
+  const PROTO_CODE = join('! as proto', 'order', '  .code ```bsl', 'Процедура Тест()', '```');
+  let codeProto = '';
+  let codeProtoError = '';
+  try { codeProto = new YarbpProtoConverter(build(PROTO_CODE).ast).convert(); }
+  catch (error) { codeProtoError = String(error && error.message || error); }
+  check('proto: конвертер не падает на фрагменте кода',
+    !codeProtoError && codeProto.includes('code'), codeProtoError);
+
+  /* ------------------------------------------------------------------ */
+  /* 4b. Кейс 44: тройной и одинарный fence, эквивалентность AST          */
+  /* ------------------------------------------------------------------ */
+  async function fetchText(url) {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error(response.status + ' ' + response.statusText + ': ' + url);
+    return (await response.text()).replace(/\r\n?/g, '\n');
+  }
+
+  function comparableAst(value) {
+    if (Array.isArray(value)) return value.map(comparableAst);
+    if (value && typeof value === 'object') {
+      const result = {};
+      for (const key of Object.keys(value).sort()) {
+        if (['position', 'comments', 'directives', '__macroExpanded'].includes(key)) continue;
+        result[key] = comparableAst(value[key]);
+      }
+      return result;
+    }
+    return value;
+  }
+
+  let case44Ok = false;
+  let case44Detail = '';
+  try {
+    const raw = await fetchText('../../notes/cases/44_bsl_code.txt');
+    const marker = raw.indexOf('ast должен быть эквивалентен');
+    const actualPart = raw.slice(raw.indexOf('! as ast'), marker).trimEnd();
+    const expectedPart = raw.slice(raw.indexOf('! as ast', marker)).trimEnd();
+
+    const actualAst = build(actualPart).ast;
+    const expectedAst = build(expectedPart).ast;
+    const actual = comparableAst(actualAst);
+    const expected = comparableAst(expectedAst);
+
+    case44Ok = JSON.stringify(actual) === JSON.stringify(expected);
+    if (!case44Ok) {
+      case44Detail = 'actual=' + JSON.stringify(actual).slice(0, 260) +
+        ' expected=' + JSON.stringify(expected).slice(0, 260);
+    }
+
+    const codes = [];
+    const collectCodes = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.valueType === valueTypes.CODE) codes.push(node);
+      for (const child of node.children || []) collectCodes(child);
+    };
+    collectCodes(actualAst);
+
+    check('кейс 44: тройной и одинарный fence дали два CODE-узла',
+      codes.length === 2 &&
+      codes.some(node => node.language === 'bsl') &&
+      codes.some(node => node.language === 'js'),
+      codes.map(node => node.language).join(','));
+  } catch (error) {
+    case44Detail = String(error && error.message || error);
+  }
+
+  check('кейс 44: AST эквивалентен разметке из файла', case44Ok, case44Detail);
+
+
+  /* ------------------------------------------------------------------ */
+  /* 5. Подсветка встроенных языков                                      */
+  /* ------------------------------------------------------------------ */
+  const codeHighlight = build(CODE);
+  const sourceHtml = new YarbpHighlighter(CODE, codeHighlight.tokens).highlight();
+  const highlightHost = document.createElement('div');
+  highlightHost.innerHTML = sourceHtml;
+
+  const block = highlightHost.querySelector('.ide-code-codeblock');
+  const body = block && block.querySelector('.ide-code-body');
+
+  check('подсветка: основной проход рисует границы и язык',
+    !!block && block.dataset.lang === 'bsl' &&
+    block.querySelectorAll('.ide-code-fence').length === 2,
+    block ? String(block.dataset.lang) : 'нет блока');
+  check('подсветка: текст слоя совпадает с исходником',
+    highlightHost.textContent === CODE,
+    highlightHost.textContent.length + ' / ' + CODE.length);
+
+  const pass = new CodeBlockHighlightPass(highlightHost, CODE_BLOCK_HIGHLIGHT_DELAY_MS);
+  pass.schedule(CODE, codeHighlight.tokens);
+
+  check('подсветка: кулдаун в диапазоне 100–200 мс',
+    CODE_BLOCK_HIGHLIGHT_DELAY_MS >= 100 && CODE_BLOCK_HIGHLIGHT_DELAY_MS <= 200,
+    String(CODE_BLOCK_HIGHLIGHT_DELAY_MS));
+  check('подсветка: до кулдауна языковых классов нет',
+    !!body && body.querySelectorAll('.code-kw').length === 0,
+    body ? body.innerHTML.slice(0, 80) : 'нет body');
+
+  pass.highlightNow();
+
+  check('подсветка BSL: ключевые слова найдены',
+    !!body && body.querySelectorAll('.code-kw').length > 0,
+    body ? String(body.querySelectorAll('.code-kw').length) : 'нет body');
+  check('подсветка BSL: комментарий и строка найдены',
+    !!body && !!body.querySelector('.code-com') && !!body.querySelector('.code-str'));
+  check('подсветка: текст после прохода не изменился',
+    !!body && body.textContent === codeText,
+    body ? JSON.stringify(body.textContent) : 'нет body');
+
+  function highlightedBody(language, lines) {
+    const source = join('! as ast', '.код ```' + language, ...lines, '```');
+    const parsed = build(source);
+    const host = document.createElement('div');
+    host.innerHTML = new YarbpHighlighter(source, parsed.tokens).highlight();
+    const blockPass = new CodeBlockHighlightPass(host);
+    blockPass.schedule(source, parsed.tokens);
+    blockPass.highlightNow();
+    return host.querySelector('.ide-code-body');
+  }
+
+  const jsBody = highlightedBody('js', ['function test() {', '  const x = 1; // hi', '}']);
+  check('подсветка JS: ключевые слова, число, комментарий',
+    !!jsBody && jsBody.querySelectorAll('.code-kw').length >= 2 &&
+    !!jsBody.querySelector('.code-num') && !!jsBody.querySelector('.code-com'),
+    jsBody ? jsBody.innerHTML.slice(0, 120) : 'нет body');
+
+  const sqlBody = highlightedBody('sql', ["SELECT * FROM t -- hi", "WHERE id = 'x'"]);
+  check('подсветка SQL: ключевые слова, строка, комментарий',
+    !!sqlBody && sqlBody.querySelectorAll('.code-kw').length >= 2 &&
+    !!sqlBody.querySelector('.code-str') && !!sqlBody.querySelector('.code-com'),
+    sqlBody ? sqlBody.innerHTML.slice(0, 120) : 'нет body');
+
+  const noLangBody = highlightedBody('', ['просто текст']);
+  check('подсветка: без языка встроенный проход не запускается',
+    !!noLangBody && noLangBody.querySelectorAll('[class^="code-"]').length === 0,
+    noLangBody ? noLangBody.innerHTML.slice(0, 120) : 'нет body');
+
+  const xssCode = join('! as ast', '.код ```html', '<img src=x onerror="window.__xss=1">', '```');
+  const xssParsed = build(xssCode);
+  const xssHost = document.createElement('div');
+  xssHost.innerHTML = new YarbpHighlighter(xssCode, xssParsed.tokens).highlight();
+  const xssPass = new CodeBlockHighlightPass(xssHost);
+  xssPass.schedule(xssCode, xssParsed.tokens);
+  xssPass.highlightNow();
+  check('подсветка: HTML из кода не становится узлом DOM',
+    xssHost.querySelector('img') === null, xssHost.innerHTML.slice(0, 120));
+  check('подсветка: HTML из кода остаётся текстом',
+    !!xssHost.querySelector('.ide-code-body') &&
+    xssHost.querySelector('.ide-code-body').textContent.includes('<img'));
+
+  /* ------------------------------------------------------------------ */
+  /* 6. Редактор: курсор и выделение не сбиваются отложенным проходом    */
+  /* ------------------------------------------------------------------ */
+  function waitForLoad(frame) {
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve(true);
+      };
+      frame.addEventListener('load', finish, { once: true });
+      setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve(false);
+      }, 10000);
+    });
+  }
+
+  const appFrame = document.createElement('iframe');
+  appFrame.style.cssText = 'position:fixed;left:-9999px;top:0;width:1024px;height:768px;border:0';
+  appFrame.src = '../../src/index.html';
+  const appLoaded = waitForLoad(appFrame);
+  document.body.appendChild(appFrame);
+  const appOk = await appLoaded;
+
+  check('редактор: страница загрузилась для проверки подсветки', appOk);
+
+  if (appOk) {
+    const doc = appFrame.contentDocument;
+    const view = appFrame.contentWindow;
+    const editor = doc.getElementById('code-textarea');
+    const layer = doc.getElementById('highlight-div');
+    const appCode = join(
+      '! as ast',
+      '.код ```bsl',
+      'Процедура Тест()',
+      '  // комментарий',
+      'КонецПроцедуры',
+      '```'
+    );
+
+    editor.value = appCode;
+    editor.focus();
+    editor.setSelectionRange(5, 5);
+    editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    check('редактор: отложенная подсветка сработала',
+      !!layer && !!layer.querySelector('.ide-code-codeblock') &&
+      layer.querySelectorAll('.ide-code-body .code-kw').length > 0,
+      layer ? layer.innerHTML.slice(0, 120) : 'нет слоя');
+    check('редактор: курсор не сбит',
+      editor.selectionStart === 5 && editor.selectionEnd === 5,
+      editor.selectionStart + ':' + editor.selectionEnd);
+    check('редактор: выделение не сбито',
+      editor.selectionStart === editor.selectionEnd);
+    check('редактор: текст слоя подсветки совпадает с редактором',
+      !!layer && layer.textContent === appCode,
+      layer ? String(layer.textContent.length) : 'нет слоя');
+  }
+
+  appFrame.remove();
+
+  /* ------------------------------------------------------------------ */
+  resultBox.textContent = lines.join('\n') + '\n';
+  document.title = failed ? 'FEATURES FAIL' : 'FEATURES PASS';
+</script>
+</body>
+</html>
+

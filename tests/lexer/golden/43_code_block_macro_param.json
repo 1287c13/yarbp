@@ -1,0 +1,201 @@
+{
+  "file": "43_code_block_macro_param.txt",
+  "flavor": "ast",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as ast",
+      "prefix": "!",
+      "start": 0,
+      "end": 8,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 9,
+      "end": 9,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "@a",
+      "start": 9,
+      "end": 11,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 14,
+      "end": 15,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "код",
+      "prefix": ".",
+      "start": 14,
+      "end": 18,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "(( код ))",
+      "start": 19,
+      "end": 28,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 29,
+      "end": 29,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 29,
+      "end": 29,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "пример",
+      "start": 29,
+      "end": 35,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 38,
+      "end": 38,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "x(a)",
+      "start": 38,
+      "end": 42,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 47,
+      "end": 48,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "код",
+      "prefix": ".",
+      "start": 47,
+      "end": 51,
+      "error": ""
+    },
+    {
+      "type": "CODE_BLOCK",
+      "value": "    Процедура Тест()\n    КонецПроцедуры",
+      "start": 52,
+      "end": 106,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 106,
+      "end": 106,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 106,
+      "end": 106,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 106,
+      "end": 106,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as ast",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 8
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "пример",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 29,
+          "end": 35
+        },
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "x",
+            "valueType": "OBJECT",
+            "prefix": "",
+            "position": {
+              "start": 9,
+              "end": 11
+            },
+            "children": [
+              {
+                "nodeType": "MEANING",
+                "key": "код",
+                "prefix": ".",
+                "position": {
+                  "start": 14,
+                  "end": 18
+                },
+                "valueType": "CODE",
+                "value": "    Процедура Тест()\n    КонецПроцедуры",
+                "language": "bsl"
+              }
+            ],
+            "__macroExpanded": true
+          }
+        ]
+      }
+    ]
+  },
+  "render": {
+    "kind": "ast",
+    "text": "{\n  \"nodeType\": \"ROOT\",\n  \"directives\": [\n    {\n      \"nodeType\": \"DIRECTIVE\",\n      \"value\": \"as ast\",\n      \"prefix\": \"!\",\n      \"position\": {\n        \"start\": 0,\n        \"end\": 8\n      }\n    }\n  ],\n  \"children\": [\n    {\n      \"nodeType\": \"MEANING\",\n      \"key\": \"пример\",\n      \"valueType\": \"OBJECT\",\n      \"prefix\": \"\",\n      \"position\": {\n        \"start\": 29,\n        \"end\": 35\n      },\n      \"children\": [\n        {\n          \"nodeType\": \"MEANING\",\n          \"key\": \"x\",\n          \"valueType\": \"OBJECT\",\n          \"prefix\": \"\",\n          \"position\": {\n            \"start\": 9,\n            \"end\": 11\n          },\n          \"children\": [\n            {\n              \"nodeType\": \"MEANING\",\n              \"key\": \"код\",\n              \"prefix\": \".\",\n              \"position\": {\n                \"start\": 14,\n                \"end\": 18\n              },\n              \"valueType\": \"CODE\",\n              \"value\": \"    Процедура Тест()\\n    КонецПроцедуры\",\n              \"language\": \"bsl\"\n            }\n          ],\n          \"__macroExpanded\": true\n        }\n      ]\n    }\n  ]\n}"
+  }
+}

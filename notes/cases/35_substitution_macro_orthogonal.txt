@@ -1,0 +1,7 @@
+! as ast
+.id root
+@a
+  .id item-(( id ))
+k
+  x(a)
+    .id 1

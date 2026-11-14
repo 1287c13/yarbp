@@ -1,0 +1,338 @@
+{
+  "file": "44a_bsl_markup.txt",
+  "flavor": "ast",
+  "tokenizeError": null,
+  "tokens": [
+    {
+      "type": "START",
+      "value": "",
+      "start": 0,
+      "end": 0,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "!",
+      "start": 0,
+      "end": 1,
+      "error": ""
+    },
+    {
+      "type": "DIRECTIVE",
+      "value": "as ast",
+      "prefix": "!",
+      "start": 0,
+      "end": 8,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 10,
+      "end": 10,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "@макро",
+      "start": 10,
+      "end": 16,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "= (( имя ))",
+      "start": 18,
+      "end": 29,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 31,
+      "end": 31,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": "..",
+      "start": 31,
+      "end": 33,
+      "error": ""
+    },
+    {
+      "type": "KEY(ARR)",
+      "value": "обработчики",
+      "prefix": "..",
+      "start": 31,
+      "end": 44,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "(( первый ))",
+      "start": 54,
+      "end": 66,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "(( второй ))",
+      "start": 76,
+      "end": 88,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 91,
+      "end": 91,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 91,
+      "end": 92,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "наследуемое",
+      "prefix": ".",
+      "start": 91,
+      "end": 103,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "что то наследуемое",
+      "start": 104,
+      "end": 122,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 124,
+      "end": 124,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_IN",
+      "value": "",
+      "start": 124,
+      "end": 124,
+      "error": ""
+    },
+    {
+      "type": "KEY(OBJ)",
+      "value": "обработчик(макро)",
+      "start": 124,
+      "end": 141,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 144,
+      "end": 145,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "js-обработчик",
+      "prefix": ".",
+      "start": 144,
+      "end": 158,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "(( обработчик-1 ))",
+      "start": 159,
+      "end": 177,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 180,
+      "end": 181,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "1С-обработчик",
+      "prefix": ".",
+      "start": 180,
+      "end": 194,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "(( обработчик-2 ))",
+      "start": 195,
+      "end": 213,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 216,
+      "end": 217,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "имя",
+      "prefix": ".",
+      "start": 216,
+      "end": 220,
+      "error": ""
+    },
+    {
+      "type": "VALUE",
+      "value": "имя-имя",
+      "start": 221,
+      "end": 228,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 230,
+      "end": 231,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "обработчик-1",
+      "prefix": ".",
+      "start": 230,
+      "end": 243,
+      "error": ""
+    },
+    {
+      "type": "CODE_BLOCK",
+      "value": "// Комментарий\n#Область Тест\n&НаКлиенте\nПроцедура Тест(Параметр = Неопределено) Экспорт\n    Число = 123; Дробь = 45.67; Стр = \"Текст \"\"кавычки\"\"\";\n    Дата = '20240101120000'; Флаг = Истина; Пусто = Null;\n    Если Параметр = 0 Тогда Возврат;\n    ИначеЕсли Параметр > 10 Тогда Для i = 1 По 10 Цикл Продолжить; КонецЦикла;\n    Иначе Пока Ложь Цикл Прервать; КонецЦикла; КонецЕсли;\n    Попытка ВызватьИсключение \"Ошибка\"; Исключение Сообщить(ОписаниеОшибки()); КонецПопытки;\n    Массив = Новый Массив(); Массив.Добавить(?(Флаг, 1, 2)); Массив[0] = Массив.Количество();\n    Результат = (Истина И Ложь) ИЛИ НЕ Флаг + \"склейка\";\nКонецПроцедуры\n#КонецОбласти",
+      "start": 244,
+      "end": 906,
+      "error": ""
+    },
+    {
+      "type": "PREFIX",
+      "value": ".",
+      "start": 908,
+      "end": 909,
+      "error": ""
+    },
+    {
+      "type": "KEY",
+      "value": "обработчик-2",
+      "prefix": ".",
+      "start": 908,
+      "end": 921,
+      "error": ""
+    },
+    {
+      "type": "CODE_BLOCK",
+      "value": "// Комментарий\n/* Блочный */\nconst стр = `шаблон ${1 + 2} текста`, число = 42, дробь = 3.14;\nlet флаг = true, пусто = null, неОпр = undefined;\nfunction тест(параметр = 0) {\n  if (параметр > 0 && флаг || !пусто) return параметр;\n  else if (параметр === 0) { for (let i = 0; i < 3; i++) continue; }\n  else while (false) break;\n  try { throw new Error(\"ошибка\"); } catch (e) { console.log(e.message); }\n  const fn = (x) => x * 2, [a, b] = [1, 2];\n  return параметр ? fn(a) : b ** 2 + (a === b ? 1 : 0);\n}\nclass Класс { constructor() { this.x = new Map(); } метод() { return this.x.get(1); } }",
+      "start": 922,
+      "end": 1517,
+      "error": ""
+    },
+    {
+      "type": "SCOPE_OUT",
+      "value": "",
+      "start": 1517,
+      "end": 1517,
+      "error": ""
+    },
+    {
+      "type": "END",
+      "value": "",
+      "start": 1517,
+      "end": 1517,
+      "error": ""
+    }
+  ],
+  "astError": null,
+  "ast": {
+    "nodeType": "ROOT",
+    "directives": [
+      {
+        "nodeType": "DIRECTIVE",
+        "value": "as ast",
+        "prefix": "!",
+        "position": {
+          "start": 0,
+          "end": 8
+        }
+      }
+    ],
+    "children": [
+      {
+        "nodeType": "MEANING",
+        "key": "обработчик",
+        "valueType": "OBJECT",
+        "prefix": "",
+        "position": {
+          "start": 10,
+          "end": 16
+        },
+        "value": "имя-имя",
+        "children": [
+          {
+            "nodeType": "MEANING",
+            "key": "обработчики",
+            "valueType": "ARRAY",
+            "prefix": "..",
+            "position": {
+              "start": 31,
+              "end": 44
+            },
+            "children": [
+              {
+                "value": "// Комментарий\n#Область Тест\n&НаКлиенте\nПроцедура Тест(Параметр = Неопределено) Экспорт\n    Число = 123; Дробь = 45.67; Стр = \"Текст \"\"кавычки\"\"\";\n    Дата = '20240101120000'; Флаг = Истина; Пусто = Null;\n    Если Параметр = 0 Тогда Возврат;\n    ИначеЕсли Параметр > 10 Тогда Для i = 1 По 10 Цикл Продолжить; КонецЦикла;\n    Иначе Пока Ложь Цикл Прервать; КонецЦикла; КонецЕсли;\n    Попытка ВызватьИсключение \"Ошибка\"; Исключение Сообщить(ОписаниеОшибки()); КонецПопытки;\n    Массив = Новый Массив(); Массив.Добавить(?(Флаг, 1, 2)); Массив[0] = Массив.Количество();\n    Результат = (Истина И Ложь) ИЛИ НЕ Флаг + \"склейка\";\nКонецПроцедуры\n#КонецОбласти",
+                "valueType": "CODE",
+                "nodeType": "MEANING",
+                "position": {
+                  "start": 54,
+                  "end": 66
+                },
+                "language": "bsl"
+              },
+              {
+                "value": "// Комментарий\n/* Блочный */\nconst стр = `шаблон ${1 + 2} текста`, число = 42, дробь = 3.14;\nlet флаг = true, пусто = null, неОпр = undefined;\nfunction тест(параметр = 0) {\n  if (параметр > 0 && флаг || !пусто) return параметр;\n  else if (параметр === 0) { for (let i = 0; i < 3; i++) continue; }\n  else while (false) break;\n  try { throw new Error(\"ошибка\"); } catch (e) { console.log(e.message); }\n  const fn = (x) => x * 2, [a, b] = [1, 2];\n  return параметр ? fn(a) : b ** 2 + (a === b ? 1 : 0);\n}\nclass Класс { constructor() { this.x = new Map(); } метод() { return this.x.get(1); } }",
+                "valueType": "CODE",
+                "nodeType": "MEANING",
+                "position": {
+                  "start": 76,
+                  "end": 88
+                },
+                "language": "js"
+              }
+            ]
+          },
+          {
+            "nodeType": "MEANING",
+            "key": "наследуемое",
+            "prefix": ".",
+            "position": {
+              "start": 91,
+              "end": 103
+            },
+            "valueType": "STRING",
+            "value": "что то наследуемое"
+          }
+        ],
+        "__macroExpanded": true
+      }
+    ]
+  },
+  "render": {
+    "kind": "ast",
+    "text": "{\n  \"nodeType\": \"ROOT\",\n  \"directives\": [\n    {\n      \"nodeType\": \"DIRECTIVE\",\n      \"value\": \"as ast\",\n      \"prefix\": \"!\",\n      \"position\": {\n        \"start\": 0,\n        \"end\": 8\n      }\n    }\n  ],\n  \"children\": [\n    {\n      \"nodeType\": \"MEANING\",\n      \"key\": \"обработчик\",\n      \"valueType\": \"OBJECT\",\n      \"prefix\": \"\",\n      \"position\": {\n        \"start\": 10,\n        \"end\": 16\n      },\n      \"value\": \"имя-имя\",\n      \"children\": [\n        {\n          \"nodeType\": \"MEANING\",\n          \"key\": \"обработчики\",\n          \"valueType\": \"ARRAY\",\n          \"prefix\": \"..\",\n          \"position\": {\n            \"start\": 31,\n            \"end\": 44\n          },\n          \"children\": [\n            {\n              \"value\": \"// Комментарий\\n#Область Тест\\n&НаКлиенте\\nПроцедура Тест(Параметр = Неопределено) Экспорт\\n    Число = 123; Дробь = 45.67; Стр = \\\"Текст \\\"\\\"кавычки\\\"\\\"\\\";\\n    Дата = '20240101120000'; Флаг = Истина; Пусто = Null;\\n    Если Параметр = 0 Тогда Возврат;\\n    ИначеЕсли Параметр > 10 Тогда Для i = 1 По 10 Цикл Продолжить; КонецЦикла;\\n    Иначе Пока Ложь Цикл Прервать; КонецЦикла; КонецЕсли;\\n    Попытка ВызватьИсключение \\\"Ошибка\\\"; Исключение Сообщить(ОписаниеОшибки()); КонецПопытки;\\n    Массив = Новый Массив(); Массив.Добавить(?(Флаг, 1, 2)); Массив[0] = Массив.Количество();\\n    Результат = (Истина И Ложь) ИЛИ НЕ Флаг + \\\"склейка\\\";\\nКонецПроцедуры\\n#КонецОбласти\",\n              \"valueType\": \"CODE\",\n              \"nodeType\": \"MEANING\",\n              \"position\": {\n                \"start\": 54,\n                \"end\": 66\n              },\n              \"language\": \"bsl\"\n            },\n            {\n              \"value\": \"// Комментарий\\n/* Блочный */\\nconst стр = `шаблон ${1 + 2} текста`, число = 42, дробь = 3.14;\\nlet флаг = true, пусто = null, неОпр = undefined;\\nfunction тест(параметр = 0) {\\n  if (параметр > 0 && флаг || !пусто) return параметр;\\n  else if (параметр === 0) { for (let i = 0; i < 3; i++) continue; }\\n  else while (false) break;\\n  try { throw new Error(\\\"ошибка\\\"); } catch (e) { console.log(e.message); }\\n  const fn = (x) => x * 2, [a, b] = [1, 2];\\n  return параметр ? fn(a) : b ** 2 + (a === b ? 1 : 0);\\n}\\nclass Класс { constructor() { this.x = new Map(); } метод() { return this.x.get(1); } }\",\n              \"valueType\": \"CODE\",\n              \"nodeType\": \"MEANING\",\n              \"position\": {\n                \"start\": 76,\n                \"end\": 88\n              },\n              \"language\": \"js\"\n            }\n          ]\n        },\n        {\n          \"nodeType\": \"MEANING\",\n          \"key\": \"наследуемое\",\n          \"prefix\": \".\",\n          \"position\": {\n            \"start\": 91,\n            \"end\": 103\n          },\n          \"valueType\": \"STRING\",\n          \"value\": \"что то наследуемое\"\n        }\n      ],\n      \"__macroExpanded\": true\n    }\n  ]\n}"
+  }
+}
