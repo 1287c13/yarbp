@@ -289,7 +289,7 @@ function applyArtifactBounds(model, process) {
         width,
         height: LAYOUT.dataObjectHeight,
       };
-      // подпись не задаём: bpmn-io сам ставит её под объектом данных,
+      // подпись не задаём: внешний просмотрщик сам ставит её под объектом данных,
       // а нулевой BPMNLabel рисовался прямо поверх рамки
       nodesById.set(ref.id, { id: ref.id, tag: 'dataObjectReference', bounds: ref.bounds });
       topMost = Math.min(topMost, ref.bounds.y);

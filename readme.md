@@ -108,8 +108,10 @@ https://yarbp.tech/
 | `protobuf` | Protobuf |
 | `xpo` | XPO, full example |
 | `bpmn` | BPMN |
-| `openapi` | OpenAPI 3 |
 | `tsd-form` | Форма ТСД |
+
+OpenAPI-пример намеренно не показывается в «Примерах»: он лежит в
+`notes/examples/openapi.yarbp` и в тестовом кейсе `tests/converters/cases/openapi_orders.yarbp`.
 
 Принимается и id примера (`?example=builtin-3`), и hash-форма
 (`#example=json`); в адресе всегда оказывается читаемый ключ.
@@ -1031,10 +1033,10 @@ python tests/converters/run_tests.py  # smoke: json, xml, proto, ui, bpmn, фо�
 python tests/flexforms/run_tests.py   # флейвор «форма-ТСД»
 ```
 
-У `tests/flexforms` есть внешние требования: первоисточники `редизайн/` вне
-репозитория (сверка дословности ассетов) и модуль `quickjs`
-(`pip install quickjs`). Без них набор не падает целиком, но часть блоков
-пропускается, а сверка ассетов помечается FAIL — см. `refactoring.md`, A-1.
+У `tests/flexforms` внешних зависимостей нет: только Python 3 и Chrome/Edge для
+браузерного дыма. Генерация ассетов из внешнего `редизайн/`, сравнение с ним и
+JS-прогоны через `quickjs` удалены — проект и тесты живут на чистом JS и
+стандартной библиотеке Python.
 
 <a id="architecture"></a>
 

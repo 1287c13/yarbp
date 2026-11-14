@@ -1,7 +1,6 @@
-/* ВНИМАНИЕ: файл сгенерирован. Правки затрутся.
-   Источник: tools/flexforms_mock_server.py
-   Генератор: yarbp/tools/build-flexforms-assets.py
-   Строки склеиваются через "\n" — содержимое дословно равно источнику. */
+/* Python-мок-сервер в виде строки — для кнопки «мок-сервер».
+   Источник: tools/flexforms_mock_server.py. Внешнего генератора нет;
+   строки склеиваются через "\n" и должны совпадать с Python-файлом. */
 
 export const FLEX_FORMS_MOCK_SERVER = [
   "#!/usr/bin/env python3",
@@ -36,20 +35,8 @@ export const FLEX_FORMS_MOCK_SERVER = [
   "import sys",
   "from datetime import datetime",
   "",
-  "try:",
-  "    from http.server import BaseHTTPRequestHandler, HTTPServer",
-  "except ImportError:  # pragma: no cover - Python 2 не поддерживается, но импорт не ломаем",
-  "    from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer",
-  "",
-  "try:",
-  "    from http.server import ThreadingHTTPServer",
-  "except ImportError:  # Python < 3.7",
-  "    ThreadingHTTPServer = None",
-  "",
-  "try:",
-  "    from urllib.parse import urlparse",
-  "except ImportError:  # pragma: no cover",
-  "    from urlparse import urlparse",
+  "from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer",
+  "from urllib.parse import urlparse",
   "",
   "",
   "DEFAULT_HOST = '127.0.0.1'",
@@ -331,7 +318,7 @@ export const FLEX_FORMS_MOCK_SERVER = [
   "",
   "def main(argv=None):",
   "    args = build_parser().parse_args(argv)",
-  "    server_class = ThreadingHTTPServer or HTTPServer",
+  "    server_class = ThreadingHTTPServer",
   "",
   "    try:",
   "        server = server_class((args.host, args.port), MockHandler)",

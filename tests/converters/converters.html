@@ -1123,30 +1123,6 @@
     check('OpenAPI: destroy убирает строку диагностики',
       apiPane.querySelectorAll('.openapi-status').length === 0);
     apiPane.remove();
-
-    // встроенный пример в папке «Примеры» — должен собираться без предупреждений
-    const builtinApi = new FileManager().data.files.find(file => file.id === 'builtin-10');
-    check('OpenAPI: встроенный пример найден', !!builtinApi,
-      new FileManager().data.files.map(file => file.id).join(','));
-
-    if (builtinApi) {
-      const builtinConverter = new YarbpOpenAPIConverter(
-        buildAST(builtinApi.content).ast, { source: builtinApi.content });
-      const builtinSpec = builtinConverter.convert();
-
-      check('OpenAPI: встроенный пример без предупреждений',
-        builtinConverter.warnings.length === 0, JSON.stringify(builtinConverter.warnings));
-      check('OpenAPI: встроенный пример проходит структурную проверку',
-        validateOpenApi(builtinSpec).length === 0, validateOpenApi(builtinSpec).join('; '));
-      check('OpenAPI: встроенный пример — два пути и две схемы',
-        Object.keys(builtinSpec.paths).length === 2 &&
-        Object.keys(builtinSpec.components.schemas).length === 2,
-        Object.keys(builtinSpec.paths).join(','));
-      const foundByKey = new FileManager()._findBuiltinByKey('openapi');
-      check('OpenAPI: ссылка ?example=openapi ведёт на встроенный пример',
-        !!foundByKey && foundByKey.id === 'builtin-10',
-        String(foundByKey && foundByKey.id));
-    }
   }
 
   /* ------------------------------------------------------------------ */

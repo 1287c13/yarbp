@@ -601,7 +601,7 @@ function buildMessageFlow(node, task, ctx, process) {
   mf.position = node.position;
 
   // По BPMN message flow соединяет **разные** пулы. Внутри одного пула нужен
-  // sequence flow, иначе схема формально невалидна (bpmn-io рисует молча, а
+  // sequence flow, иначе схема формально невалидна (внешний просмотрщик рисует молча, а
   // валидаторы и моделлер — нет). Проверить это можно только после сборки всех
   // процессов, поэтому проверка живёт в validateModel.
   process._pendingArtifacts.messageFlows.push(mf);

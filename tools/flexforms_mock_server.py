@@ -30,20 +30,8 @@ import os
 import sys
 from datetime import datetime
 
-try:
-    from http.server import BaseHTTPRequestHandler, HTTPServer
-except ImportError:  # pragma: no cover - Python 2 не поддерживается, но импорт не ломаем
-    from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
-
-try:
-    from http.server import ThreadingHTTPServer
-except ImportError:  # Python < 3.7
-    ThreadingHTTPServer = None
-
-try:
-    from urllib.parse import urlparse
-except ImportError:  # pragma: no cover
-    from urlparse import urlparse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
 
 
 DEFAULT_HOST = '127.0.0.1'
@@ -325,7 +313,7 @@ def _pause_if_interactive():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    server_class = ThreadingHTTPServer or HTTPServer
+    server_class = ThreadingHTTPServer
 
     try:
         server = server_class((args.host, args.port), MockHandler)
