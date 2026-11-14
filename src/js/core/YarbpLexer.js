@@ -1,4 +1,4 @@
-import {calcLeadingSpaces, calcTrailingSpaces} from '../utils.js';
+import {calcLeadingSpaces, calcTrailingSpaces} from '../utils/utils.js';
 
 export const TokenTypes = Object.freeze({
   /* control tokens */

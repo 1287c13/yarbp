@@ -20,7 +20,7 @@
  */
 import { FLEX_FORMS_STYLES } from './FlexFormsStyles.js';
 import { FLEX_FORMS_RUNTIME } from './FlexFormsRuntime.js';
-import { escJsonForHtml } from '../../../escape.js';
+import { escJsonForHtml } from '../../../utils/escape.js';
 import {
   FLEX_FORMS_PAGE_SKELETON,
   FLEX_FORMS_IR_MARKER,

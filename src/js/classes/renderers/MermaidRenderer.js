@@ -1,6 +1,6 @@
 import { DiagnosticsStatusRenderer } from './DiagnosticsStatusRenderer.js';
 import { YarbpMermaidConverter } from '../ast-converters/MermaidConvertor.js';
-import { escText } from '../../escape.js';
+import { escText } from '../../utils/escape.js';
 
 /** `! как мермейд` — flowchart Mermaid для PR и markdown. */
 export class MermaidRenderer extends DiagnosticsStatusRenderer {

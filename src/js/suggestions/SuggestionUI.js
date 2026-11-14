@@ -1,4 +1,4 @@
-import { measureCharWidth } from './utils.js';
+import { measureCharWidth } from '../utils/utils.js';
 
 export class SuggestionUI {
   constructor(textarea, container) {

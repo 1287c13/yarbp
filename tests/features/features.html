@@ -22,14 +22,14 @@
 </script>
 
 <script type="module">
-  import { YarbpLexer, TokenTypes } from '../../src/js/classes/YarbpLexer.js';
-  import { YarbpParser, valueTypes } from '../../src/js/classes/YarbpParser.js';
+  import { YarbpLexer, TokenTypes } from '../../src/js/core/YarbpLexer.js';
+  import { YarbpParser, valueTypes } from '../../src/js/core/YarbpParser.js';
   import { YarbpJSONConverter } from '../../src/js/classes/ast-converters/JSONConvertor.js';
   import { YarbpXMLConverter } from '../../src/js/classes/ast-converters/XMLConvertor.js';
   import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
   import { YarbpHighlighter } from '../../src/js/classes/highlighters/YarbpHighlighter.js';
   import { CodeBlockHighlighter } from '../../src/js/classes/highlighters/CodeBlockHighlighter.js';
-  import { SuggestionProvider } from '../../src/js/SuggestionProvider.js';
+  import { SuggestionProvider } from '../../src/js/suggestions/SuggestionProvider.js';
   import {
     CodeBlockHighlightPass,
     CODE_BLOCK_HIGHLIGHT_DELAY_MS

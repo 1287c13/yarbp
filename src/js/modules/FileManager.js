@@ -2,8 +2,8 @@
 //
 // Встроенные примеры умеют открываться ссылкой: ?example=<slug> (см.
 // readExampleKeyFromUrl / writeExampleKeyToUrl в конце файла).
-import { escAttr, escText } from '../escape.js';
-import { clearStored, removeStored, readStored, storedKeys, writeStored } from '../storage.js';
+import { escAttr, escText } from '../utils/escape.js';
+import { clearStored, removeStored, readStored, storedKeys, writeStored } from '../utils/storage.js';
 
 const EXAMPLE_PARAM = 'example';
 

@@ -1,4 +1,4 @@
-import { nodeTypes } from '../../YarbpParser.js';
+import { nodeTypes } from '../../../core/YarbpParser.js';
 import { buildModel } from './buildModel.js';
 import { serializeBpmn } from './serializeBpmn.js';
 import { recalculateDi, getLayoutStats, resetLayoutStats } from './BpmnDiGenerator.js';

@@ -1,4 +1,4 @@
-import { nodeTypes } from '../YarbpParser.js';
+import { nodeTypes } from '../../core/YarbpParser.js';
 import { buildSchemaObject } from './schemaFields.js';
 
 /**

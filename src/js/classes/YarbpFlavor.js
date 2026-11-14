@@ -4,9 +4,9 @@ import { YarbpXMLConverter } from './ast-converters/XMLConvertor.js'
 import { YarbpProtoConverter } from './ast-converters/ProtobufConvertor.js'
 
 /* suggestions */
-import { xpmSuggestions } from './suggestions/xpmSuggestions.js';
-import { bpmnSuggestions } from './suggestions/bpmnSuggestions.js';
-import { flexFormsSuggestions } from './suggestions/flexFormsSuggestions.js';
+import { xpmSuggestions } from '../suggestions/xpmSuggestions.js';
+import { bpmnSuggestions } from '../suggestions/bpmnSuggestions.js';
+import { flexFormsSuggestions } from '../suggestions/flexFormsSuggestions.js';
 
 /* renderers */
 import { YarbpBasicRenderer } from './YarbpBasicRenderer.js'
@@ -22,7 +22,7 @@ import { MermaidRenderer } from './renderers/MermaidRenderer.js';
 import { XMLHighlighter } from './highlighters/XMLHighlighter.js'
 
 /* escaping */
-import { escText } from '../escape.js'
+import { escText } from '../utils/escape.js'
 
 
 class YarbpLexerRenderer extends YarbpBasicRenderer {

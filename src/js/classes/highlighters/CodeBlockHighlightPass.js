@@ -1,5 +1,5 @@
-import { Ticker } from '../../Ticker.js';
-import { TokenTypes } from '../YarbpLexer.js';
+import { Ticker } from '../../utils/Ticker.js';
+import { TokenTypes } from '../../core/YarbpLexer.js';
 import { CodeBlockHighlighter } from './CodeBlockHighlighter.js';
 
 /**

@@ -1,7 +1,7 @@
 import { YarbpBasicRenderer } from '../YarbpBasicRenderer.js';
 import { YarbpBPMNConverter } from '../ast-converters/bpmn/YarbpBPMNConverter.js';
 import { XMLHighlighter } from '../highlighters/XMLHighlighter.js';
-import { Ticker } from '../../Ticker.js';
+import { Ticker } from '../../utils/Ticker.js';
 
 /**
  * Пауза автообновления схемы.

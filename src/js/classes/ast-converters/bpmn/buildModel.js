@@ -1,4 +1,4 @@
-import { nodeTypes } from '../../YarbpParser.js';
+import { nodeTypes } from '../../../core/YarbpParser.js';
 import {
   BpmnDefinitions, BpmnCollaboration, BpmnParticipant,
   BpmnProcess, BpmnLane, BpmnFlowNode, BpmnSequenceFlow,

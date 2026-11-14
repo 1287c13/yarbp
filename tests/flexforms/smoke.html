@@ -28,9 +28,9 @@
 import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
 import { FlexFormsRenderer } from '../../src/js/classes/renderers/FlexFormsRenderer.js';
 import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
-import { YarbpLexer } from '../../src/js/classes/YarbpLexer.js';
-import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
-import { flexFormsSuggestions } from '../../src/js/classes/suggestions/flexFormsSuggestions.js';
+import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
+import { YarbpParser } from '../../src/js/core/YarbpParser.js';
+import { flexFormsSuggestions } from '../../src/js/suggestions/flexFormsSuggestions.js';
 import { FileManager } from '../../src/js/modules/FileManager.js';
 import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
 
@@ -139,7 +139,7 @@ try {
 
   /**
    * Ждём, пока страница-хост подставит форму: iframe сначала грузит
-   * preview.html, затем получает HTML через postMessage и document.write.
+   * preview/host.html, затем получает HTML через postMessage и document.write.
    * Фиксированная пауза 1500 мс давала гонку на медленном старте браузера.
    */
   const waitForFormDoc = async (frame, timeoutMs = 8000) => {
@@ -223,7 +223,7 @@ try {
       ' / ' + (htmlBtn ? htmlBtn.offsetWidth + 'x' + htmlBtn.offsetHeight : 'нет') +
       ' / ' + (mockBtn ? mockBtn.offsetWidth + 'x' + mockBtn.offsetHeight : 'нет'));
 
-  // Страница формы уходит в iframe через страницу-хост (src/preview.html) —
+  // Страница формы уходит в iframe через страницу-хост (src/preview/host.html) —
   // иначе её встроенные скрипты блокировала бы строгая CSP редактора. Поэтому
   // проверяем ровно тот документ, который рендерер отдал хосту.
   const srcdoc = renderer && typeof renderer.pendingPreviewHtml === 'string'

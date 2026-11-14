@@ -19,16 +19,16 @@ const PREVIEW_DEBOUNCE_MS = 400;
  *
  * Отдельный документ нужен из-за CSP: `srcdoc`/`blob:` наследуют политику
  * редактора, а страница формы собрана из встроенных <script>/<style>.
- * `preview.html` отдаётся сервером и политику не наследует — см. файл
- * `src/preview.html` и описание протокола `postMessage` там же.
+ * `preview/host.html` отдаётся сервером и политику не наследует — см. файл
+ * `src/preview/host.html` и описание протокола `postMessage` там же.
  *
  * Путь считаем от модуля, а не от текущей страницы: рендерер запускается и
  * из `src/index.html`, и из тестовых страниц (`tests/flexforms/smoke.html`).
- * Относительный `preview.html` от документа во втором случае указывал бы на
- * несуществующий `tests/flexforms/preview.html`, iframe получал 404 и форма
+ * Относительный `preview/host.html` от документа во втором случае указывал бы на
+ * несуществующий `tests/flexforms/preview/host.html`, iframe получал 404 и форма
  * не монтировалась (`нет #track`).
  */
-const PREVIEW_HOST_PAGE = new URL('../../../preview.html', import.meta.url).href;
+const PREVIEW_HOST_PAGE = new URL('../../../preview/host.html', import.meta.url).href;
 
 /** Заглушка экрана, если из разметки не собирается IR. */
 const EMPTY_IR_HINT = '<!DOCTYPE html><meta charset="utf-8">' +
@@ -134,7 +134,7 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
 
     const screen = container.querySelector('.ff-phone-screen');
 
-    // Документ подставляет страница-хост (preview.html): srcdoc наследовал бы
+    // Документ подставляет страница-хост (preview/host.html): srcdoc наследовал бы
     // CSP редактора, а странице формы нужны встроенные скрипты и стили.
     const iframe = document.createElement('iframe');
     iframe.title = 'Предпросмотр формы ТСД';

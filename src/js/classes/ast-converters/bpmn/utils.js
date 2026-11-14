@@ -1,5 +1,5 @@
-import { nodeTypes } from '../../YarbpParser.js';
-import { escapeHtml, findChildrenByKeyValue, IdGenerator } from '../../../utils.js';
+import { nodeTypes } from '../../../core/YarbpParser.js';
+import { escapeHtml, findChildrenByKeyValue, IdGenerator } from '../../../utils/utils.js';
 
 /* ---------------- XML ---------------- */
 

@@ -1,4 +1,4 @@
-import { escText } from '../../escape.js';
+import { escText } from '../../utils/escape.js';
 
 /**
  * Лёгкая подсветка содержимого фрагментов кода.

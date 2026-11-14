@@ -1,6 +1,6 @@
 import { DiagnosticsStatusRenderer } from './DiagnosticsStatusRenderer.js';
 import { YarbpOpenAPIConverter } from '../ast-converters/OpenAPIConvertor.js';
-import { escText } from '../../escape.js';
+import { escText } from '../../utils/escape.js';
 
 /**
  * Панель «JSON-документ»: конвертер → JSON + строка диагностики.

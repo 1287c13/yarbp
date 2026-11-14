@@ -1,4 +1,4 @@
-import { calcLeadingSpaces } from '../utils.js';
+import { calcLeadingSpaces } from '../utils/utils.js';
 
 export const COMMENT_PREFIX = '--/';
 

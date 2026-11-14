@@ -1,6 +1,6 @@
-import { TokenTypes } from './classes/YarbpLexer.js';
-import { COMMON_DIRECTIVES } from './classes/suggestions/commonDirectives.js';
-import { resolveContext } from './classes/suggestions/contextResolver.js';
+import { TokenTypes } from '../core/YarbpLexer.js';
+import { COMMON_DIRECTIVES } from './commonDirectives.js';
+import { resolveContext } from './contextResolver.js';
 
 const HINT = '▼ Alt';
 

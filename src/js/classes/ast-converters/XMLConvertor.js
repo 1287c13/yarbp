@@ -1,4 +1,4 @@
-import { nodeTypes, valueTypes } from '../YarbpParser.js';
+import { nodeTypes, valueTypes } from '../../core/YarbpParser.js';
 
 export class YarbpXMLConverter {
   /**

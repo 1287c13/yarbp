@@ -1,5 +1,5 @@
-import {nodeTypes} from '../YarbpParser.js';
-import {findChildrenByKeyValue} from "../../utils.js";
+import {nodeTypes} from '../../core/YarbpParser.js';
+import {findChildrenByKeyValue} from "../../utils/utils.js";
 
 export class YarbpXPMConverter {
   constructor(ast) {

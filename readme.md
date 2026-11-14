@@ -11,6 +11,7 @@
 
 <p>
   <a href="#about">Общее описание</a> ·
+  <a href="#structure">Структура</a> ·
   <a href="#sandbox">Песочница</a> ·
   <a href="#syntax">Синтаксис</a> ·
   <a href="#converters">Конвертеры</a> ·
@@ -23,6 +24,7 @@
 
 - [Общее описание](#about)
 - [Идеи](#ideas)
+- [Структура репозитория](#structure)
 - [Песочница](#sandbox)
   - [Ссылки на встроенные примеры](#sandbox-examples)
 - [Спецификация](#spec)
@@ -77,6 +79,29 @@
   - настраиваемый сахар для объявления свойств
 - Вся семантика на стороне конвертера - язык определяет только структуру, а смысл придаёт целевой конвертер.
 - При этом низкий порог входа. Хотим писать просто - пишем просто, разметка валидна. Хотим писать компактно и удобно - изучаем фичи.
+
+<a id="structure"></a>
+
+## Структура репозитория
+
+```text
+src/                    рантайм редактора
+  index.html            точка входа
+  preview/host.html     страница-хост предпросмотра формы ТСД
+  css/ fonts/ static/   оформление, шрифты, иконки
+  js/                   см. src/js/README.md
+
+notes/                  материалы вне рантайма
+  cases/                входные кейсы golden-тестов
+  design/               макеты, схемы, скриншоты
+  examples/             примеры, не встроенные в редактор
+
+tests/                  браузерные и golden-тесты
+tools/                  утилиты командной строки
+readme.md               эта документация
+```
+
+Подробная карта JavaScript-модулей — в `src/js/README.md`.
 
 <a id="sandbox"></a>
 
@@ -547,7 +572,7 @@ function test() { return 1; }
 
 Рендер:
 
-![Карта процесса-опыта](render_examples/XPO.PNG)
+![Карта процесса-опыта](notes/design/render_examples/XPO.PNG)
 
 Идентификаторы иконок для использвоания в конвертере КПО:
 
@@ -647,7 +672,7 @@ function test() { return 1; }
 
 Рендер формы:
 
-![сложная-форма](render_examples/complex_form.PNG)
+![сложная-форма](notes/design/render_examples/complex_form.PNG)
 
 </details>
 
@@ -1051,11 +1076,11 @@ JS-прогоны через `quickjs` удалены — проект и тес
 
 #### Целевая схема компонентов
 
-![компоненты](render_examples/components.png)
+![компоненты](notes/design/render_examples/components.png)
 
 #### Сиквенс текущей реализации редактора
 
-![сиквенс](render_examples/seq.png)
+![сиквенс](notes/design/render_examples/seq.png)
 
 <details>
 <summary>Исходники PlantUML</summary>

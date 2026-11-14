@@ -1,6 +1,6 @@
 import { TokenTypes } from './YarbpLexer.js';
-import { splitWithEscaping, dedentMultilineString } from '../utils.js'
-import { expandMacros } from '../macroPostprocess.js'
+import { splitWithEscaping, dedentMultilineString } from '../utils/utils.js'
+import { expandMacros } from './macroPostprocess.js'
 
 export const nodeTypes = Object.freeze({
   ROOT: 'ROOT',           /* single general root for document*/

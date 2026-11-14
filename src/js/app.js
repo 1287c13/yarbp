@@ -1,16 +1,16 @@
 import { YarbpFlavor } from './classes/YarbpFlavor.js';
-import { YarbpLexer, TokenTypes } from './classes/YarbpLexer.js';
-import { YarbpParser } from './classes/YarbpParser.js';
+import { YarbpLexer, TokenTypes } from './core/YarbpLexer.js';
+import { YarbpParser } from './core/YarbpParser.js';
 import { YarbpHighlighter } from './classes/highlighters/YarbpHighlighter.js';
 import { CodeBlockHighlightPass } from './classes/highlighters/CodeBlockHighlightPass.js';
 import { FileManager } from './modules/FileManager.js';
 import { toggleLineComments } from './modules/CommentToggler.js';
 
-import { SuggestionProvider } from './SuggestionProvider.js';
-import { SuggestionUI } from './SuggestionUI.js';
-import { Ticker } from './Ticker.js';
+import { SuggestionProvider } from './suggestions/SuggestionProvider.js';
+import { SuggestionUI } from './suggestions/SuggestionUI.js';
+import { Ticker } from './utils/Ticker.js';
 import { IndentGuides } from './classes/highlighters/IndentGuides.js';
-import { readStored, writeStored } from './storage.js';
+import { readStored, writeStored } from './utils/storage.js';
 
 const MIN_SIZE_PERCENT = 1;
 const MAX_SIDEBAR_PERCENT = 80;

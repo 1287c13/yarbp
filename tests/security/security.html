@@ -21,9 +21,9 @@
    * интересна именно сборка HTML — поэтому результат каждой сборки ещё и
    * разбирается DOM-парсером: живой узел виден только там.
    */
-  import { escText, escAttr, escJsonForHtml } from '../../src/js/escape.js';
-  import { YarbpLexer } from '../../src/js/classes/YarbpLexer.js';
-  import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
+  import { escText, escAttr, escJsonForHtml } from '../../src/js/utils/escape.js';
+  import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
+  import { YarbpParser } from '../../src/js/core/YarbpParser.js';
   import { YarbpHighlighter } from '../../src/js/classes/highlighters/YarbpHighlighter.js';
   import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   import { FileManager } from '../../src/js/modules/FileManager.js';
@@ -273,7 +273,7 @@
   let previewHtml = '';
   try {
     editorHtml = await fetchText('../../src/index.html');
-    previewHtml = await fetchText('../../src/preview.html');
+    previewHtml = await fetchText('../../src/preview/host.html');
   } catch (e) { /* проверки ниже покажут пустоту */ }
 
   const cspMatch = editorHtml.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/);

@@ -20,10 +20,10 @@
    * настоящем localStorage (этот origin), экспорт перехватывается на уровне
    * Blob, а запрет хранилища имитируется подменой свойства window.
    */
-  import { readStored, writeStored, removeStored, storedKeys } from '../../src/js/storage.js';
+  import { readStored, writeStored, removeStored, storedKeys } from '../../src/js/utils/storage.js';
   import { FileManager } from '../../src/js/modules/FileManager.js';
-  import { YarbpLexer } from '../../src/js/classes/YarbpLexer.js';
-  import { YarbpParser } from '../../src/js/classes/YarbpParser.js';
+  import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
+  import { YarbpParser } from '../../src/js/core/YarbpParser.js';
   import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
   import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
 
@@ -545,7 +545,7 @@
     const hostSrc = hostFrame ? String(hostFrame.getAttribute('src') || '') : '';
     const hostSrcPath = hostSrc.split('?')[0];
     check('предпросмотр: iframe грузит страницу-хост, а не srcdoc',
-      /(^|\/)preview\.html$/.test(hostSrcPath), hostSrc || 'нет src');
+      /(^|\/)preview\/host\.html$/.test(hostSrcPath), hostSrc || 'нет src');
 
     const hostDoc = hostFrame ? hostFrame.contentDocument : null;
     check('предпросмотр: форма отрисована внутри хоста',
