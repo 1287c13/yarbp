@@ -1,5 +1,5 @@
 import { TokenTypes } from './YarbpLexer.js';
-import { escText } from '../escape.js';
+import { escText, escAttr } from '../escape.js';
 
 export class YarbpHighlighter {
 
@@ -14,6 +14,7 @@ export class YarbpHighlighter {
     [TokenTypes.COMMENT_OUT]: 'removed',
     [TokenTypes.DIRECTIVE]: 'flavor',
     [TokenTypes.TYPE]: 'ide-code-type',
+    [TokenTypes.CODE_BLOCK]: 'ide-code-codeblock',
     // Недопустимый фрагмент: подсвечивается волнистым подчёркиванием, а текст
     // под ним остаётся текстом (экранируется как все остальные токены).
     [TokenTypes.UNPARSED]: 'ide-code-unparsed'
@@ -73,9 +74,15 @@ export class YarbpHighlighter {
 
     for (const { token, className } of this.collectRanges()) {
       result += escText(code.slice(cursor, token.start));
-      result += `<span class="${className}">`
-        + escText(code.slice(token.start, token.end))
-        + '</span>';
+
+      if (token.type === TokenTypes.CODE_BLOCK) {
+        result += this.renderCodeBlock(code, token, className);
+      } else {
+        result += `<span class="${className}">`
+          + escText(code.slice(token.start, token.end))
+          + '</span>';
+      }
+
       cursor = token.end;
     }
 
@@ -83,5 +90,28 @@ export class YarbpHighlighter {
     this.code = result;
     return this.code;
   };
+
+  /**
+   * Фрагмент кода: границы и язык рисует основной проход, содержимое —
+   * отдельный отложенный проход (CodeBlockHighlightPass). Текст остаётся
+   * исходным: три куска при склейке дают ровно `code.slice(start, end)`.
+   */
+  renderCodeBlock(code, token, className) {
+    const contentStart = token.contentStart ?? token.end;
+    const contentEnd = token.contentEnd ?? token.end;
+    const language = token.language ? escAttr(token.language) : '';
+
+    const opener = escText(code.slice(token.start, contentStart));
+    const content = escText(code.slice(contentStart, contentEnd));
+    const closer = escText(code.slice(contentEnd, token.end));
+
+    return `<span class="${className}" data-code-block-start="${token.start}"`
+      + (language ? ` data-lang="${language}"` : '')
+      + '>'
+      + `<span class="ide-code-fence">${opener}</span>`
+      + `<span class="ide-code-body">${content}</span>`
+      + `<span class="ide-code-fence">${closer}</span>`
+      + '</span>';
+  }
 
 }

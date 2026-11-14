@@ -64,6 +64,13 @@ pointer-events: none; z-index: 1; margin: 0; border: none; }
 .ide-code-prop { color: #0000FF; text-decoration: none; }
 .ide-code-val { color: #335272; text-decoration: none; }
 .ide-code-type { color: #b800d5; text-decoration: none; }
+/* Фрагмент кода: границы рисует основной проход, содержимое — отложенный. */
+.ide-code-codeblock { background-color: #f4f7fb; }
+.ide-code-fence { color: #6a737d; }
+.ide-code-body .code-kw { color: #0033b3; }
+.ide-code-body .code-str { color: #a31515; }
+.ide-code-body .code-num { color: #098658; }
+.ide-code-body .code-com { color: #6a737d; }
 .special-symbols { color: #bec3c6; text-decoration: none; }
 .flavor { background-color: #ddffe9; color: #408055; border: none;
   outline: 1px solid #408055; outline-offset: 2px; border-radius: 5px;}
@@ -184,6 +191,12 @@ body.dark .ide-code-key { color: #cbd7da; font-weight: bolder; text-decoration: 
 body.dark .ide-code-prop { color: #99c7ff; text-decoration: none; }
 body.dark .ide-code-val { color: #c3cdd0; text-decoration: none;  }
 body.dark .ide-code-type { color: #ff9d50; text-decoration: none; }
+body.dark .ide-code-codeblock { background-color: #17212b; }
+body.dark .ide-code-fence { color: #8b949e; }
+body.dark .ide-code-body .code-kw { color: #569cd6; }
+body.dark .ide-code-body .code-str { color: #ce9178; }
+body.dark .ide-code-body .code-num { color: #b5cea8; }
+body.dark .ide-code-body .code-com { color: #6a9955; }
 
 body.dark .xml-special { color: #8d8d8d; text-decoration: none; }
 body.dark .xml-closing-tag { color: #8d8d8d; text-decoration: none; }

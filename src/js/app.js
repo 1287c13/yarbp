@@ -2,6 +2,7 @@ import { YarbpFlavor } from './classes/YarbpFlavor.js';
 import { YarbpLexer, TokenTypes } from './classes/YarbpLexer.js';
 import { YarbpParser } from './classes/YarbpParser.js';
 import { YarbpHighlighter } from './classes/YarbpHighlighter.js';
+import { CodeBlockHighlightPass } from './classes/highlighters/CodeBlockHighlightPass.js';
 import { FileManager } from './modules/FileManager.js';
 import { toggleLineComments } from './modules/CommentToggler.js';
 
@@ -230,6 +231,8 @@ function syncRenderScroll() {
 
 const LEXER_ERROR_TEXT = {
   'unterminated quoted value': 'незакрытая кавычка',
+  'unterminated code block': 'незакрытый фрагмент кода',
+  'expected value': 'ожидалось значение',
   'unknown prefix value': 'неизвестный префикс',
   'empty key': 'пустой ключ',
   'invalid char': 'недопустимый символ'
@@ -248,27 +251,39 @@ function lineColumnAt(text, offset) {
  * Лексер уже отдаёт и токены `UNPARSED`, и текст `error`; не хватало только
  * вывода. Сообщения лексера технические («invalid char»), поэтому здесь они
  * переводятся в человеческие формулировки — сам лексер не меняется.
+ *
+ * Второй источник — нефатальные диагностики парсера (нет ключа подстановки,
+ * цикл). Они не меняют AST и golden-снимки, но должны быть видны пользователю.
  */
-function describeSyntaxError(code, tokens) {
+function describeSyntaxError(code, tokens, parserDiagnostics = []) {
   const broken = tokens.find(token => token.error || token.type === TokenTypes.UNPARSED);
-  if (!broken) return '';
+  if (broken) {
+    const { line, column } = lineColumnAt(code, broken.start);
+    const raw = String(broken.error || '').trim();
+    const reason = LEXER_ERROR_TEXT[raw] || raw || 'не удалось разобрать';
 
-  const { line, column } = lineColumnAt(code, broken.start);
-  const raw = String(broken.error || '').trim();
-  const reason = LEXER_ERROR_TEXT[raw] || raw || 'не удалось разобрать';
+    const fragment = String(broken.value ?? '').trim();
+    const tail = fragment
+      ? ': «' + (fragment.length > 24 ? fragment.slice(0, 24) + '…' : fragment) + '»'
+      : '';
 
-  const fragment = String(broken.value ?? '').trim();
-  const tail = fragment
-    ? ': «' + (fragment.length > 24 ? fragment.slice(0, 24) + '…' : fragment) + '»'
-    : '';
+    return 'строка ' + line + ', позиция ' + column + ' — ' + reason + tail;
+  }
 
-  return 'строка ' + line + ', позиция ' + column + ' — ' + reason + tail;
+  const firstDiagnostic = (parserDiagnostics || [])[0];
+  if (firstDiagnostic) {
+    const { line, column } = lineColumnAt(code, firstDiagnostic.start ?? 0);
+    return 'строка ' + line + ', позиция ' + column + ' — ' + firstDiagnostic.message;
+  }
+
+  return '';
 }
 
-function updateStatus(code) {
+function updateStatus(code, parserDiagnostics = []) {
   if (!editorStatus) return;
 
-  const message = describeSyntaxError(code, YarbpAppGlobals.lexer.tokens);
+  const message = describeSyntaxError(
+    code, YarbpAppGlobals.lexer.tokens, parserDiagnostics);
   editorStatus.hidden = !message;
   editorStatus.textContent = message;
   editorStatus.title = message;
@@ -344,11 +359,24 @@ function updateViews() {
   lastRenderedCode = code;
   YarbpAppGlobals.lexer.setInitialState(code);
   YarbpAppGlobals.lexer.tokenize();
-  updateStatus(code);
+
+  /* AST нужен и для статуса: диагностики подстановок не попадают в токены. */
+  let ast = null;
+  try {
+    ast = YarbpAppGlobals.parser.getAST();
+  } catch (e) {
+    console.error('[app] AST build failed:', e);
+  }
+  lastAST = ast;
+  updateStatus(code, YarbpAppGlobals.parser.lastDiagnostics || []);
 
   YarbpAppGlobals.highlighter.code = code;
   YarbpAppGlobals.highlighter.tokens = YarbpAppGlobals.lexer.tokens;
   highlightDiv.innerHTML = YarbpAppGlobals.highlighter.highlight();
+
+  /* Подсветка встроенных языков — отдельным отложенным проходом. */
+  YarbpAppGlobals.codeBlockHighlightPass.schedule(
+    code, YarbpAppGlobals.lexer.tokens);
 
   YarbpAppGlobals.indentGuides?.refresh();
 
@@ -360,14 +388,6 @@ function updateViews() {
   } else {
     flavor = new YarbpFlavor(firstDirective.value);
   }
-
-  let ast = null;
-  try {
-    ast = YarbpAppGlobals.parser.getAST();
-  } catch (e) {
-    console.error('[app] AST build failed:', e);
-  }
-  lastAST = ast;
 
   scheduleSuggestions(flavor, ast);
 
@@ -678,6 +698,7 @@ function setAppGlobals() {
     lexer: lexer,
     parser: new YarbpParser(lexer),
     highlighter: new YarbpHighlighter(),
+    codeBlockHighlightPass: new CodeBlockHighlightPass(highlightDiv),
     flavor: undefined,
     renderer: undefined
   };
