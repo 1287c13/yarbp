@@ -7,6 +7,7 @@ const HINT = '▼ Alt';
 export class SuggestionProvider {
   update({ tokens, ast, cursorOffset, text, flavor, force = false }) {
     if (!tokens || !tokens.length) return null;
+    if (this.isInsideCodeBlock(tokens, cursorOffset)) return null;
 
     const directive = this.findDirectiveAt(tokens, cursorOffset);
     if (directive) return this.resolveDirectiveContext(directive, cursorOffset, text, force);
@@ -16,6 +17,25 @@ export class SuggestionProvider {
     }
 
     return null;
+  }
+
+  /**
+   * Курсор внутри фрагмента кода — это чужой язык (BSL/JS/SQL/...),
+   * подсказки ЯРБП там не применяются. Проверяем весь остров, включая
+   * fence: на строке с ``` тоже не должно быть меню.
+   */
+  isInsideCodeBlock(tokens, cursorOffset) {
+    for (const t of tokens) {
+      if (t.type === TokenTypes.CODE_BLOCK) {
+        if (cursorOffset >= t.start && cursorOffset < t.end) return true;
+        continue;
+      }
+      if (t.type === TokenTypes.UNPARSED &&
+          t.error === 'unterminated code block') {
+        if (cursorOffset >= t.start && cursorOffset <= t.end) return true;
+      }
+    }
+    return false;
   }
 
   findDirectiveAt(tokens, cursorOffset) {

@@ -29,6 +29,7 @@
   import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
   import { YarbpHighlighter } from '../../src/js/classes/highlighters/YarbpHighlighter.js';
   import { CodeBlockHighlighter } from '../../src/js/classes/highlighters/CodeBlockHighlighter.js';
+  import { SuggestionProvider } from '../../src/js/SuggestionProvider.js';
   import {
     CodeBlockHighlightPass,
     CODE_BLOCK_HIGHLIGHT_DELAY_MS
@@ -486,6 +487,73 @@
     xssHost.querySelector('.ide-code-body').textContent.includes('<img'));
 
   /* ------------------------------------------------------------------ */
+  /* 5b. Подсказки внутри фрагмента кода не вызываются                   */
+  /* ------------------------------------------------------------------ */
+  const suggestionsCode = join(
+    '! как ast',
+    '.ключ значение',
+    '```bsl',
+    'Процедура Тест()',
+    '```');
+  const suggestionsParsed = build(suggestionsCode);
+  const codeBlockToken = suggestionsParsed.tokens
+    .find(token => token.type === TokenTypes.CODE_BLOCK);
+  const directiveToken = suggestionsParsed.tokens
+    .find(token => token.type === TokenTypes.DIRECTIVE);
+  const suggestionProvider = new SuggestionProvider();
+
+  check('подсказки: токены CODE_BLOCK и DIRECTIVE найдены',
+    !!codeBlockToken && !!directiveToken);
+
+  if (codeBlockToken && directiveToken) {
+    const insideResult = suggestionProvider.update({
+      tokens: suggestionsParsed.tokens,
+      ast: suggestionsParsed.ast,
+      cursorOffset: codeBlockToken.contentStart + 2,
+      text: suggestionsCode,
+      flavor: null
+    });
+    check('подсказки: внутри CODE_BLOCK меню не вызывается',
+      insideResult === null,
+      insideResult ? JSON.stringify(insideResult).slice(0, 120) : '');
+
+    const forcedInsideResult = suggestionProvider.update({
+      tokens: suggestionsParsed.tokens,
+      ast: suggestionsParsed.ast,
+      cursorOffset: codeBlockToken.contentStart + 2,
+      text: suggestionsCode,
+      flavor: null,
+      force: true
+    });
+    check('подсказки: Alt внутри CODE_BLOCK меню не вызывает',
+      forcedInsideResult === null,
+      forcedInsideResult ? JSON.stringify(forcedInsideResult).slice(0, 120) : '');
+
+    const outsideResult = suggestionProvider.update({
+      tokens: suggestionsParsed.tokens,
+      ast: suggestionsParsed.ast,
+      cursorOffset: directiveToken.end,
+      text: suggestionsCode,
+      flavor: null
+    });
+    check('подсказки: вне CODE_BLOCK меню работает',
+      !!outsideResult && outsideResult.suggestions.length > 0,
+      outsideResult ? String(outsideResult.suggestions.length) : 'null');
+  }
+
+  const unclosedToken = codeUnclosed.tokens.find(token =>
+    token.type === TokenTypes.UNPARSED &&
+    token.error === 'unterminated code block');
+  check('подсказки: незакрытый CODE_BLOCK тоже подавляет меню',
+    !!unclosedToken && suggestionProvider.update({
+      tokens: codeUnclosed.tokens,
+      ast: codeUnclosed.ast,
+      cursorOffset: unclosedToken.start + 3,
+      text: CODE_UNCLOSED,
+      flavor: null
+    }) === null);
+
+  /* ------------------------------------------------------------------ */
   /* 6. Редактор: курсор и выделение не сбиваются отложенным проходом    */
   /* ------------------------------------------------------------------ */
   function waitForLoad(frame) {
@@ -547,6 +615,32 @@
     check('редактор: текст слоя подсветки совпадает с редактором',
       !!layer && layer.textContent === appCode,
       layer ? String(layer.textContent.length) : 'нет слоя');
+
+    const popup = doc.querySelector('.suggestion-popup');
+    const directiveEnd = appCode.indexOf('\n');
+
+    editor.setSelectionRange(directiveEnd, directiveEnd);
+    editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 400));
+    check('редактор: вне блока подсказки открываются',
+      !!popup && popup.hidden === false,
+      popup ? String(popup.hidden) : 'нет popup');
+
+    const insideBlock = appCode.indexOf('Процедура') + 3;
+    editor.setSelectionRange(insideBlock, insideBlock);
+    editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 400));
+    check('редактор: внутри блока подсказки не открываются',
+      !!popup && popup.hidden === true,
+      popup ? String(popup.hidden) : 'нет popup');
+
+    editor.dispatchEvent(new view.KeyboardEvent('keydown', {
+      key: 'Alt', bubbles: true, cancelable: true
+    }));
+    await new Promise(resolve => setTimeout(resolve, 400));
+    check('редактор: Alt внутри блока не открывает подсказки',
+      !!popup && popup.hidden === true,
+      popup ? String(popup.hidden) : 'нет popup');
   }
 
   appFrame.remove();
