@@ -21,8 +21,14 @@ const PREVIEW_DEBOUNCE_MS = 400;
  * редактора, а страница формы собрана из встроенных <script>/<style>.
  * `preview.html` отдаётся сервером и политику не наследует — см. файл
  * `src/preview.html` и описание протокола `postMessage` там же.
+ *
+ * Путь считаем от модуля, а не от текущей страницы: рендерер запускается и
+ * из `src/index.html`, и из тестовых страниц (`tests/flexforms/smoke.html`).
+ * Относительный `preview.html` от документа во втором случае указывал бы на
+ * несуществующий `tests/flexforms/preview.html`, iframe получал 404 и форма
+ * не монтировалась (`нет #track`).
  */
-const PREVIEW_HOST_PAGE = 'preview.html';
+const PREVIEW_HOST_PAGE = new URL('../../../preview.html', import.meta.url).href;
 
 /** Заглушка экрана, если из разметки не собирается IR. */
 const EMPTY_IR_HINT = '<!DOCTYPE html><meta charset="utf-8">' +

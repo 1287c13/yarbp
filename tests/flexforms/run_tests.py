@@ -24,9 +24,11 @@ import io
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from html import unescape as html_unescape
 
@@ -221,21 +223,23 @@ def test_browser():
         [sys.executable, '-m', 'http.server', str(port), '--bind', '127.0.0.1'],
         cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+    # Свежий профиль на каждый запуск: иначе Chrome может отдать из кеша
+    # старую версию модулей, и дым проверит не тот код, который лежит в репо.
+    profile = tempfile.mkdtemp(prefix='yarbp-flexforms-smoke-')
+
     try:
         if not wait_for_port(port):
             check('smoke.html: сервер тестов поднялся', False, 'порт %d' % port)
             return
 
         url = 'http://127.0.0.1:%d/yarbp/tests/flexforms/smoke.html' % port
-        profile = os.path.join(os.environ.get('TEMP', os.path.expanduser('~')),
-                               'yarbp-flexforms-smoke')
         command = [
             browser,
             '--headless=new',
             '--disable-gpu',
             '--no-first-run',
             '--no-default-browser-check',
-            '--virtual-time-budget=9000',
+            '--virtual-time-budget=15000',
             '--user-data-dir=' + profile,
             '--dump-dom',
             url,
@@ -255,6 +259,7 @@ def test_browser():
             server.wait(timeout=10)
         except subprocess.TimeoutExpired:
             server.kill()
+        shutil.rmtree(profile, ignore_errors=True)
 
     match = re.search(r'<pre id="result">(.*?)</pre>', output, re.S)
     if not match:

@@ -121,8 +121,6 @@ try {
     irActions.length === 2 && irActions.every(action => action.отображатьСтатистику === true),
     irActions.map(action => action.имя + '=' + String(action.отображатьСтатистику)).join(', '));
 
-  await new Promise(resolve => setTimeout(resolve, 1500));
-
   const container = document.querySelector('#render-pane .ui-render-container');
   expect('контейнер предпросмотра создан', !!container);
   expect('редактор результата скрыт',
@@ -138,6 +136,25 @@ try {
   const configBtn = container && container.querySelector('.ff-export-btn--config');
   const htmlBtn = container && container.querySelector('.ff-export-btn--html');
   const mockBtn = container && container.querySelector('.ff-export-btn--mock');
+
+  /**
+   * Ждём, пока страница-хост подставит форму: iframe сначала грузит
+   * preview.html, затем получает HTML через postMessage и document.write.
+   * Фиксированная пауза 1500 мс давала гонку на медленном старте браузера.
+   */
+  const waitForFormDoc = async (frame, timeoutMs = 8000) => {
+    const deadline = Date.now() + timeoutMs;
+    let doc = null;
+    while (Date.now() < deadline) {
+      try { doc = frame && frame.contentDocument; } catch (e) { doc = null; }
+      if (doc && doc.getElementById('track')) return doc;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    try { doc = frame && frame.contentDocument; } catch (e) { doc = null; }
+    return doc;
+  };
+
+  const innerDoc = await waitForFormDoc(iframe);
 
   expect('корпус ТСД (SVG getSVG) на месте', !!svg,
     svg ? svg.getAttribute('viewBox') : 'нет');
@@ -227,14 +244,13 @@ try {
     srcdoc.indexOf("localStorage.getItem('tsd-form-state')") !== -1);
 
   /* 3. Движок внутри iframe отрисовал форму (если origin доступен). */
-  let innerDoc = null;
-  try { innerDoc = iframe && iframe.contentDocument; } catch (e) { innerDoc = null; }
   if (innerDoc) {
     const track = innerDoc.getElementById('track');
     const select = innerDoc.getElementById('action-input');
     const brand = innerDoc.getElementById('brandText');
     expect('движок: экраны операций отрисованы', !!track && track.children.length === 2,
-      track ? String(track.children.length) : 'нет #track');
+      track ? String(track.children.length) :
+        'нет #track; URL=' + innerDoc.URL + '; title=' + innerDoc.title);
     expect('движок: выбор операции заполнен', !!select && select.options.length === 2,
       select ? String(select.options.length) : 'нет #action-input');
     const innerTable = innerDoc.querySelector('table.ff-table');
@@ -265,7 +281,7 @@ try {
       return action ? (action.children || []).length : -1;
     };
     const cardsIn = index => {
-      const screen = track.children[index];
+      const screen = track ? track.children[index] : null;
       return screen ? screen.querySelectorAll(':scope > .card.grid-card').length : -1;
     };
     expect('группы: своя плашка-карточка на каждую группу операции',
@@ -276,7 +292,7 @@ try {
 
     /* Пустая таблица-приёмник: шапка блока (имя + счётчик строк) и подсказка
        про сканер. a2_t1 — приёмник операции a1 (.приемник a2_t1). */
-    const a2Screen = track.children[1];
+    const a2Screen = track ? track.children[1] : null;
     const a2Head = a2Screen ? a2Screen.querySelector('.tbl-head') : null;
     const a2Empty = a2Screen ? a2Screen.querySelector('.empty') : null;
     expect('таблица: шапка блока — имя и счётчик строк',

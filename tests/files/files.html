@@ -543,8 +543,9 @@
     check('предпросмотр: в рамке ТСД есть iframe', !!hostFrame);
 
     const hostSrc = hostFrame ? String(hostFrame.getAttribute('src') || '') : '';
+    const hostSrcPath = hostSrc.split('?')[0];
     check('предпросмотр: iframe грузит страницу-хост, а не srcdoc',
-      hostSrc.indexOf('preview.html') === 0, hostSrc || 'нет src');
+      /(^|\/)preview\.html$/.test(hostSrcPath), hostSrc || 'нет src');
 
     const hostDoc = hostFrame ? hostFrame.contentDocument : null;
     check('предпросмотр: форма отрисована внутри хоста',
