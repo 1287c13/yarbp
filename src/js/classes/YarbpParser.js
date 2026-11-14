@@ -18,7 +18,8 @@ export const valueTypes = Object.freeze({
   NUMBER: 'NUMBER',
   NULL: 'NULL',
   OBJECT: 'OBJECT',
-  ARRAY: 'ARRAY'
+  ARRAY: 'ARRAY',
+  CODE: 'CODE' /* фрагмент кода: value — сырой текст, language — язык или null */
 });
 
 class ASTNode {
@@ -27,6 +28,7 @@ class ASTNode {
     key: 'key',                   /* node name if not anonymous */
     value: 'value',               /* node value used for primitives only else children are value */
     valueType: 'valueType',       /* enum valueTypes */
+    language: 'language',         /* язык фрагмента кода (valueTypes.CODE) */
     extendedType: 'extendedType', /* user type if specified */
     prefix: 'prefix',             /* prefix symbols if used */
     position: 'position',         /* whole location in text */
@@ -72,6 +74,11 @@ export class YarbpParser {
     // Кэш AST: за один пересчёт его просят дважды (подсказки и рендерер).
     this.cachedTokens = null;
     this.cachedAST = null;
+    this.cachedDiagnostics = [];
+
+    /* Нефатальные замечания раскрытия подстановок (нет ключа, цикл и т.п.).
+       В AST не попадают, чтобы не менять golden-снимки и контракт конвертеров. */
+    this.lastDiagnostics = [];
   };
 
   /** sequential processing of tokens and recursive calls to create a tree */
@@ -136,6 +143,52 @@ export class YarbpParser {
         enrichedEntity.type = token.value;
       } else
 
+      /** фрагмент кода: примитив с сырым значением и необязательным языком */
+      if (token.type === TokenTypes.CODE_BLOCK) {
+        const codePosition = {
+          start: token.contentStart ?? token.start,
+          end: token.contentEnd ?? token.end
+        };
+        const codeProps = {
+          nodeType: nodeTypes.MEANING,
+          valueType: valueTypes.CODE,
+          value: token.value,
+          language: token.language ?? null,
+          position: codePosition
+        };
+
+        let enrichedEntities = [];
+
+        if (isNestedKeyMet) {
+          valueInConstructing.valueType = codeProps.valueType;
+          valueInConstructing.value = codeProps.value;
+          valueInConstructing.language = codeProps.language;
+          valueInConstructing.position = codeProps.position;
+          enrichedEntities = [valueInConstructing];
+
+        } else if (root.valueType === valueTypes.ARRAY) {
+          enrichedEntities = [new ASTNode(codeProps)];
+
+        } else if (root.valueType === valueTypes.OBJECT && !isNestedKeyMet) {
+          root.value = token.value;
+          root.language = token.language ?? null;
+
+        } else {
+          enrichedEntities = [new ASTNode(codeProps)];
+        }
+
+        enrichedEntities.forEach(enrichedEntity => {
+          enrichedEntity.nodeType = nodeTypes.MEANING;
+          if (!enrichedEntity.position) {
+            enrichedEntity.position = codePosition;
+          }
+
+          if (!root.children) { root.children = []; }
+          root.children.push(enrichedEntity);
+          isNestedKeyMet = false;
+        });
+      } else
+
       /** if value - deside is it for key or is it standing alone
        *  - if is for key so enrich valueInConstructing and stop constructing a key-value
        *  - if standing alone so create a new node
@@ -146,6 +199,11 @@ export class YarbpParser {
         if (isNestedKeyMet) {
           valueInConstructing.valueType = this.resolveType(token.value);
           valueInConstructing.value = this.resolveValue(token.value);
+          /* Значение со следующей строки: позиция узла должна указывать
+             на строку значения, а не на ключ (п. 4.6). */
+          if (token.onNextLine) {
+            valueInConstructing.position = { start: token.start, end: token.end };
+          }
           enrichedEntities = [valueInConstructing];
 
         } else if (root.valueType === valueTypes.ARRAY) {
@@ -252,6 +310,7 @@ export class YarbpParser {
     // дважды (подсказки и рендерер). `tokenize()` создаёт новый массив токенов,
     // поэтому ссылка — надёжный признак «документ не менялся».
     if (this.cachedAST && this.cachedTokens === this.lexer.tokens) {
+      this.lastDiagnostics = this.cachedDiagnostics;
       return this.cachedAST;
     }
 
@@ -262,10 +321,15 @@ export class YarbpParser {
 
     // Без макросов раскрывать нечего: `expandMacros` пересобирает дерево и
     // клонирует каждый узел, а результат структурно равен входу.
-    const result = this.hasMacroSyntax() ? expandMacros(ast) : withChildren(ast);
+    const diagnostics = [];
+    const result = this.hasMacroSyntax()
+      ? expandMacros(ast, diagnostics, this.lexer?.text || '')
+      : withChildren(ast);
 
     this.cachedTokens = this.lexer.tokens;
     this.cachedAST = result;
+    this.cachedDiagnostics = diagnostics;
+    this.lastDiagnostics = diagnostics;
     return result;
   }
 }

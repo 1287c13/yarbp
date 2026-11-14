@@ -19,6 +19,7 @@ export const TokenTypes = Object.freeze({
   BOOL: 'BOOL',
   NULL: 'NULL',
   ANY_VALUE: 'VALUE', /* value untyped at lexer */
+  CODE_BLOCK: 'CODE_BLOCK', /* fenced code island: raw text + optional language */
 
   /* special tokens */
   PREFIX: 'PREFIX',
@@ -47,6 +48,13 @@ class Token {
     this.start = props.start;
     this.end = props.end;
     this.error = props.error;
+
+    /* Поля фрагмента кода и «значения с новой строки». В Token.attrs их нет:
+       pretty-view и golden-снимки лексера не должны менять состав колонок. */
+    this.language = props.language;
+    this.contentStart = props.contentStart;
+    this.contentEnd = props.contentEnd;
+    this.onNextLine = props.onNextLine;
   }
 }
 
@@ -105,6 +113,15 @@ export class YarbpLexer {
     VALUE_ENDED: 'VALUE_ENDED',
     NEXT_KEY_ENCOUNTERED: 'NEXT_KEY_ENCOUNTERED',
 
+    /* значение примитивного ключа на следующей строке */
+    WAITING_FOR_NEXT_LINE_VALUE: 'WAITING_FOR_NEXT_LINE_VALUE',
+    NEXT_LINE_VALUE_PENDING: 'NEXT_LINE_VALUE_PENDING',
+    NEXT_LINE_VALUE_ENCOUNTERED: 'NEXT_LINE_VALUE_ENCOUNTERED',
+    NEXT_LINE_VALUE_ABSENT: 'NEXT_LINE_VALUE_ABSENT',
+
+    /* фрагмент кода: ``` язык? сырой текст ``` */
+    CODE_BLOCK_ENCOUNTERED: 'CODE_BLOCK_ENCOUNTERED',
+
     COMMENT_ENCOUNTERED: 'COMMENT_ENCOUNTERED',
     IN_COMMENT: 'IN_COMMENT',
     COMMENT_ENDED: 'COMMENT_ENDED',
@@ -123,6 +140,15 @@ export class YarbpLexer {
     ':': YarbpLexer.states.OBJECT_ENDED,
     '..': YarbpLexer.states.ARRAY_ENDED,
   });
+
+  /** Длина открывающего fence: 1 или 3 обратных апострофа (2 — не fence). */
+  static codeFenceLengthAt(text, pos) {
+    let count = 0;
+    while (text[pos + count] === '`') count++;
+    if (count >= 3) return 3;
+    if (count === 1) return 1;
+    return 0;
+  }
 
   static allowedTypes = new Set([
     TokenTypes.START,
@@ -163,6 +189,13 @@ export class YarbpLexer {
     this.openedScopes = undefined;
     this.prettyView = undefined;
 
+    /* Нефатальные замечания: golden-снимки их не видят, строка статуса — видит. */
+    this.diagnostics = [];
+    this.pendingPrimitive = null;
+    this.lastPrimitive = null;
+    this.valueStartedOnNextLine = false;
+    this.nextPos = undefined;
+
     this.rendererObserver = undefined;
     this.isObserved = false;
 
@@ -188,6 +221,12 @@ export class YarbpLexer {
     this.prettyView = '';
     this.onlyAllowedTokens = true;
 
+    this.diagnostics = [];
+    this.pendingPrimitive = null;
+    this.lastPrimitive = null;
+    this.valueStartedOnNextLine = false;
+    this.nextPos = undefined;
+
     this.addControlToken(TokenTypes.START,0);
   }
 
@@ -196,6 +235,18 @@ export class YarbpLexer {
       const char = this.text[pos];
       this.state = this.defineState(char, pos);
       this.handleState(char, pos);
+
+      /* Фрагмент кода — лексический остров: обработчик перескакивает сразу
+         за закрывающие кавычки, не пропуская содержимое через автомат. */
+      if (this.nextPos !== undefined) {
+        pos = this.nextPos;
+        this.nextPos = undefined;
+      }
+    }
+
+    if (this.pendingPrimitive) {
+      this.finishPendingPrimitiveAsEmpty();
+      this.state = YarbpLexer.states.WAITING_AFTER_NEWLINE;
     }
 
     if (this.state === YarbpLexer.states.IN_QUOTED_VALUE && this.currentToken.trim()) {
@@ -295,6 +346,11 @@ export class YarbpLexer {
         && token.type === TokenTypes.OBJECT) {
       activeScope.objectToken = token;
       activeScope.objectIndex = this.tokens.length;
+    }
+
+    if (this.valueStartedOnNextLine) {
+      token.onNextLine = true;
+      this.valueStartedOnNextLine = false;
     }
 
     this.tokens.push(token);
@@ -423,10 +479,26 @@ export class YarbpLexer {
     if (this.currentToken === '..' && char === '\n' && this.onlyAllowedTokens)
       return YarbpLexer.states.ARRAY_ENDED;
 
+    /* Значение примитива на следующей строке: ключ уже добавлен, ждём
+       значение. Пробелы/пустые строки копятся как обычный отступ. */
+    if (this.state === YarbpLexer.states.WAITING_FOR_NEXT_LINE_VALUE)
+      return this.defineNextLineValueState(char, pos);
+
+    /* Фрагмент кода — лексический остров. Проверяем до обычных правил
+       значения, иначе ``` попадёт в IN_VALUE как обычный текст. */
+    if ((this.state === YarbpLexer.states.WAITING_FOR_VALUE
+        || this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE)
+        && char === '`' && this.shouldStartCodeBlock(pos))
+      return YarbpLexer.states.CODE_BLOCK_ENCOUNTERED;
+
     // Невалидный мусор, накопленный в WAITING, иначе молча потеряется.
     if (this.state === YarbpLexer.states.WAITING && char === '\n'
         && !YarbpLexer.tokenValidationRegexp.test(this.currentToken))
       return YarbpLexer.states.ERROR;
+
+    if (this.state === YarbpLexer.states.WAITING_FOR_VALUE && char === '\n'
+        && this.lastPrimitive)
+      return YarbpLexer.states.NEXT_LINE_VALUE_PENDING;
 
     if ((this.state === YarbpLexer.states.WAITING
         || this.state === YarbpLexer.states.WAITING_FOR_VALUE)
@@ -473,12 +545,14 @@ export class YarbpLexer {
       return YarbpLexer.states.IN_QUOTED_VALUE;
 
     if (this.state === YarbpLexer.states.IN_QUOTED_VALUE
+        && this.currentToken.length >= 2
         && ((this.currentToken.trim())[0] === this.currentToken.at(-1) && this.currentToken.at(-1) !== '('
             || (this.currentToken.trim()[0] === '(' && this.currentToken.at(-1) === ')'))
         &&  char === '\n')
       return YarbpLexer.states.VALUE_ENDED;
 
     if (this.state === YarbpLexer.states.IN_QUOTED_VALUE
+        && this.currentToken.length >= 2
         && ((this.currentToken.trim())[0] === this.currentToken.at(-1) && this.currentToken.at(-1) !== '('
             || (this.currentToken.trim()[0] === '(' && this.currentToken.at(-1) === ')'))
         &&  YarbpLexer.isSpaceChar(char))
@@ -539,6 +613,99 @@ export class YarbpLexer {
     return this.state;
   };
 
+  /**
+   * Что стоит на следующей строке после примитивного ключа:
+   * значение, новый узел или конец документа.
+   *
+   * Значением считаются только однозначные начала: кавычка/скобка,
+   * три обратных кавычки, число, yes/no/да/нет/null. Bareword остаётся
+   * новым узлом (кейс 7_shorthand: `.c` + `d:e = f`).
+   */
+  defineNextLineValueState(char, pos) {
+    const S = YarbpLexer.states;
+
+    if (char === ' ' || char === '\t' || char === '\n')
+      return S.WAITING_FOR_NEXT_LINE_VALUE;
+
+    if (char === '`' && this.shouldStartCodeBlock(pos))
+      return S.CODE_BLOCK_ENCOUNTERED;
+
+    if (char === '"' || char === "'" || char === '(')
+      return S.NEXT_LINE_VALUE_ENCOUNTERED;
+
+    if (this.isScalarValueStart(pos))
+      return S.NEXT_LINE_VALUE_ENCOUNTERED;
+
+    return S.NEXT_LINE_VALUE_ABSENT;
+  };
+
+  /** Число или литерал проекта (yes/no/да/нет/null), но не `--`-комментарий. */
+  isScalarValueStart(pos) {
+    const rest = this.text.slice(pos);
+    if (/^-?\d/.test(rest) && !rest.startsWith('--')) return true;
+    return /^(?:yes|no|да|нет|null)(?![\p{L}\p{N}_])/u.test(rest);
+  };
+
+  /**
+   * Закрывающий fence: для ``` — где угодно, для одного ` — отдельной
+   * строкой (иначе обратный апостроф внутри кода закрыл бы блок раньше).
+   */
+  findClosingCodeFence(open, fenceLength) {
+    if (fenceLength === 3) {
+      return this.text.indexOf('```', open + 3);
+    }
+
+    let lineStart = this.text.indexOf('\n', open);
+    if (lineStart === -1) return -1;
+    lineStart += 1;
+
+    while (lineStart <= this.text.length) {
+      let pos = lineStart;
+      while (this.text[pos] === ' ' || this.text[pos] === '\t') pos++;
+      if (this.text[pos] === '`') return pos;
+
+      const next = this.text.indexOf('\n', lineStart);
+      if (next === -1) return -1;
+      lineStart = next + 1;
+    }
+
+    return -1;
+  };
+
+  /**
+   * Одиночный ` считается fence только при наличии закрывающей строки:
+   * иначе обратная совместимость ломается на случайном апострофе в значении.
+   */
+  shouldStartCodeBlock(pos) {
+    const fenceLength = YarbpLexer.codeFenceLengthAt(this.text, pos);
+    if (fenceLength === 3) return true;
+    if (fenceLength !== 1) return false;
+    return this.findClosingCodeFence(pos, 1) !== -1;
+  };
+
+  /**
+   * Снимает структурный отступ самого fence с каждой строки содержимого.
+   * Внутренние отступы кода сохраняются относительно fence: так блок,
+   * сдвинутый вместе с макросом, эквивалентен блоку без сдвига.
+   */
+  dedentCodeBlockContent(content, open) {
+    const lineStart = this.text.lastIndexOf('\n', open - 1) + 1;
+    const prefix = this.text.slice(lineStart, open);
+
+    /* Fence после ключа в той же строке (`.код ```bsl`) структурного
+       отступа не задаёт. */
+    if (!/^[ \t]*$/.test(prefix)) return content;
+
+    const indent = prefix.length;
+    if (indent === 0) return content;
+
+    return content.split('\n').map(line => {
+      let cut = 0;
+      while (cut < indent && (line[cut] === ' ' || line[cut] === '\t')) cut++;
+      return line.slice(cut);
+    }).join('\n');
+  };
+
   handleState(char, pos) {
     const S = YarbpLexer.states;
 
@@ -584,6 +751,41 @@ export class YarbpLexer {
           this.currentMatchPosition = pos;
         }
         this.addCharToToken(char);
+        return;
+
+      case S.WAITING_FOR_NEXT_LINE_VALUE:
+        // Пустая строка между ключом и значением допустима; отступ копится
+        // так же, как в WAITING_AFTER_NEWLINE, чтобы scope-токены не съехали.
+        if (char === '\n' && this.currentToken.trim() === '') {
+          this.currentToken = '';
+          return;
+        }
+        this.addCharToToken(char);
+        return;
+
+      case S.NEXT_LINE_VALUE_PENDING:
+        // Ключ уже добавлен, после него были только пробелы до перевода
+        // строки. Решение «значение или пусто» принимает следующая строка.
+        this.pendingPrimitive = {
+          endPos: pos,
+          keyStart: this.lastPrimitive?.keyStart ?? pos,
+          typed: Boolean(this.lastPrimitive?.typed)
+        };
+        this.lastPrimitive = null;
+        this.currentToken = '';
+        this.state = S.WAITING_FOR_NEXT_LINE_VALUE;
+        return;
+
+      case S.NEXT_LINE_VALUE_ENCOUNTERED:
+        this.handleNextLineValueEncountered(char, pos);
+        return;
+
+      case S.NEXT_LINE_VALUE_ABSENT:
+        this.handleNextLineValueAbsent(char, pos);
+        return;
+
+      case S.CODE_BLOCK_ENCOUNTERED:
+        this.handleCodeBlock(pos);
         return;
 
       case S.PREFIX_ENCOUNTERED:
@@ -749,7 +951,12 @@ export class YarbpLexer {
       this.state = YarbpLexer.states.ERROR;
       return;
     }
+
+    const typed = this.currentToken.includes(':');
+    const keyStart = this.currentMatchPosition;
+
     this.addToken(TokenTypes.PRIMITIVE);
+    this.lastPrimitive = { typed, keyStart };
 
     this.state = char === '\n'
       ? YarbpLexer.states.WAITING_AFTER_NEWLINE
@@ -769,12 +976,166 @@ export class YarbpLexer {
   }
 
   handlePrimitiveEndedEmpty(pos, char) {
-    this.handlePrimitiveEnded(pos, char);
-    this.addToken(TokenTypes.ANY_VALUE, pos, '');
+    const typed = this.currentToken.includes(':');
+    const keyStart = this.currentMatchPosition;
 
-    this.state = char === '\n'
+    this.handlePrimitiveEnded(pos, char);
+
+    if (this.error) return;
+
+    /* Пока не решили, есть ли значение на следующей строке, пустой VALUE
+       не добавляем: иначе значение со следующей строки станет отдельным
+       узлом. Для старых кейсов токен появится на том же месте при
+       finishPendingPrimitiveAsEmpty(). */
+    this.pendingPrimitive = { endPos: pos, keyStart, typed };
+    this.lastPrimitive = null;
+    this.state = YarbpLexer.states.WAITING_FOR_NEXT_LINE_VALUE;
+  }
+
+  handleNextLineValueEncountered(char, pos) {
+    const S = YarbpLexer.states;
+
+    this.pendingPrimitive = null;
+    this.valueStartedOnNextLine = true;
+    this.currentToken = '';
+    this.currentMatchPosition = pos;
+
+    if (char === '`') {
+      this.state = S.CODE_BLOCK_ENCOUNTERED;
+    } else if (char === '"' || char === "'" || char === '(') {
+      this.state = S.IN_QUOTED_VALUE;
+    } else {
+      this.state = S.IN_VALUE;
+    }
+
+    this.handleState(char, pos);
+  }
+
+  handleNextLineValueAbsent(char, pos) {
+    const indent = this.currentToken;
+
+    this.finishPendingPrimitiveAsEmpty();
+
+    /* Отступ относился к следующему узлу: возвращаем его, иначе
+       handlePrefixEncountered/handleImplicitObjectEncountered увидят 0. */
+    this.currentToken = indent;
+    this.state = YarbpLexer.states.WAITING_AFTER_NEWLINE;
+    this.state = this.defineState(char, pos);
+    this.handleState(char, pos);
+  }
+
+  finishPendingPrimitiveAsEmpty() {
+    const pending = this.pendingPrimitive;
+    if (!pending) return;
+
+    this.pendingPrimitive = null;
+    this.valueStartedOnNextLine = false;
+    this.addToken(TokenTypes.ANY_VALUE, pending.endPos, '');
+
+    /* Пустые типизированные поля — легальные объявления (кейс 5). Для
+       остальных отсутствие значения показываем в строке статуса. */
+    if (!pending.typed) {
+      this.diagnostics.push({ message: 'expected value', start: pending.keyStart });
+    }
+  }
+
+  /**
+   * Фрагмент кода — лексический остров.
+   *
+   * Открывающие ``` и всё до закрывающих ``` не проходят через автомат:
+   * содержимое сохраняется как есть, язык берётся из первого слова после
+   * открывающих кавычек. Закрывающая строка может быть с отступом — её
+   * отступ и перевод строки перед ней в значение не входят; отступы самих
+   * строк кода сохраняются.
+   */
+  handleCodeBlock(pos) {
+    const open = pos;
+    const fenceLength = YarbpLexer.codeFenceLengthAt(this.text, open);
+    const close = this.findClosingCodeFence(open, fenceLength);
+
+    if (close === -1) {
+      this.addUnterminatedCodeBlock(open);
+      return;
+    }
+
+    const end = close + fenceLength;
+    const firstNewline = this.text.indexOf('\n', open + fenceLength);
+
+    let language = null;
+    let contentStart;
+    let contentEnd;
+
+    if (firstNewline === -1 || close < firstNewline) {
+      /* ```код``` в одну строку: языка нет, содержимое между кавычками. */
+      contentStart = open + fenceLength;
+      contentEnd = close;
+    } else {
+      const info = this.text.slice(open + fenceLength, firstNewline).trim();
+      language = info.split(/\s+/)[0] || null;
+      contentStart = firstNewline + 1;
+
+      const lineStart = this.text.lastIndexOf('\n', close - 1) + 1;
+      const beforeClose = this.text.slice(lineStart, close);
+      contentEnd = /^[ \t]*$/.test(beforeClose)
+        ? Math.max(contentStart, lineStart - 1)
+        : close;
+    }
+
+    const token = new Token({
+      type: TokenTypes.CODE_BLOCK,
+      value: this.dedentCodeBlockContent(
+        this.text.slice(contentStart, contentEnd), open),
+      prefix: undefined,
+      start: open,
+      end: end,
+      error: '',
+      language: language,
+      contentStart: contentStart,
+      contentEnd: contentEnd
+    });
+
+    if (this.valueStartedOnNextLine) {
+      token.onNextLine = true;
+      this.valueStartedOnNextLine = false;
+    }
+
+    this.tokens.push(token);
+    this.onlyAllowedTokens = false;
+    this.pendingPrimitive = null;
+    this.currentToken = '';
+    this.currentMatchPosition = end;
+    this.error = '';
+    this.nextPos = end - 1;
+
+    const after = this.text[end];
+    this.state = after === '\n'
       ? YarbpLexer.states.WAITING_AFTER_NEWLINE
       : YarbpLexer.states.WAITING;
+  }
+
+  addUnterminatedCodeBlock(open) {
+    const token = new Token({
+      type: TokenTypes.UNPARSED,
+      value: this.text.slice(open),
+      prefix: undefined,
+      start: open,
+      end: this.text.length,
+      error: 'unterminated code block'
+    });
+
+    if (this.valueStartedOnNextLine) {
+      token.onNextLine = true;
+      this.valueStartedOnNextLine = false;
+    }
+
+    this.tokens.push(token);
+    this.onlyAllowedTokens = false;
+    this.pendingPrimitive = null;
+    this.currentToken = '';
+    this.currentMatchPosition = this.text.length;
+    this.error = '';
+    this.nextPos = this.text.length;
+    this.state = YarbpLexer.states.WAITING_AFTER_NEWLINE;
   }
 
   handleArrayEnded(pos, char) {

@@ -91,6 +91,13 @@ export function dedentMultilineString(str) {
   const firstLine = lines[start];
   const restLines = lines.slice(start + 1);
 
+  /* Закрывающая кавычка на отдельной строке оставляет пустую последнюю
+     строку. Это разделитель формы записи, а не часть значения: иначе
+     вариант «значение с новой строки» не был бы эквивалентен inline. */
+  if (restLines.length > 0 && restLines[restLines.length - 1].trim() === '') {
+    restLines.pop();
+  }
+
   if (restLines.length === 0) return firstLine || '';
 
   const indentSizes = restLines
