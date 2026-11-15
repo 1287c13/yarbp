@@ -113,18 +113,27 @@
     const doc = frame.contentDocument;
     const nav = win.performance.getEntriesByType('navigation')[0] || {};
     const resources = win.performance.getEntriesByType('resource');
-    const decoded = resources.reduce((sum, item) => sum + (item.decodedBodySize || 0), 0);
-    const transfer = resources.reduce((sum, item) => sum + (item.transferSize || 0), 0);
+    const loadEnd = Number(nav.loadEventEnd) > 0 ? nav.loadEventEnd : Infinity;
+    // Ресурсы первого экрана — те, что начались до load; остальные пришли
+    // фоновым prefetch уже после готовности интерфейса.
+    const firstScreen = resources.filter(item => !item.startTime || item.startTime <= loadEnd);
+    const background = resources.filter(item => item.startTime > loadEnd);
+    const sum = (items, field) =>
+      items.reduce((total, item) => total + (item[field] || 0), 0);
 
     const result = {
       startup: {
         navigationMs: round(nav.duration || 0),
         domContentLoadedMs: round(nav.domContentLoadedEventEnd || 0),
         loadMs: round(nav.loadEventEnd || 0),
-        resources: resources.length,
-        decodedBytes: decoded,
-        transferBytes: transfer,
-        top: resources
+        resources: firstScreen.length,
+        decodedBytes: sum(firstScreen, 'decodedBodySize'),
+        transferBytes: sum(firstScreen, 'transferSize'),
+        backgroundResources: background.length,
+        backgroundDecodedBytes: sum(background, 'decodedBodySize'),
+        totalResources: resources.length,
+        totalDecodedBytes: sum(resources, 'decodedBodySize'),
+        top: firstScreen
           .map(item => ({ name: item.name.split('/').slice(-2).join('/'), bytes: item.decodedBodySize || 0 }))
           .sort((a, b) => b.bytes - a.bytes)
           .slice(0, 8)

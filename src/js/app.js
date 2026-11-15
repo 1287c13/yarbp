@@ -343,10 +343,15 @@ function scheduleFlavorPrefetch() {
       });
   };
 
-  if (typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(start, { timeout: 1500 });
+  // Стартуем сразу после `load`: интерфейс уже готов, а prefetch не должен
+  // задерживать само событие загрузки. setTimeout(0) отделяет запуск от
+  // обработчика load, но не откладывает его до простоя.
+  const startSoon = () => window.setTimeout(start, 0);
+
+  if (document.readyState === 'complete') {
+    startSoon();
   } else {
-    window.setTimeout(start, 0);
+    window.addEventListener('load', startSoon, { once: true });
   }
 }
 
