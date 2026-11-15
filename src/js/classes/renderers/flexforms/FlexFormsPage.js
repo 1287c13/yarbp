@@ -34,27 +34,35 @@ import {
    отсюда же, чтобы не зависеть от сгенерированного модуля напрямую. */
 export { FLEX_FORMS_PHONE };
 
-/**
- * Nonce общий для всех собранных страниц: контент страницы генерируется здесь,
- * IR экранируется, а CSP запрещает inline-обработчики и чужие скрипты. Nonce
- * не является секретом (он виден в HTML), но не даёт вставить скрипт без него.
- */
-export const FLEX_FORMS_CSP_NONCE = 'yarbp-flexforms';
+/** Nonce на одну сборку: CSP разрешает только скрипты, помеченные им. */
+function createFlexFormsNonce() {
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index++) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
 
-const FLEX_FORMS_CSP = [
-  '<meta http-equiv="Content-Security-Policy" content="',
-  "default-src 'none'; ",
-  `script-src 'nonce-${FLEX_FORMS_CSP_NONCE}'; `,
-  "script-src-attr 'none'; ",
-  "style-src 'unsafe-inline'; ",
-  "img-src data:; ",
-  "connect-src http: https:; ",
-  "base-uri 'none'; ",
-  "form-action 'none'; ",
-  "frame-src 'none'; ",
-  "object-src 'none'",
-  '">',
-].join('');
+function flexFormsCsp(nonce) {
+  return [
+    '<meta http-equiv="Content-Security-Policy" content="',
+    "default-src 'none'; ",
+    `script-src 'nonce-${nonce}'; `,
+    "script-src-attr 'none'; ",
+    "style-src 'unsafe-inline'; ",
+    "img-src data:; ",
+    "connect-src http: https:; ",
+    "base-uri 'none'; ",
+    "form-action 'none'; ",
+    "frame-src 'none'; ",
+    "object-src 'none'",
+    '">',
+  ].join('');
+}
 
 /**
  * Предпросмотр: движок при загрузке восстанавливает из localStorage не только
@@ -195,9 +203,10 @@ export function buildFormPage(ir, options = {}) {
 
   // CSP ставится после сборки, чтобы пометить nonce-ом и служебные скрипты
   // предпросмотра/standalone, которые вставляются в skeleton выше.
+  const nonce = createFlexFormsNonce();
   page = page
-    .replace('<meta charset="utf-8">', '<meta charset="utf-8">\n' + FLEX_FORMS_CSP)
-    .replaceAll('<script>', `<script nonce="${FLEX_FORMS_CSP_NONCE}">`);
+    .replace('<meta charset="utf-8">', '<meta charset="utf-8">\n' + flexFormsCsp(nonce))
+    .replaceAll('<script>', `<script nonce="${nonce}">`);
 
   return page;
 }

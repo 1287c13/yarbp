@@ -27,7 +27,6 @@
   import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
   import {
     buildFormPage,
-    FLEX_FORMS_CSP_NONCE,
     PREVIEW_STATE_SCRIPT,
     PREVIEW_AUTOFOCUS_SCRIPT,
     STANDALONE_STATE_SCRIPT,
@@ -572,11 +571,14 @@
   /* Единственное допустимое отличие предпросмотра от выкачанной страницы —
      два служебных скрипта: сброс снимка IR и заглушка автофокуса. Всё
      остальное (skeleton, CSS, движок, IR) обязано совпадать строкой. */
-  // Скрипты в собранной странице помечены CSP nonce, поэтому сравниваем
-  // их версии с тем же nonce, а не исходные константы без атрибута.
+  // Каждая сборка получает свой CSP nonce. Для сравнения базы страницы
+  // нормализуем только nonce, а служебные preview-скрипты удаляем.
+  const normalizeNonce = (html) => html
+    .replace(/nonce-[^']+/g, 'nonce-NONCE')
+    .replace(/nonce="[^"]+"/g, 'nonce="NONCE"');
   const withNonce = (script) =>
-    script.replace('<script>', `<script nonce="${FLEX_FORMS_CSP_NONCE}">`);
-  const withoutPreviewOnlyScripts = (html) => html
+    script.replace('<script>', '<script nonce="NONCE">');
+  const withoutPreviewOnlyScripts = (html) => normalizeNonce(html)
     .replace(withNonce(PREVIEW_STATE_SCRIPT), '')
     .replace(withNonce(PREVIEW_AUTOFOCUS_SCRIPT), '')
     .replace(withNonce(STANDALONE_STATE_SCRIPT), '')
