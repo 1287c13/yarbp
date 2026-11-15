@@ -225,10 +225,11 @@ export class UIGenerator {
       this.extractShorthand(field);
       const parsed = this.parseSugaredValue(field.value || '');
       const fieldProps = {};
+      const values = [];
       (field.children || []).forEach(child => {
-        if (child.nodeType === 'MEANING' && child.prefix === '.') {
-          fieldProps[child.key] = child.value;
-        }
+        if (child.nodeType !== 'MEANING' || child.prefix !== '.') return;
+        fieldProps[child.key] = child.value;
+        if (child.key === 'значение') values.push(child.value);
       });
       const label = parsed.label || field.value || field.key || 'field-' + columns.length;
       const name = field.id || label;
@@ -237,7 +238,7 @@ export class UIGenerator {
         label: label,
         placeholder: parsed.placeholder || '',
         postfix: parsed.postfix || fieldProps['постфикс'] || '',
-        value: fieldProps['значение'] === undefined ? '' : fieldProps['значение'],
+        values: values,
         type: this.mapFieldType(field.type || field.key || 'текст'),
       });
     });
@@ -247,17 +248,28 @@ export class UIGenerator {
     const header = columns
       .map(column => `<th>${this.escapeHtml(column.label)}</th>`)
       .join('') + '<th></th>';
-    const cells = columns.map(column =>
-      `<td><input type="${this.escapeHtml(column.type)}" name="${this.escapeHtml(column.name)}" data-field="${this.escapeHtml(column.name)}" value="${this.escapeHtml(column.value)}" placeholder="${this.escapeHtml(column.placeholder)}" />` +
-      (column.postfix ? `<span class="field-postfix">${this.escapeHtml(column.postfix)}</span>` : '') +
-      '</td>').join('');
-    const row = `<tr data-ui-table-row>${cells}` +
-      '<td><button type="button" class="btn-secondary remove-table-row" aria-label="Удалить строку">✖</button></td></tr>';
+
+    const makeRow = (rowIndex) => {
+      const cells = columns.map(column => {
+        const value = rowIndex >= 0 && column.values[rowIndex] !== undefined
+          ? column.values[rowIndex] : '';
+        return `<td><input type="${this.escapeHtml(column.type)}" name="${this.escapeHtml(column.name)}" data-field="${this.escapeHtml(column.name)}" value="${this.escapeHtml(value)}" placeholder="${this.escapeHtml(column.placeholder)}" />` +
+          (column.postfix ? `<span class="field-postfix">${this.escapeHtml(column.postfix)}</span>` : '') +
+          '</td>';
+      }).join('');
+      return `<tr data-ui-table-row>${cells}` +
+        '<td><button type="button" class="btn-secondary remove-table-row" aria-label="Удалить строку">✖</button></td></tr>';
+    };
+
+    const rowCount = Math.max(1, ...columns.map(column => column.values.length));
+    const rows = [];
+    for (let index = 0; index < rowCount; index++) rows.push(makeRow(index));
+    const blankRow = makeRow(-1);
 
     return `<div class="ui-table-wrap" data-ui-table="${tableId}">` +
-      `<table class="ui-table"><thead><tr>${header}</tr></thead><tbody>${row}</tbody></table>` +
+      `<table class="ui-table"><thead><tr>${header}</tr></thead><tbody>${rows.join('')}</tbody></table>` +
       '<button type="button" class="btn-secondary add-table-row">+ Добавить строку</button>' +
-      `<template class="ui-table-row-template">${row}</template>` +
+      `<template class="ui-table-row-template">${blankRow}</template>` +
       '</div>';
   }
 

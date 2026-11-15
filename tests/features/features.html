@@ -886,6 +886,35 @@ import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
   tableRuntime.destroy();
   tableHost.remove();
 
+  /* Несколько стартовых строк: повторные .значение у колонки. */
+  const multiTableCode = join(
+    '! как форма',
+    'форма',
+    '  группа:таблица-соответствий',
+    '    поле:строка = Номер',
+    '      .значение 1',
+    '      .значение 2',
+    '    поле:строка = Название',
+    '      .значение Первый',
+    '      .значение Второй'
+  );
+  const multiTableParsed = build(multiTableCode);
+  const multiTableGenerator = new UIGenerator(false);
+  const multiTableHost = document.createElement('div');
+  multiTableHost.innerHTML = multiTableGenerator.generateHTML(multiTableParsed.ast);
+  document.body.appendChild(multiTableHost);
+  const multiTable = multiTableHost.querySelector('[data-ui-table]');
+  const multiValues = multiTable
+    ? Array.from(multiTable.querySelectorAll('tbody input')).map(input => input.value).join(',')
+    : '';
+  check('UI: повторные .значение создают несколько стартовых строк',
+    !!multiTable && multiTable.querySelectorAll('tbody tr').length === 2 &&
+    multiTable.querySelectorAll('tbody input')[0].value === '1' &&
+    multiTable.querySelectorAll('tbody input')[1].value === 'Первый',
+    multiTable ? 'rows=' + multiTable.querySelectorAll('tbody tr').length +
+      ' values=' + multiValues : 'нет таблицы');
+  multiTableHost.remove();
+
   // Результат уже записан до UI-блока — обновляем, чтобы новые проверки
   // попали в отчёт, а не только в title.
   resultBox.textContent = lines.join('\n') + '\n';
