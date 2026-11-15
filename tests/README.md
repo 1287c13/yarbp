@@ -25,5 +25,6 @@ python tests/run_all.py --list
 | `flexforms/` | флейвор «форма-ТСД», пример и браузерный дым | `python yarbp/tests/flexforms/run_tests.py` |
 | `openapi2yarbp/` | обратный импорт OpenAPI → ЯРБП | `python yarbp/tests/openapi2yarbp/run_tests.py` |
 | `schema2yarbp/` | обратный импорт JSON Schema → ЯРБП | `python yarbp/tests/schema2yarbp/run_tests.py` |
+| `perf/` | диагностические замеры startup и ввода (не входит в `run_all.py`) | `python yarbp/tests/perf/run_tests.py` |
 
 Подробности и список проверок — в `README.md` соответствующей папки.

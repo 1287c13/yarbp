@@ -1,5 +1,5 @@
 export function resolveContext(ast, cursorOffset, text) {
-  console.log('===== [R] cursor=', cursorOffset);
+  
 
   const root = ast?.nodeType === 'ROOT' ? ast : ast?.root;
   if (!root || root.nodeType !== 'ROOT') return null;
@@ -10,19 +10,9 @@ export function resolveContext(ast, cursorOffset, text) {
   const node = found?.node ?? null;
   const path = found?.path ?? [root];
 
-  console.log('[R found]', found ? {
-    key: node?.key,
-    valueType: node?.valueType,
-    value: node?.value,
-    position: node?.position,
-    pathLen: path.length,
-    pathKeys: path.map(p => p.key ?? p.nodeType),
-  } : null);
+  
 
-  console.log('[R pos]',
-    'position=', node?.position,
-    'cursorOffset=', cursorOffset,
-    'inName=', node ? cursorOffset <= node.position.end : null);
+  
 
   let parentNode = null;
   if (node) {
@@ -32,10 +22,10 @@ export function resolveContext(ast, cursorOffset, text) {
   }
 
   const parentKey = parentNode?.key ?? null;
-  console.log('[R] parentKey=', JSON.stringify(parentKey));
+  
 
   if (!node) {
-    console.log('[R branch] no node → key');
+    
     return { parentKey, childKey: null, slot: 'key', outerKey: null };
   }
 
@@ -55,7 +45,7 @@ export function resolveContext(ast, cursorOffset, text) {
     if (arrayParent) {
       const ownerPath = path.slice(0, arrayParentIdx + 1);
       const owner = findObjectParent(ownerPath, arrayParent);
-      console.log('[R branch] anonymous value → array-parent. arrayKey=', arrayParent.key, 'owner=', owner?.key);
+      
       return {
         parentKey: owner?.key ?? null,
         childKey: (arrayParent.prefix || '') + arrayParent.key,
@@ -70,26 +60,24 @@ export function resolveContext(ast, cursorOffset, text) {
       && node.value != null) {
     const segment = text.slice(node.position.end, cursorOffset);
     const cursorOnNewLine = segment.includes('\n');
-    console.log('[R shorthand] value=', JSON.stringify(node.value),
-      'segment=', JSON.stringify(segment), 'onNewLine=', cursorOnNewLine);
+    
 
     if (!cursorOnNewLine) {
       const firstChild = node.children?.[0];
       const childrenStart = firstChild ? firstChild.position.start : null;
       const afterName = cursorOffset > node.position.end;
       const beforeChildren = childrenStart === null || cursorOffset < childrenStart;
-      console.log('[R shorthand detail]', 'afterName=', afterName,
-        'beforeChildren=', beforeChildren, 'childrenStart=', childrenStart);
+      
 
       if (afterName && beforeChildren) {
-        console.log('[R branch] shorthand → null');
+        
         return null;
       }
     }
   }
 
   if (cursorOffset <= node.position.end) {
-    console.log('[R branch] inside name → key');
+    
     return { parentKey, childKey: null, slot: 'key', outerKey: null };
   }
 
@@ -97,14 +85,14 @@ export function resolveContext(ast, cursorOffset, text) {
     const segment = text.slice(node.position.end, cursorOffset);
     const cursorOnNewLine = segment.includes('\n');
 
-    console.log('[R primitive] segment=', JSON.stringify(segment), 'onNewLine=', cursorOnNewLine);
+    
 
     if (cursorOnNewLine) {
-      console.log('[R branch] primitive, cursor on new line → key in parent');
+      
       return { parentKey, childKey: null, slot: 'key', outerKey: null };
     }
 
-    console.log('[R branch] primitive after name → value');
+    
     return {
       parentKey,
       childKey: (node.prefix || '') + node.key,
@@ -116,10 +104,10 @@ export function resolveContext(ast, cursorOffset, text) {
   const segment = text.slice(node.position.end, cursorOffset);
   const cursorOnNewLine = segment.includes('\n');
 
-  console.log('[R object/array] segment=', JSON.stringify(segment), 'onNewLine=', cursorOnNewLine);
+  
 
   if (!cursorOnNewLine) {
-    console.log('[R branch] same line → value-slot');
+    
     return {
       parentKey,
       childKey: (node.prefix || '') + node.key,
@@ -129,14 +117,14 @@ export function resolveContext(ast, cursorOffset, text) {
   }
 
   const nodeInd = cursorIndent(text, node.position.start);
-  console.log('[R] cursorInd=', cursorInd, 'nodeInd=', nodeInd);
+  
 
   if (cursorInd > nodeInd) {
-    console.log('[R branch] deeper → key in node');
+    
     return { parentKey: node.key, childKey: null, slot: 'key', outerKey: null };
   }
 
-  console.log('[R branch] at level → key in parent');
+  
   return { parentKey, childKey: null, slot: 'key', outerKey: null };
 }
 
@@ -162,7 +150,7 @@ function findNodeRec(parent, cursorOffset, text, cursorInd, path) {
     const inside = cursorOffset >= pos.start && cursorOffset <= pos.end;
 
     if (inside) {
-      console.log('[findNode] inside node=', child.key);
+      
       const deeper = findNodeRec(child, cursorOffset, text, cursorInd, [...path, child]);
       if (deeper.node) return deeper;
       return { node: child, path: [...path, child] };
@@ -175,8 +163,7 @@ function findNodeRec(parent, cursorOffset, text, cursorInd, path) {
       const childLineStart = text.lastIndexOf('\n', pos.end - 1);
       const sameLine = cursorLineStart === childLineStart;
 
-      console.log('[findNode] after node=', child.key,
-        'sameLine=', sameLine, 'cursorInd=', cursorInd, 'childInd=', childInd);
+      
 
       if (sameLine || cursorInd > childInd) {
         const deeper = findNodeRec(child, cursorOffset, text, cursorInd, [...path, child]);

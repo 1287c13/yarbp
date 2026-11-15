@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>perf cases</title>
+  <style>
+    body { margin: 0; padding: 16px; background: #fff; color: #111;
+      font: 12px/1.5 Consolas, monospace; }
+    #result { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<pre id="result">running...</pre>
+
+<script>
+  window.addEventListener('error', event => {
+    const box = document.getElementById('result');
+    if (box) box.textContent = 'ERROR: ' + (event.message || '') +
+      ' @ ' + (event.filename || '') + ':' + (event.lineno || '');
+    document.title = 'PERF FAIL';
+  });
+  window.addEventListener('unhandledrejection', event => {
+    const box = document.getElementById('result');
+    if (box) box.textContent = 'REJECTION: ' + String(event.reason && event.reason.message || event.reason);
+    document.title = 'PERF FAIL';
+  });
+</script>
+
+<script type="module">
+  /*
+   * Замеры производительности редактора:
+   *   1) startup: ресурсы и navigation timing iframe с src/index.html;
+   *   2) ввод: updateViews для JSON/BPMN/XPO-документов.
+   *
+   * Это диагностический набор, а не golden: он печатает цифры и падает
+   * только если страница редактора вообще не загрузилась.
+   */
+  import { FileManager } from '../../src/js/modules/FileManager.js';
+
+  const resultBox = document.getElementById('result');
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function waitForLoad(frame, timeout = 15000) {
+    return new Promise(resolve => {
+      let settled = false;
+      const done = ok => {
+        if (settled) return;
+        settled = true;
+        resolve(ok);
+      };
+      frame.addEventListener('load', () => setTimeout(() => done(true), 400), { once: true });
+      setTimeout(() => done(false), timeout);
+    });
+  }
+
+  function nextFrame(win) {
+    return new Promise(resolve => {
+      win.requestAnimationFrame(() => win.requestAnimationFrame(resolve));
+    });
+  }
+
+  function round(value) {
+    return Math.round(value * 10) / 10;
+  }
+
+  function median(values) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2
+      ? sorted[middle]
+      : (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
+  function makeJsonDoc(items) {
+    const lines = ['! as json', ':', '  .version 1', '  ..items'];
+    for (let i = 0; i < items; i++) {
+      lines.push(`    : .id ${i} .name "Item ${i}" .active yes .price ${i + 0.5}`);
+    }
+    return lines.join('\n');
+  }
+
+  function makeBpmnDoc(steps) {
+    const lines = [
+      '! как бпмн',
+      'процесс = Процесс',
+      '  ..роли',
+      '    роль .имя Исполнитель',
+      '  событие = Начало'
+    ];
+    for (let i = 0; i < steps; i++) {
+      lines.push(`${'  '.repeat(i + 1)}задача = Шаг ${i}`);
+    }
+    lines.push(`${'  '.repeat(steps + 1)}событие .расположение конец`);
+    return lines.join('\n');
+  }
+
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:1280px;height:800px;border:0';
+  frame.src = '../../src/index.html';
+  const loaded = waitForLoad(frame);
+  document.body.appendChild(frame);
+
+  const ok = await loaded;
+  if (!ok) {
+    resultBox.textContent = 'APP LOAD FAIL';
+    document.title = 'PERF FAIL';
+  } else {
+    await sleep(500);
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const nav = win.performance.getEntriesByType('navigation')[0] || {};
+    const resources = win.performance.getEntriesByType('resource');
+    const decoded = resources.reduce((sum, item) => sum + (item.decodedBodySize || 0), 0);
+    const transfer = resources.reduce((sum, item) => sum + (item.transferSize || 0), 0);
+
+    const result = {
+      startup: {
+        navigationMs: round(nav.duration || 0),
+        domContentLoadedMs: round(nav.domContentLoadedEventEnd || 0),
+        loadMs: round(nav.loadEventEnd || 0),
+        resources: resources.length,
+        decodedBytes: decoded,
+        transferBytes: transfer,
+        top: resources
+          .map(item => ({ name: item.name.split('/').slice(-2).join('/'), bytes: item.decodedBodySize || 0 }))
+          .sort((a, b) => b.bytes - a.bytes)
+          .slice(0, 8)
+      },
+      input: {}
+    };
+
+    const fm = new FileManager('yarbp_perf_audit');
+    const xpo = fm.data.files.find(file => file.slug === 'xpo');
+    const docs = {
+      json: makeJsonDoc(300),
+      bpmn: makeBpmnDoc(80),
+      xpo: xpo ? xpo.content : ''
+    };
+
+    const editor = doc.getElementById('code-textarea');
+    for (const [name, code] of Object.entries(docs)) {
+      if (!code) continue;
+      const samples = [];
+      for (let i = 0; i < 3; i++) {
+        editor.value = code;
+        const started = win.performance.now();
+        editor.dispatchEvent(new win.Event('input', { bubbles: true }));
+        await nextFrame(win);
+        const update = win.performance.now() - started;
+        await sleep(350);
+        const settled = win.performance.now() - started;
+        samples.push({ update: round(update), settled: round(settled) });
+      }
+      result.input[name] = {
+        lines: code.split('\n').length,
+        updateMs: round(median(samples.map(sample => sample.update))),
+        settledMs: round(median(samples.map(sample => sample.settled))),
+        samples
+      };
+    }
+
+    frame.remove();
+    resultBox.textContent = JSON.stringify(result, null, 2);
+    document.title = 'PERF PASS';
+  }
+</script>
+</body>
+</html>

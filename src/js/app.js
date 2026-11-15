@@ -378,7 +378,7 @@ function updateViews() {
   YarbpAppGlobals.codeBlockHighlightPass.schedule(
     code, YarbpAppGlobals.lexer.tokens);
 
-  YarbpAppGlobals.indentGuides?.refresh();
+  YarbpAppGlobals.indentGuides?.invalidate();
 
   const firstDirective = YarbpAppGlobals.lexer.tokens.find(token => token.type === TokenTypes.DIRECTIVE);
 

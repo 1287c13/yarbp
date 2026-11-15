@@ -126,6 +126,19 @@ export class IndentGuides {
     this.render();
   }
 
+  /**
+   * Пометить содержимое грязным и отрисовать в ближайшем кадре.
+   *
+   * `refresh()` синхронный и на каждый ввод дублировал работу собственного
+   * input-обработчика: полный parseContent + renderNumbers прямо в updateViews.
+   * Для больших документов это заметная пауза; здесь работа уходит в rAF.
+   */
+  invalidate() {
+    if (this.destroyed) return;
+    this.contentDirty = true;
+    this.schedule();
+  }
+
   schedule() {
     if (this.destroyed || this.frameId !== null) return;
     this.frameId = requestAnimationFrame(() => {

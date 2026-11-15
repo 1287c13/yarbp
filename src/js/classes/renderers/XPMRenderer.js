@@ -1,5 +1,9 @@
 import {YarbpBasicRenderer} from "../YarbpBasicRenderer.js";
 import {YarbpXPMConverter} from "../ast-converters/XPMConverter.js";
+import { Ticker } from '../../utils/Ticker.js';
+
+/** Пауза перед перерисовкой XPM: первый кадр сразу, дальнейшие — после набора. */
+const XPM_RENDER_DELAY_MS = 250;
 
 /**
  * Рендерер XPM-диаграмм.
@@ -111,6 +115,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
   /* region Тема ========================================================= */
   static measureSvg = null;
   static staticSizeCache = new Map();
+  static pinDataUriCache = new Map();
   markersDefs = null;
 
   constructor(...args) {
@@ -118,6 +123,10 @@ export class XPMRenderer extends YarbpBasicRenderer {
     this.uiContainer = null;
     this._markersVersion = -1;
     this.tileRenderers = this._createTileRenderers();
+    this.ticker = new Ticker(XPM_RENDER_DELAY_MS);
+    this.lastTokens = null;
+    this.lastDark = null;
+    this.rendered = false;
   }
 
   /* endregion ========================================================== */
@@ -869,6 +878,12 @@ export class XPMRenderer extends YarbpBasicRenderer {
    * @returns {string}
    */
   static _createPinSVGDataURI(color, src) {
+    // Иконки — огромные статические SVG. Base64-кодирование каждой из них
+    // на каждый рендер заметно бьёт по XPM; кэшируем готовый data-URI.
+    const cacheKey = color + '|' + src;
+    const cached = XPMRenderer.pinDataUriCache.get(cacheKey);
+    if (cached) return cached;
+
     const _getSVGString = (color, src) => {
       switch (src) {
         default:
@@ -910,10 +925,29 @@ export class XPMRenderer extends YarbpBasicRenderer {
     for (let i = 0; i < bytes.length; i++) {
       binary += String.fromCharCode(bytes[i]);
     }
-    return `data:image/svg+xml;base64,${btoa(binary)}`;
+    const dataUri = `data:image/svg+xml;base64,${btoa(binary)}`;
+    XPMRenderer.pinDataUriCache.set(cacheKey, dataUri);
+    return dataUri;
   }
 
   render() {
+    const isDark = XPMRenderer.isDark();
+
+    // Первый показ — сразу: панель не должна пустовать. Дальше — по тикеру,
+    // иначе каждый keystroke пересобирает всю SVG (на XPO это секунды).
+    if (!this.rendered) {
+      this.performRender();
+      return;
+    }
+
+    if (this.lexer && this.lastTokens === this.lexer.tokens && this.lastDark === isDark) {
+      return;
+    }
+
+    this.ticker.schedule(() => this.performRender());
+  }
+
+  performRender() {
     this.AST = this.parser.getAST();
 
     const isDark = XPMRenderer.isDark();
@@ -955,6 +989,15 @@ export class XPMRenderer extends YarbpBasicRenderer {
     img.style.height = svg.getAttribute('height') + 'px';
 
     this.uiContainer.replaceChildren(img);
+    this.rendered = true;
+    this.lastTokens = this.lexer ? this.lexer.tokens : null;
+    this.lastDark = isDark;
+  }
+
+  destroy() {
+    this.ticker.cancel();
+    this.renderer = null;
+    this.AST = null;
   }
 
   /* endregion ========================================================== */
