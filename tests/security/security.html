@@ -29,7 +29,7 @@
   import { FileManager } from '../../src/js/modules/FileManager.js';
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
   import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
-  import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
+  import { buildFormPage, FLEX_FORMS_CSP_NONCE } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
   import { FLEX_FORMS_RUNTIME } from '../../src/js/classes/renderers/flexforms/FlexFormsRuntime.js';
 
   const resultBox = document.getElementById('result');
@@ -96,6 +96,22 @@
   check('D-01: IR из <data> равен исходному (значения не искажены)',
     JSON.stringify(parsedIR) === JSON.stringify(irWithTag),
     parsedIR ? JSON.stringify(parsedIR).slice(0, 120) : 'нет');
+
+  /* D-22: страница формы тоже получает CSP, а обработчики — делегирование. */
+  const formCsp = pageDoc.querySelector('meta[http-equiv="Content-Security-Policy"]');
+  const formCspContent = formCsp ? formCsp.getAttribute('content') : '';
+  const formScripts = Array.from(pageDoc.querySelectorAll('script'));
+  check('D-22: страница FlexForms объявляет CSP', !!formCsp);
+  check('D-22: FlexForms script-src ограничен nonce',
+    formCspContent.includes(`script-src 'nonce-${FLEX_FORMS_CSP_NONCE}'`) &&
+    formCspContent.includes("script-src-attr 'none'"),
+    formCspContent || 'нет политики');
+  check('D-22: все скрипты FlexForms помечены nonce',
+    formScripts.length > 0 &&
+    formScripts.every(script => script.getAttribute('nonce') === FLEX_FORMS_CSP_NONCE),
+    String(formScripts.length));
+  check('D-22: в FlexForms нет inline-обработчиков',
+    !/<[^>]+\son[a-z]+\s*=/i.test(page));
 
   check('D-01: движок не читает #form-params через innerHTML',
     FLEX_FORMS_RUNTIME.indexOf("#form-params').innerHTML") === -1);

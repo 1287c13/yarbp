@@ -322,6 +322,32 @@ try {
       a2Head.querySelector('.tbl-count').textContent === '1',
       a2Head ? 'счётчик=' + a2Head.querySelector('.tbl-count').textContent : 'нет .tbl-head');
 
+    /* Делегирование обработчиков (CSP запрещает inline-onclick). */
+    const delegatedClearBtn = innerDoc.querySelector('.clear-btn');
+    const delegatedClearField = delegatedClearBtn ? delegatedClearBtn.closest('.field') : null;
+    const delegatedClearInput = delegatedClearField
+      ? delegatedClearField.querySelector('input') : null;
+    if (delegatedClearInput) delegatedClearInput.value = 'Тест';
+    if (delegatedClearBtn) delegatedClearBtn.click();
+    expect('делегирование: кнопка очистки очищает поле',
+      !!delegatedClearBtn && !!delegatedClearInput && delegatedClearInput.value === '',
+      delegatedClearInput ? 'значение=' + delegatedClearInput.value : 'нет .clear-btn/input');
+
+    const delegatedQtyBtn = innerDoc.querySelector('.qty-step[data-step="1"]');
+    const delegatedQtyWrap = delegatedQtyBtn
+      ? delegatedQtyBtn.closest('.qty-input-wrap') : null;
+    const delegatedQtyInput = delegatedQtyWrap
+      ? delegatedQtyWrap.querySelector('input') : null;
+    if (delegatedQtyInput) {
+      delegatedQtyInput.value = '1';
+      delegatedQtyInput.dispatchEvent(new innerWin.Event('change', { bubbles: true }));
+      if (delegatedQtyBtn) delegatedQtyBtn.click();
+    }
+    expect('делегирование: счётчик «+» увеличивает число',
+      !!delegatedQtyBtn && !!delegatedQtyInput &&
+      Number(String(delegatedQtyInput.value).replace(',', '.')) === 2,
+      delegatedQtyInput ? 'значение=' + delegatedQtyInput.value : 'нет .qty-step/input');
+
     /* Правка ячейки: contenteditable больше не живёт «сама по себе» — значение
        уезжает в IR (syncTableCell), иначе оно терялось при отправке. */
     const firstCell = innerDoc.querySelector('#a2_t1 tbody tr td');

@@ -27,6 +27,7 @@
   import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
   import {
     buildFormPage,
+    FLEX_FORMS_CSP_NONCE,
     PREVIEW_STATE_SCRIPT,
     PREVIEW_AUTOFOCUS_SCRIPT,
     STANDALONE_STATE_SCRIPT,
@@ -571,10 +572,14 @@
   /* Единственное допустимое отличие предпросмотра от выкачанной страницы —
      два служебных скрипта: сброс снимка IR и заглушка автофокуса. Всё
      остальное (skeleton, CSS, движок, IR) обязано совпадать строкой. */
+  // Скрипты в собранной странице помечены CSP nonce, поэтому сравниваем
+  // их версии с тем же nonce, а не исходные константы без атрибута.
+  const withNonce = (script) =>
+    script.replace('<script>', `<script nonce="${FLEX_FORMS_CSP_NONCE}">`);
   const withoutPreviewOnlyScripts = (html) => html
-    .replace(PREVIEW_STATE_SCRIPT, '')
-    .replace(PREVIEW_AUTOFOCUS_SCRIPT, '')
-    .replace(STANDALONE_STATE_SCRIPT, '')
+    .replace(withNonce(PREVIEW_STATE_SCRIPT), '')
+    .replace(withNonce(PREVIEW_AUTOFOCUS_SCRIPT), '')
+    .replace(withNonce(STANDALONE_STATE_SCRIPT), '')
     .replace(/\n{2,}/g, '\n');
 
   const standalonePageHtml = buildFormPage(parityIR, { standalone: true });

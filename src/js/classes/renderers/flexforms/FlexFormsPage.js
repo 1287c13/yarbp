@@ -35,6 +35,28 @@ import {
 export { FLEX_FORMS_PHONE };
 
 /**
+ * Nonce общий для всех собранных страниц: контент страницы генерируется здесь,
+ * IR экранируется, а CSP запрещает inline-обработчики и чужие скрипты. Nonce
+ * не является секретом (он виден в HTML), но не даёт вставить скрипт без него.
+ */
+export const FLEX_FORMS_CSP_NONCE = 'yarbp-flexforms';
+
+const FLEX_FORMS_CSP = [
+  '<meta http-equiv="Content-Security-Policy" content="',
+  "default-src 'none'; ",
+  `script-src 'nonce-${FLEX_FORMS_CSP_NONCE}'; `,
+  "script-src-attr 'none'; ",
+  "style-src 'unsafe-inline'; ",
+  "img-src data:; ",
+  "connect-src http: https:; ",
+  "base-uri 'none'; ",
+  "form-action 'none'; ",
+  "frame-src 'none'; ",
+  "object-src 'none'",
+  '">',
+].join('');
+
+/**
  * Предпросмотр: движок при загрузке восстанавливает из localStorage не только
  * значения полей, но и сам IR (`boot()` → `saved.ir`). В редакторе IR каждый
  * раз новый, поэтому снимок IR выбрасываем, а значения/uid оставляем — они
@@ -162,7 +184,7 @@ export function buildFormPage(ir, options = {}) {
       .replace('\n<script>\n', () => '\n' + STANDALONE_STATE_SCRIPT + '\n\n<script>\n');
   }
 
-  return skeleton
+  let page = skeleton
     // Замена через функцию: в CSS/движке есть `$`, и строковая замена
     // истолковала бы `$&`, `$'`, `` $` `` как подстановки.
     .replace(FLEX_FORMS_STYLES_MARKER, () => FLEX_FORMS_STYLES)
@@ -170,6 +192,14 @@ export function buildFormPage(ir, options = {}) {
     // IR — данные пользователя: `<`/`&` уходят в \u-escape, иначе значение
     // с тегом становится живым элементом страницы (D-01, refactoring.md).
     .replace(FLEX_FORMS_IR_MARKER, () => escJsonForHtml(serializeFormIR(ir)));
+
+  // CSP ставится после сборки, чтобы пометить nonce-ом и служебные скрипты
+  // предпросмотра/standalone, которые вставляются в skeleton выше.
+  page = page
+    .replace('<meta charset="utf-8">', '<meta charset="utf-8">\n' + FLEX_FORMS_CSP)
+    .replaceAll('<script>', `<script nonce="${FLEX_FORMS_CSP_NONCE}">`);
+
+  return page;
 }
 
 
