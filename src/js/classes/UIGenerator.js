@@ -66,6 +66,11 @@ export class UIGenerator {
         .tab-panel.active { display: block; }
         .repeatable-item { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
         .repeatable-header { display: flex; justify-content: space-between; margin-bottom: 12px; font-weight: 600; }
+        .ui-action { margin-top: 8px; }
+        .ui-dialog-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(17,24,39,.45); }
+        .ui-dialog { width: min(360px, 100%); background: white; border-radius: 12px; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+        .ui-dialog p { margin-bottom: 16px; line-height: 1.4; }
+        .ui-dialog button { width: 100%; padding: 9px 12px; border: 0; border-radius: 8px; background: #3b82f6; color: white; cursor: pointer; font-size: .95rem; }
         @media (max-width: 768px) {
           .form-grid { grid-template-columns: 1fr; }
         }
@@ -95,6 +100,131 @@ export class UIGenerator {
       panel.classList.toggle('active', panel.dataset.tabPanel === target);
     });
   }
+
+  // Цель из .источник/.приемник/.навигация: последний сегмент после # или ..
+  function targetId(raw) {
+    const text = String(raw || '').trim().replace(/^#/, '').replace(/\\s+/g, ' ');
+    const parts = text.split(/[.\\s]+/).filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
+  }
+
+  function findTab(raw) {
+    const id = targetId(raw);
+    if (!id) return null;
+    const byData = Array.from(document.querySelectorAll('[data-tab-id]'))
+      .find(el => el.dataset.tabId === id);
+    return byData || document.getElementById(id);
+  }
+
+  function findField(raw) {
+    const id = targetId(raw);
+    if (!id) return null;
+    return Array.from(document.querySelectorAll('input, select'))
+      .find(el => el.name === id || el.id === id) || null;
+  }
+
+  function activateTarget(raw) {
+    const tab = findTab(raw);
+    if (!tab) return false;
+    const tabs = tab.closest('.tabs');
+    if (tabs && tab.dataset.tabPanel) {
+      activateTab(tabs, tab.dataset.tabPanel);
+      return true;
+    }
+    return false;
+  }
+
+  function showDialog(message, okLabel) {
+    if (!message) return;
+    const backdrop = document.createElement('div');
+    backdrop.className = 'ui-dialog-backdrop';
+    const box = document.createElement('div');
+    box.className = 'ui-dialog';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    const text = document.createElement('p');
+    text.textContent = message;
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.textContent = okLabel || 'Ок';
+    box.appendChild(text);
+    box.appendChild(ok);
+    backdrop.appendChild(box);
+    document.body.appendChild(backdrop);
+    const previousFocus = document.activeElement;
+    const close = () => {
+      document.removeEventListener('keydown', onKey);
+      backdrop.remove();
+      if (previousFocus && previousFocus.focus) previousFocus.focus();
+    };
+    const onKey = event => {
+      if (event.key === 'Escape') close();
+    };
+    ok.addEventListener('click', close);
+    backdrop.addEventListener('click', event => {
+      if (event.target === backdrop) close();
+    });
+    document.addEventListener('keydown', onKey);
+    ok.focus();
+  }
+
+  function checkAction(button) {
+    const check = button.dataset.check;
+    if (!check) {
+      if (button.dataset.dialog) showDialog(button.dataset.dialog, button.dataset.dialogOk);
+      return true;
+    }
+    const field = findField(check);
+    const empty = !field || String(field.value || '').trim() === '';
+    const invalid = button.dataset.checkType === 'пусто' ? empty : false;
+    if (!invalid) return true;
+    if (button.dataset.dialog) showDialog(button.dataset.dialog, button.dataset.dialogOk);
+    return button.dataset.checkGoal !== 'запретить';
+  }
+
+  function transfer(button) {
+    const source = findTab(button.dataset.source);
+    const target = findTab(button.dataset.target);
+    if (!source || !target) return;
+    const fields = Array.from(source.querySelectorAll('input, select'));
+    const values = fields.map(field => {
+      const label = field.closest('.input-group')?.querySelector('label')?.textContent || field.name;
+      return { label: label, value: field.value || '—' };
+    }).filter(item => item.value !== '—');
+    if (!values.length) return;
+    let list = target.querySelector('.items-list');
+    if (!list) {
+      list = document.createElement('div');
+      list.className = 'items-list';
+      target.appendChild(list);
+    }
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    values.forEach(data => {
+      const span = document.createElement('span');
+      span.textContent = data.label + ': ' + data.value;
+      item.appendChild(span);
+    });
+    list.appendChild(item);
+    fields.forEach(field => {
+      if (field.tagName === 'SELECT') field.selectedIndex = -1;
+      else field.value = '';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    activateTarget(button.dataset.target);
+  }
+
+  document.querySelectorAll('.ui-action').forEach(btn => {
+    btn.addEventListener('click', function() {
+      if (!checkAction(this)) return;
+      if (this.dataset.source && this.dataset.target) {
+        transfer(this);
+        return;
+      }
+      if (this.dataset.navigation) activateTarget(this.dataset.navigation);
+    });
+  });
 
   // Клик по табу
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -349,7 +479,7 @@ export class UIGenerator {
   }
 
   renderTabs(n) {
-    const groupId = `tabs-${++this.tabsCounter}`;
+    const groupId = String((n.props && n.props['ид']) || `tabs-${++this.tabsCounter}`);
     const tabNodes = n.children.filter(c => c.nodeType === 'MEANING' && c.key.startsWith('таб'));
     if (!tabNodes.length) return '';
 
@@ -361,12 +491,24 @@ export class UIGenerator {
       const label = String(tab.value || id).replace(/^=\s*/, '').trim() || 'Таб';
       const panelId = `${groupId}-${index}`;
       const content = this.renderNode(tab);
+      const customButtons = (tab.children || []).filter(
+        child => child.nodeType === 'MEANING' && child.key === 'кнопка');
+      const hasCustomTransfer = customButtons.some(
+        button => button.props && button.props['источник'] && button.props['приемник']);
+      const hasCustomNavigation = customButtons.some(
+        button => button.props && button.props['навигация']);
 
       let body = content;
-      if (isList) {
+      if (isList && !hasCustomNavigation) {
         body += '<button type="button" class="btn-secondary show-form-btn">+ Добавить</button>';
       }
       if (isForm) {
+        const autoAdd = hasCustomTransfer
+          ? ''
+          : '<button type="button" class="btn-secondary submit-item" style="margin-top:12px;">Добавить</button>';
+        const autoBack = hasCustomNavigation
+          ? ''
+          : '<button type="button" class="btn-secondary back-to-list" style="margin-top:8px;">← Назад к списку</button>';
         body = `
           <div class="repeatable-item">
             <div class="repeatable-header">
@@ -374,16 +516,16 @@ export class UIGenerator {
               <button type="button" class="btn-secondary remove-item" style="width:auto;padding:4px 8px;">✖</button>
             </div>
             ${content}
-            <button type="button" class="btn-secondary submit-item" style="margin-top:12px;">Добавить</button>
+            ${autoAdd}
           </div>
-          <button type="button" class="btn-secondary back-to-list" style="margin-top:8px;">← Назад к списку</button>`;
+          ${autoBack}`;
       }
 
       const legacyClass = isList ? ' list-view' : (isForm ? ' form-view' : '');
       const activeClass = index === 0 ? ' active' : '';
       return {
         button: `<button type="button" class="tab-btn${activeClass}" data-tab-target="${panelId}">${this.escapeHtml(label)}</button>`,
-        panel: `<section class="tab-panel${legacyClass}${activeClass}" data-tab-panel="${panelId}">${body}</section>`
+        panel: `<section class="tab-panel${legacyClass}${activeClass}" data-tab-panel="${panelId}" data-tab-id="${this.escapeHtml(id)}">${body}</section>`
       };
     });
 
@@ -422,7 +564,33 @@ export class UIGenerator {
   }
 
   button(n) {
-    return ''; // Кнопки рендерятся в renderTabs
+    const props = n.props || {};
+    const label = String(n.parsedValue?.label || n.value || '').replace(/^=\s*/, '').trim();
+    if (!label) return '';
+
+    const attrs = [];
+    const add = (name, value) => {
+      if (value === undefined || value === null || value === '') return;
+      attrs.push(`data-${name}="${this.escapeHtml(String(value))}"`);
+    };
+    add('source', props['источник']);
+    add('target', props['приемник']);
+    add('navigation', props['навигация']);
+    add('check', props['проверить']);
+    add('check-type', props['тип_проверки']);
+    add('check-goal', props['цель_проверки']);
+
+    const dialog = String(props['диалог'] || '');
+    if (dialog) {
+      const divider = dialog.indexOf(' / ');
+      const message = divider === -1 ? dialog : dialog.slice(0, divider);
+      const okLabel = divider === -1 ? 'Ок' : dialog.slice(divider + 3);
+      add('dialog', message.trim());
+      add('dialog-ok', okLabel.trim() || 'Ок');
+    }
+
+    if (!attrs.length) return '';
+    return `<button type="button" class="btn-secondary ui-action" ${attrs.join(' ')}>${this.escapeHtml(label)}</button>`;
   }
 
   label(n) {

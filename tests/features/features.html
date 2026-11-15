@@ -742,6 +742,66 @@
 
   uiHostEl.remove();
 
+  /* ------------------------------------------------------------------ */
+  /* UI-рантайм: .источник/.приемник, .навигация, .проверить, .диалог    */
+  /* ------------------------------------------------------------------ */
+  const actionCode = join(
+    '! как форма',
+    'форма',
+    '  табы .ид ops',
+    '    таб#список',
+    '      группа:набор-соответствий',
+    '    таб#добавить',
+    '      поле#количество:число = Количество',
+    '      кнопка = Добавить',
+    '        .источник #добавить',
+    '        .приемник #список',
+    '      кнопка = Назад',
+    '        .навигация #ops.список',
+    '        .проверить #добавить.количество',
+    '        .тип_проверки пусто',
+    '        .цель_проверки запретить',
+    '        .диалог Заполните количество / Ок'
+  );
+  const actionParsed = build(actionCode);
+  const actionGenerator = new UIGenerator(false);
+  const actionHost = document.createElement('div');
+  actionHost.innerHTML = actionGenerator.generateHTML(actionParsed.ast);
+  document.body.appendChild(actionHost);
+
+  const actionRuntime = document.createElement('script');
+  actionRuntime.textContent = actionGenerator.generateRuntimeJS();
+  document.body.appendChild(actionRuntime);
+
+  const actionTabs = actionHost.querySelectorAll('.tab-btn');
+  const actionButtons = actionHost.querySelectorAll('.ui-action');
+  check('UI: кнопки с действиями отрисованы',
+    actionTabs.length === 2 && actionButtons.length === 2,
+    'tabs=' + actionTabs.length + ', actions=' + actionButtons.length);
+
+  const backButton = Array.from(actionButtons).find(btn => btn.textContent.includes('Назад'));
+  const addButton = Array.from(actionButtons).find(btn => btn.textContent.includes('Добавить'));
+  if (actionTabs.length === 2) actionTabs[1].click();
+  if (backButton) backButton.click();
+  const dialog = document.querySelector('.ui-dialog');
+  const formPanel = actionHost.querySelector('[data-tab-id="добавить"]');
+  check('UI: диалог показывает причину и не пускает назад',
+    !!dialog && /Заполните количество/.test(dialog.textContent) &&
+    !!formPanel && formPanel.classList.contains('active'),
+    dialog ? dialog.textContent.trim() : 'нет диалога');
+  if (dialog) dialog.querySelector('button').click();
+
+  const actionInput = actionHost.querySelector('[data-tab-id="добавить"] input');
+  const actionList = actionHost.querySelector('[data-tab-id="список"] .items-list');
+  if (actionInput) actionInput.value = '5';
+  if (addButton) addButton.click();
+  check('UI: .источник/.приемник переносит строку и чистит источник',
+    !!actionList && actionList.querySelectorAll('.list-item').length === 1 &&
+    actionList.textContent.includes('5') && !!actionInput && actionInput.value === '',
+    actionList ? actionList.textContent.slice(0, 80) : 'нет списка');
+
+  actionHost.remove();
+
   // Результат уже записан до UI-блока — обновляем, чтобы новые проверки
   // попали в отчёт, а не только в title.
   resultBox.textContent = lines.join('\n') + '\n';
