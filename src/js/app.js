@@ -1,4 +1,4 @@
-import { YarbpFlavor } from './classes/YarbpFlavor.js';
+import { YarbpFlavor, prefetchFlavors } from './classes/YarbpFlavor.js';
 import { YarbpLexer, TokenTypes } from './core/YarbpLexer.js';
 import { YarbpParser } from './core/YarbpParser.js';
 import { YarbpHighlighter } from './classes/highlighters/YarbpHighlighter.js';
@@ -317,6 +317,38 @@ let lastRenderedCode = null;
 let lastAST = null;
 let rendererLoadGeneration = 0;
 let pendingRendererName = null;
+let flavorPrefetchStarted = false;
+
+/**
+ * Фоновая догрузка остальных флейворов. Запускается только после того, как
+ * выбранный флейвор уже отрисован: первый экран не ждёт BPMN/FlexForms/OpenAPI.
+ */
+function scheduleFlavorPrefetch() {
+  if (flavorPrefetchStarted) return;
+  flavorPrefetchStarted = true;
+
+  const start = () => {
+    document.documentElement.dataset.flavorPrefetch = 'loading';
+    prefetchFlavors()
+      .then(results => {
+        const failed = results.filter(result => result.status === 'rejected');
+        document.documentElement.dataset.flavorPrefetch = failed.length ? 'partial' : 'done';
+        if (failed.length) {
+          console.warn('[app] flavor prefetch incomplete:', failed.length);
+        }
+      })
+      .catch(error => {
+        document.documentElement.dataset.flavorPrefetch = 'error';
+        console.warn('[app] flavor prefetch failed:', error);
+      });
+  };
+
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(start, { timeout: 1500 });
+  } else {
+    window.setTimeout(start, 0);
+  }
+}
 
 /** Создать рендерер выбранного флейвора и подписать его на лексер. */
 function instantiateRenderer(flavor, RendererClass) {
@@ -327,11 +359,13 @@ function instantiateRenderer(flavor, RendererClass) {
   YarbpAppGlobals.renderer = renderer;
   YarbpAppGlobals.lexer.setObserver(renderer);
   YarbpAppGlobals.lexer.callRendererObserver();
+  scheduleFlavorPrefetch();
 }
 
 /**
- * Тяжёлые флейворы подгружаются по `import()`: первый кадр редактора не ждёт
- * FlexForms/BPMN/OpenAPI/Schema/Mermaid. Пока грузится — не плодим запросы.
+ * Выбранный тяжёлый флейвор грузится первым (без него нечего рисовать), а
+ * остальные — фоном после первого рендера. Пока грузится выбранный — не плодим
+ * запросы; повторный выбор переиспользует тот же import().
  */
 function startRenderer(flavor, RendererClass) {
   if (RendererClass) {

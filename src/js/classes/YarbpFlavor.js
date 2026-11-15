@@ -158,6 +158,37 @@ const FlavorMap = new Map(
   )
 );
 
+/* Один import() на флейвор: выбранный рендерер и фоновый prefetch делят
+   результат, поэтому модуль не запрашивается дважды. */
+const RendererPromises = new WeakMap();
+
+function loadFlavorRenderer(flavorData) {
+  if (!flavorData) return Promise.resolve(null);
+  if (flavorData.renderer) return Promise.resolve(flavorData.renderer);
+  if (typeof flavorData.loadRenderer !== 'function') return Promise.resolve(null);
+
+  let pending = RendererPromises.get(flavorData);
+  if (!pending) {
+    pending = flavorData.loadRenderer().catch(error => {
+      RendererPromises.delete(flavorData);
+      throw error;
+    });
+    RendererPromises.set(flavorData, pending);
+  }
+  return pending;
+}
+
+/**
+ * Фоновая догрузка всех тяжёлых флейворов. Вызывается после первого рендера
+ * выбранного флейвора: интерфейс уже готов, остальные рендереры догружаются
+ * в фоне и при переключении не ждут сеть.
+ */
+export function prefetchFlavors() {
+  const dynamicFlavors = Object.values(KnownFlavors)
+    .filter(flavor => typeof flavor.loadRenderer === 'function');
+  return Promise.allSettled(dynamicFlavors.map(loadFlavorRenderer));
+}
+
 export class YarbpFlavor {
   constructor(flavorDirective) {
     this.flavorName = this.normalizeFlavorName(flavorDirective);
@@ -166,16 +197,11 @@ export class YarbpFlavor {
 
   /**
    * Класс рендерера: статический для лёгких флейворов, динамический импорт —
-   * для тяжёлых (FlexForms/BPMN/OpenAPI/Schema/Mermaid). Так стартовый экран
-   * не грузит их код, пока пользователь не выбрал соответствующий флейвор.
+   * для тяжёлых (FlexForms/BPMN/OpenAPI/Schema/Mermaid). Выбранный флейвор
+   * загружается первым; остальные догружаются в фоне (см. `prefetchFlavors`).
    */
   async loadRenderer() {
-    if (!this.flavorData) return null;
-    if (this.flavorData.renderer) return this.flavorData.renderer;
-    if (typeof this.flavorData.loadRenderer === 'function') {
-      return this.flavorData.loadRenderer();
-    }
-    return null;
+    return loadFlavorRenderer(this.flavorData);
   }
 
   /**

@@ -586,6 +586,17 @@
   if (appOk) {
     const doc = appFrame.contentDocument;
     const view = appFrame.contentWindow;
+
+    // Фоновая догрузка остальных флейворов: первый экран уже отрисован, но
+    // остальные рендереры должны приехать без выбора пользователя.
+    let prefetchState = doc.documentElement.dataset.flavorPrefetch;
+    for (let attempt = 0; attempt < 60 && prefetchState !== 'done'; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      prefetchState = doc.documentElement.dataset.flavorPrefetch;
+    }
+    check('флейворы: остальные рендереры догружены в фоне',
+      prefetchState === 'done', String(prefetchState));
+
     const editor = doc.getElementById('code-textarea');
     const layer = doc.getElementById('highlight-div');
     const appCode = join(
@@ -651,7 +662,7 @@
     );
     editor.dispatchEvent(new view.Event('input', { bubbles: true }));
     await new Promise(resolve => setTimeout(resolve, 2500));
-    check('ленивый BPMN: рендерер загрузился и отрисовал схему',
+    check('фоновый BPMN: рендерер отрисовал схему',
       doc.getElementById('render-textarea').value.includes('bpmn:definitions'));
   }
 
