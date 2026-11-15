@@ -519,30 +519,19 @@ function shiftProcessBy(process, dx, dy) {
 
 function snapEndEventsToRightEdge(model) {
   for (const process of model.processes) {
-    if (!process.bounds) { console.log('no bounds', process.id); continue; }
-    console.log('process', process.id,
-                'pool.x', process.bounds.x,
-                'pool.width', process.bounds.width,
-                'poolRight', process.bounds.x + process.bounds.width);
+    if (!process.bounds) continue;
 
     const poolRight = process.bounds.x + process.bounds.width;
     const targetRight = poolRight - LAYOUT.endEventRightMargin;
 
     for (const node of process.flowNodes) {
       if (node.tag !== 'endEvent') continue;
-      console.log('  endEvent', node.id,
-                  'bounds', JSON.stringify(node.bounds),
-                  'right', node.bounds ? node.bounds.x + node.bounds.width : 'n/a');
       if (!node.bounds) continue;
 
       const b = node.bounds;
-      if (!Number.isFinite(b.x) || !Number.isFinite(b.width)) {
-        console.log('    skip: bad x/width');
-        continue;
-      }
+      if (!Number.isFinite(b.x) || !Number.isFinite(b.width)) continue;
 
       const dx = targetRight - (b.x + b.width);
-      console.log('    targetRight', targetRight, 'dx', dx);
       if (!Number.isFinite(dx) || dx === 0) continue;
 
       b.x += dx;
