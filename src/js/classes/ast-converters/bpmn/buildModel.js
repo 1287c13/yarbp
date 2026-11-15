@@ -683,7 +683,13 @@ function buildGateway(node, ctx, process, opts) {
   const tag        = GATEWAY_TAG_MAP[typeValue] || DEFAULT_GATEWAY_TAG;
 
   // B-4: `параллельный`, `инклюзивный`, `событийный`; остальное — исключающий.
-  if (typeValue !== null && tag === DEFAULT_GATEWAY_TAG) {
+  // D-24: `шлюз .тип параллельный = Слияние` — не опечатка типа, а перепутанный
+  // порядок: значение узла должно идти до атрибутов.
+  if (typeValue !== null && /\S\s*=/.test(String(typeValue))) {
+    warn(ctx, node,
+      'в .тип попало «' + typeValue + '»: похоже, значение и атрибут перепутаны. ' +
+      'Сначала значение, потом атрибуты — например, `шлюз = Слияние .тип параллельный`');
+  } else if (typeValue !== null && tag === DEFAULT_GATEWAY_TAG) {
     warn(ctx, node, 'неизвестный тип шлюза «' + typeValue + '» — исключающий по умолчанию');
   }
 

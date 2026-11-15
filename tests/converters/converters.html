@@ -695,6 +695,13 @@
       warningsOf(['! как бпмн', 'процесс = П', '  событие = С', '  шлюз = Г .тип хитрый'].join('\n'))
         .some(item => /неизвестный тип шлюза/.test(item.message)));
 
+    const orderWarnings = warningsOf(['! как бпмн', 'процесс = П', '  событие = Старт',
+      '  шлюз .тип параллельный = Слияние'].join('\n'));
+    check('D-24: перепутанный порядок «значение/атрибут» объяснён',
+      orderWarnings.some(item => item.line === 4 &&
+        /Сначала значение, потом атрибуты/.test(item.message)),
+      JSON.stringify(orderWarnings));
+
     // событийный шлюз не сходится: продолжение идёт от каждой ветки
     let eventGatewaySource = '';
     try {
