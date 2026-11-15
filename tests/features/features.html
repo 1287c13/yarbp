@@ -825,6 +825,50 @@ import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
     exportedDoc ? 'tabs=' + exportedTabs.length : 'нет документа');
   exportedFrame.remove();
 
+  /* Редактируемая таблица-соответствий: строки, колонки и постфикс. */
+  const tableCode = join(
+    '! как форма',
+    'форма',
+    '  группа:таблица-соответствий',
+    '    поле:строка = Номер',
+    '    поле:целое = Количество / / / шт.'
+  );
+  const tableParsed = build(tableCode);
+  const tableGenerator = new UIGenerator(false);
+  const tableHost = document.createElement('div');
+  tableHost.innerHTML = tableGenerator.generateHTML(tableParsed.ast);
+  document.body.appendChild(tableHost);
+  const tableRuntime = new UIRuntime(tableHost);
+  tableRuntime.mount();
+
+  const uiTable = tableHost.querySelector('[data-ui-table]');
+  const tableAdd = tableHost.querySelector('.add-table-row');
+  check('UI: таблица-соответствий рисует колонки и постфикс',
+    !!uiTable && uiTable.querySelectorAll('thead th').length === 3 &&
+    !!uiTable.querySelector('.field-postfix') &&
+    uiTable.querySelector('.field-postfix').textContent === 'шт.',
+    uiTable ? String(uiTable.querySelectorAll('thead th').length) : 'нет таблицы');
+
+  const tableInput = uiTable ? uiTable.querySelector('tbody input') : null;
+  if (tableInput) {
+    tableInput.value = '7';
+    tableInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  if (tableAdd) tableAdd.click();
+  check('UI: таблица добавляет строку и обновляет view-model',
+    !!uiTable && uiTable.querySelectorAll('tbody tr').length === 2 &&
+    (tableRuntime.viewModel.snapshot().tables['corr-1'] || []).length === 2,
+    uiTable ? String(uiTable.querySelectorAll('tbody tr').length) : 'нет таблицы');
+
+  const tableRemove = uiTable ? uiTable.querySelector('.remove-table-row') : null;
+  if (tableRemove) tableRemove.click();
+  check('UI: таблица удаляет строку',
+    !!uiTable && uiTable.querySelectorAll('tbody tr').length === 1 &&
+    (tableRuntime.viewModel.snapshot().tables['corr-1'] || []).length === 1,
+    uiTable ? String(uiTable.querySelectorAll('tbody tr').length) : 'нет таблицы');
+  tableRuntime.destroy();
+  tableHost.remove();
+
   // Результат уже записан до UI-блока — обновляем, чтобы новые проверки
   // попали в отчёт, а не только в title.
   resultBox.textContent = lines.join('\n') + '\n';

@@ -13,6 +13,7 @@ export class UIGenerator {
     ];
     this.cardCounter = 0;
     this.tabsCounter = 0;
+    this.tableCounter = 0;
   }
 
   /**
@@ -51,6 +52,14 @@ export class UIGenerator {
         .field-row input, .field-row select { flex: 1; min-width: 0; }
         .field-clear { flex: 0 0 auto; width: 30px; height: 30px; padding: 0; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; cursor: pointer; font-size: 16px; line-height: 1; color: #6b7280; }
         .field-clear:hover { background: #f3f4f6; color: #111827; }
+        .field-postfix { flex: 0 0 auto; color: #6b7280; font-size: .85rem; white-space: nowrap; }
+        .ui-table-wrap { margin-top: 12px; }
+        .ui-table { width: 100%; border-collapse: collapse; background: white; }
+        .ui-table th, .ui-table td { border-bottom: 1px solid #e5e7eb; padding: 8px; text-align: left; vertical-align: top; }
+        .ui-table th { font-size: .8rem; color: #6b7280; font-weight: 600; }
+        .ui-table td input { width: 100%; min-width: 0; padding: 7px 9px; border: 1px solid #d1d5db; border-radius: 7px; }
+        .ui-table .remove-table-row { width: auto; padding: 4px 8px; }
+        .add-table-row { margin-top: 8px; }
         .items-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
         .list-item { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; }
         .btn-secondary { background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 0.9rem; width: 100%; }
@@ -168,6 +177,8 @@ export class UIGenerator {
       if (['*', 'да', 'yes'].includes(parts[2])) result.required = true;
       else result.postfix = parts[2];
     }
+    // Канонический сахар: label / placeholder / required / postfix.
+    if (parts.length >= 4 && parts[3]) result.postfix = parts[3];
     return result;
   }
 
@@ -198,15 +209,42 @@ export class UIGenerator {
   }
 
   renderCorrespondenceTable(n) {
-    const rows = n.children.map(field => {
-      if (field.nodeType !== 'MEANING') return '';
+    const tableId = 'corr-' + (++this.tableCounter);
+    const columns = [];
+
+    n.children.forEach(field => {
+      if (field.nodeType !== 'MEANING') return;
       this.parseKeyAndId(field);
       this.extractShorthand(field);
-      const label = field.value || field.key || '';
-      const postfix = field.props?.['постфикс'] || '';
-      return `<div class="info-row"><span>${this.escapeHtml(label)}:</span><strong>${postfix ? this.escapeHtml(postfix) : '—'}</strong></div>`;
-    }).join('');
-    return `<div class="order-card">${rows}</div>`;
+      const parsed = this.parseSugaredValue(field.value || '');
+      const name = field.id || field.key || 'field-' + columns.length;
+      const label = parsed.label || field.value || field.key || name;
+      columns.push({
+        name: name,
+        label: label,
+        placeholder: parsed.placeholder || '',
+        postfix: parsed.postfix || field.props?.['постфикс'] || '',
+        type: this.mapFieldType(field.type || field.key || 'текст'),
+      });
+    });
+
+    if (!columns.length) return '';
+
+    const header = columns
+      .map(column => `<th>${this.escapeHtml(column.label)}</th>`)
+      .join('') + '<th></th>';
+    const cells = columns.map(column =>
+      `<td><input type="${this.escapeHtml(column.type)}" name="${this.escapeHtml(column.name)}" data-field="${this.escapeHtml(column.name)}" placeholder="${this.escapeHtml(column.placeholder)}" />` +
+      (column.postfix ? `<span class="field-postfix">${this.escapeHtml(column.postfix)}</span>` : '') +
+      '</td>').join('');
+    const row = `<tr data-ui-table-row>${cells}` +
+      '<td><button type="button" class="btn-secondary remove-table-row" aria-label="Удалить строку">✖</button></td></tr>';
+
+    return `<div class="ui-table-wrap" data-ui-table="${tableId}">` +
+      `<table class="ui-table"><thead><tr>${header}</tr></thead><tbody>${row}</tbody></table>` +
+      '<button type="button" class="btn-secondary add-table-row">+ Добавить строку</button>' +
+      `<template class="ui-table-row-template">${row}</template>` +
+      '</div>';
   }
 
   renderCorrespondenceSet(n) {
@@ -285,6 +323,7 @@ export class UIGenerator {
     const label = n.parsedValue?.label || n.key || '';
     const placeholder = n.parsedValue?.placeholder || '';
     const required = n.parsedValue?.required;
+    const postfix = n.parsedValue?.postfix || (n.props && n.props['постфикс']) || '';
     const isSelect = fieldType === 'выбор';
     const clear = String((n.props && n.props['доп-функционал']) || '').includes('очистить');
 
@@ -304,7 +343,7 @@ export class UIGenerator {
     return `
       <div class="input-group">
         <label>${this.escapeHtml(label)}</label>
-        <div class="field-row">${control}${clearButton}</div>
+        <div class="field-row">${control}${postfix ? `<span class="field-postfix">${this.escapeHtml(postfix)}</span>` : ''}${clearButton}</div>
       </div>`;
   }
 

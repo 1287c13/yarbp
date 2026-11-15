@@ -12,6 +12,7 @@ export class UIViewModel {
     this.activeTab = null;
     this.fields = Object.create(null);
     this.lists = Object.create(null);
+    this.tables = Object.create(null);
   }
 
   setField(name, value) {
@@ -32,11 +33,16 @@ export class UIViewModel {
     this.lists[listId].push(item);
   }
 
+  setTableRows(tableId, rows) {
+    if (tableId) this.tables[tableId] = rows;
+  }
+
   snapshot() {
     return {
       activeTab: this.activeTab,
       fields: Object.assign({}, this.fields),
       lists: Object.assign({}, this.lists),
+      tables: Object.assign({}, this.tables),
     };
   }
 }
@@ -235,6 +241,41 @@ export class UIRuntime {
     if (item) item.remove();
   }
 
+  addTableRow(button) {
+    const wrap = button.closest('[data-ui-table]');
+    if (!wrap) return;
+    const template = wrap.querySelector('.ui-table-row-template');
+    const body = wrap.querySelector('tbody');
+    if (!template || !body) return;
+    const row = template.content.firstElementChild.cloneNode(true);
+    row.querySelectorAll('input').forEach(input => input.value = '');
+    body.appendChild(row);
+    this.syncTable(wrap);
+    const first = row.querySelector('input');
+    if (first) first.focus();
+  }
+
+  removeTableRow(button) {
+    const wrap = button.closest('[data-ui-table]');
+    const row = button.closest('tr');
+    if (!wrap || !row) return;
+    row.remove();
+    this.syncTable(wrap);
+  }
+
+  syncTable(wrap) {
+    if (!wrap) return;
+    const tableId = wrap.dataset.uiTable;
+    const rows = Array.from(wrap.querySelectorAll('tbody tr')).map(row => {
+      const values = {};
+      row.querySelectorAll('input, select').forEach(field => {
+        values[field.dataset.field || field.name] = field.value;
+      });
+      return values;
+    });
+    this.viewModel.setTableRows(tableId, rows);
+  }
+
   showForm(button) {
     const card = button.closest('.fieldset-card');
     const tabs = card && card.querySelector('.tabs');
@@ -320,22 +361,25 @@ export class UIRuntime {
     this.root.querySelectorAll('input, select').forEach(field => {
       this.viewModel.setField(field.name, field.value);
     });
+    this.root.querySelectorAll('[data-ui-table]').forEach(wrap => this.syncTable(wrap));
     const active = this.root.querySelector('.tab-btn.active');
     if (active) this.viewModel.setActiveTab(active.dataset.tabTarget);
   }
 
   _onInput(event) {
     const field = event.target;
-    if (field && field.matches && field.matches('input, select')) {
-      this.viewModel.setField(field.name, field.value);
-    }
+    if (!field || !field.matches || !field.matches('input, select')) return;
+    this.viewModel.setField(field.name, field.value);
+    const table = field.closest('[data-ui-table]');
+    if (table) this.syncTable(table);
   }
 
   _onChange(event) {
     const field = event.target;
-    if (field && field.matches && field.matches('input, select')) {
-      this.viewModel.setField(field.name, field.value);
-    }
+    if (!field || !field.matches || !field.matches('input, select')) return;
+    this.viewModel.setField(field.name, field.value);
+    const table = field.closest('[data-ui-table]');
+    if (table) this.syncTable(table);
   }
 
   _onClick(event) {
@@ -350,6 +394,12 @@ export class UIRuntime {
 
     const clear = target.closest('.field-clear');
     if (clear) { this.clearField(clear); return; }
+
+    const addRow = target.closest('.add-table-row');
+    if (addRow) { this.addTableRow(addRow); return; }
+
+    const removeRow = target.closest('.remove-table-row');
+    if (removeRow) { this.removeTableRow(removeRow); return; }
 
     const remove = target.closest('.remove-item');
     if (remove) { this.removeItem(remove); return; }
