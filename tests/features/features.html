@@ -673,6 +673,17 @@
   uiRuntimeEl.textContent = uiGenerator.generateRuntimeJS();
   document.body.appendChild(uiRuntimeEl);
 
+  const uiTabs = uiHostEl.querySelectorAll('.tab-btn');
+  check('UI: табы отрисованы', uiTabs.length === 2, String(uiTabs.length));
+  if (uiTabs.length === 2) {
+    uiTabs[1].click();
+    check('UI: переключение на второй таб',
+      uiHostEl.querySelector('.form-view').classList.contains('active'));
+    uiTabs[0].click();
+    check('UI: переключение на первый таб',
+      uiHostEl.querySelector('.list-view').classList.contains('active'));
+  }
+
   const uiShow = uiHostEl.querySelector('.show-form-btn');
   if (uiShow) uiShow.click();
 

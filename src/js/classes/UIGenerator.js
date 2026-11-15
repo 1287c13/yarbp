@@ -12,6 +12,7 @@ export class UIGenerator {
       { test: (node) => node.key === 'опция', render: this.option },
     ];
     this.cardCounter = 0;
+    this.tabsCounter = 0;
   }
 
   /**
@@ -57,6 +58,12 @@ export class UIGenerator {
         .order-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-top: 12px; }
         .info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
         .form-view { display: none; }
+        .tabs { margin-bottom: 12px; }
+        .tab-nav { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+        .tab-btn { padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; background: none; cursor: pointer; font-size: 0.9rem; color: #6b7280; }
+        .tab-btn.active { color: #111827; border-bottom-color: #3b82f6; font-weight: 600; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
         .repeatable-item { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
         .repeatable-header { display: flex; justify-content: space-between; margin-bottom: 12px; font-weight: 600; }
         @media (max-width: 768px) {
@@ -76,10 +83,37 @@ export class UIGenerator {
   generateRuntimeJS() {
     return `
 (function() {
+  // Переключить активную панель табов. Инлайн-стили сбрасываем: иначе
+  // show/back и tab-кнопки будут спорить, кто главнее.
+  function activateTab(tabs, target) {
+    if (!tabs || !target) return;
+    tabs.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tabTarget === target);
+    });
+    tabs.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.style.display = '';
+      panel.classList.toggle('active', panel.dataset.tabPanel === target);
+    });
+  }
+
+  // Клик по табу
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      activateTab(this.closest('.tabs'), this.dataset.tabTarget);
+    });
+  });
+
   // Показать форму
   document.querySelectorAll('.show-form-btn').forEach(btn => {
     btn.addEventListener('click', function() {
       const card = this.closest('.fieldset-card');
+      const tabs = card && card.querySelector('.tabs');
+      const formPanel = card && card.querySelector('.form-view');
+      if (tabs && formPanel) {
+        activateTab(tabs, formPanel.dataset.tabPanel);
+        return;
+      }
+      if (!card) return;
       card.querySelector('.list-view').style.display = 'none';
       card.querySelector('.form-view').style.display = 'block';
     });
@@ -89,6 +123,13 @@ export class UIGenerator {
   document.querySelectorAll('.back-to-list').forEach(btn => {
     btn.addEventListener('click', function() {
       const card = this.closest('.fieldset-card');
+      const tabs = card && card.querySelector('.tabs');
+      const listPanel = card && card.querySelector('.list-view');
+      if (tabs && listPanel) {
+        activateTab(tabs, listPanel.dataset.tabPanel);
+        return;
+      }
+      if (!card) return;
       card.querySelector('.list-view').style.display = 'block';
       card.querySelector('.form-view').style.display = 'none';
     });
@@ -156,8 +197,14 @@ export class UIGenerator {
       // Очищаем и возвращаемся
       formView.querySelectorAll('input').forEach(f => f.value = '');
       formView.querySelectorAll('select').forEach(f => f.selectedIndex = 0);
-      card.querySelector('.list-view').style.display = 'block';
-      formView.style.display = 'none';
+      const tabs = card.querySelector('.tabs');
+      const listPanel = card.querySelector('.list-view');
+      if (tabs && listPanel) {
+        activateTab(tabs, listPanel.dataset.tabPanel);
+      } else {
+        card.querySelector('.list-view').style.display = 'block';
+        formView.style.display = 'none';
+      }
     });
   });
 })();`;
@@ -302,43 +349,48 @@ export class UIGenerator {
   }
 
   renderTabs(n) {
-    const cardId = n.props['ид'] || `card-${++this.cardCounter}`;
+    const groupId = `tabs-${++this.tabsCounter}`;
     const tabNodes = n.children.filter(c => c.nodeType === 'MEANING' && c.key.startsWith('таб'));
+    if (!tabNodes.length) return '';
 
-    const listTab = tabNodes.find(t => t.id === 'список' || t.key.includes('список'));
-    const formTab = tabNodes.find(t => t.id === 'добавить' || t.key.includes('добавить'));
+    const tabs = tabNodes.map((tab, index) => {
+      this.parseKeyAndId(tab);
+      const id = tab.id || tab.key || `tab-${index}`;
+      const isList = id.includes('список');
+      const isForm = id.includes('добавить');
+      const label = String(tab.value || id).replace(/^=\s*/, '').trim() || 'Таб';
+      const panelId = `${groupId}-${index}`;
+      const content = this.renderNode(tab);
 
-    let listHTML = '';
-    let formHTML = '';
-
-    if (listTab) {
-      this.parseKeyAndId(listTab);
-      const listContent = this.renderNode(listTab);
-      listHTML = `
-        <div class="list-view">
-          ${listContent}
-          <button type="button" class="btn-secondary show-form-btn">+ Добавить</button>
-        </div>`;
-    }
-
-    if (formTab) {
-      this.parseKeyAndId(formTab);
-      const formContent = this.renderNode(formTab);
-      formHTML = `
-        <div class="form-view">
+      let body = content;
+      if (isList) {
+        body += '<button type="button" class="btn-secondary show-form-btn">+ Добавить</button>';
+      }
+      if (isForm) {
+        body = `
           <div class="repeatable-item">
             <div class="repeatable-header">
               <span>Новая запись</span>
               <button type="button" class="btn-secondary remove-item" style="width:auto;padding:4px 8px;">✖</button>
             </div>
-            ${formContent}
+            ${content}
             <button type="button" class="btn-secondary submit-item" style="margin-top:12px;">Добавить</button>
           </div>
-          <button type="button" class="btn-secondary back-to-list" style="margin-top:8px;">← Назад к списку</button>
-        </div>`;
-    }
+          <button type="button" class="btn-secondary back-to-list" style="margin-top:8px;">← Назад к списку</button>`;
+      }
 
-    return listHTML + formHTML;
+      const legacyClass = isList ? ' list-view' : (isForm ? ' form-view' : '');
+      const activeClass = index === 0 ? ' active' : '';
+      return {
+        button: `<button type="button" class="tab-btn${activeClass}" data-tab-target="${panelId}">${this.escapeHtml(label)}</button>`,
+        panel: `<section class="tab-panel${legacyClass}${activeClass}" data-tab-panel="${panelId}">${body}</section>`
+      };
+    });
+
+    return `<div class="tabs" data-tabs-id="${groupId}">` +
+      `<div class="tab-nav">${tabs.map(tab => tab.button).join('')}</div>` +
+      `<div class="tab-panels">${tabs.map(tab => tab.panel).join('')}</div>` +
+      `</div>`;
   }
 
   field(n, children) {
