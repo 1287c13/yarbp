@@ -237,7 +237,6 @@ export class UIGenerator {
         label: label,
         placeholder: parsed.placeholder || '',
         postfix: parsed.postfix || fieldProps['постфикс'] || '',
-        value: fieldProps['значение'] === undefined ? '' : fieldProps['значение'],
         type: this.mapFieldType(field.type || field.key || 'текст'),
       });
     });
@@ -248,7 +247,7 @@ export class UIGenerator {
       .map(column => `<th>${this.escapeHtml(column.label)}</th>`)
       .join('') + '<th></th>';
     const cells = columns.map(column =>
-      `<td><input type="${this.escapeHtml(column.type)}" name="${this.escapeHtml(column.name)}" data-field="${this.escapeHtml(column.name)}" value="${this.escapeHtml(column.value)}" placeholder="${this.escapeHtml(column.placeholder)}" />` +
+      `<td><input type="${this.escapeHtml(column.type)}" name="${this.escapeHtml(column.name)}" data-field="${this.escapeHtml(column.name)}" placeholder="${this.escapeHtml(column.placeholder)}" />` +
       (column.postfix ? `<span class="field-postfix">${this.escapeHtml(column.postfix)}</span>` : '') +
       '</td>').join('');
     const row = `<tr data-ui-table-row>${cells}` +

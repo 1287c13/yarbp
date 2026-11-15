@@ -838,7 +838,6 @@ import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
     'форма',
     '  группа:таблица-соответствий',
     '    поле:строка = Номер',
-    '      .значение 7',
     '    поле:целое = Количество / / / шт.'
   );
   const tableParsed = build(tableCode);
@@ -851,14 +850,18 @@ import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
 
   const uiTable = tableHost.querySelector('[data-ui-table]');
   const tableAdd = tableHost.querySelector('.add-table-row');
-  check('UI: таблица-соответствий рисует колонки, значение и постфикс',
+  check('UI: таблица-соответствий рисует колонки и постфикс',
     !!uiTable && uiTable.querySelectorAll('thead th').length === 3 &&
     !!uiTable.querySelector('.field-postfix') &&
     uiTable.querySelector('.field-postfix').textContent === 'шт.' &&
-    uiTable.querySelector('tbody input').value === '7',
+    uiTable.querySelector('tbody input').value === '',
     uiTable ? String(uiTable.querySelectorAll('thead th').length) : 'нет таблицы');
 
   const tableInput = uiTable ? uiTable.querySelector('tbody input') : null;
+  if (tableInput) {
+    tableInput.value = '7';
+    tableInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   if (tableAdd) tableAdd.click();
   check('UI: таблица добавляет строку и обновляет view-model',
     !!uiTable && uiTable.querySelectorAll('tbody tr').length === 2 &&
