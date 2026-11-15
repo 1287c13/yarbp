@@ -9,11 +9,18 @@
 python tests/run_all.py
 python tests/run_all.py --suite converters
 python tests/run_all.py --list
+python tests/run_all.py --json report.json --junit report.xml
 ```
 
 Браузер ищется в `YARBP_BROWSER`, затем в `PATH` (`google-chrome`,
-`chromium`, `chrome`, `msedge`), затем в стандартных путях Windows. В CI
-переменная задаётся workflow-файлом `.github/workflows/tests.yml`.
+`chromium`, `chrome`, `msedge`), затем в стандартных путях Windows.
+Общая обвязка браузерных наборов — `tests/_harness.py`: поиск браузера,
+локальный `http.server`, `--dump-dom`, разбор результата и заголовка.
+`security`, `files` и `features` уже используют её; остальные наборы
+подключаются постепенно.
+
+`--json` и `--junit` пишут сводку по наборам (имя, статус, время) для
+локальных отчётов и CI.
 
 | Папка | Что проверяет | Запуск |
 | --- | --- | --- |
