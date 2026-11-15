@@ -290,6 +290,10 @@ function updateStatus(code, parserDiagnostics = []) {
 }
 
 function cleanupRenderer() {
+  // Инвалидируем незавершённую динамическую загрузку: её результат уже не нужен.
+  rendererLoadGeneration++;
+  pendingRendererName = null;
+
   const renderer = YarbpAppGlobals.renderer;
   if (renderer && typeof renderer.destroy === 'function') {
     try { renderer.destroy(); } catch (e) { console.error('[app] renderer cleanup failed:', e); }
@@ -311,6 +315,48 @@ function cleanupRenderer() {
 let pendingUpdateFrame = 0;
 let lastRenderedCode = null;
 let lastAST = null;
+let rendererLoadGeneration = 0;
+let pendingRendererName = null;
+
+/** Создать рендерер выбранного флейвора и подписать его на лексер. */
+function instantiateRenderer(flavor, RendererClass) {
+  const renderer = new RendererClass(
+    YarbpAppGlobals.lexer, YarbpAppGlobals.parser,
+    renderTextarea, renderHighlightDiv, syncRenderScroll
+  );
+  YarbpAppGlobals.renderer = renderer;
+  YarbpAppGlobals.lexer.setObserver(renderer);
+  YarbpAppGlobals.lexer.callRendererObserver();
+}
+
+/**
+ * Тяжёлые флейворы подгружаются по `import()`: первый кадр редактора не ждёт
+ * FlexForms/BPMN/OpenAPI/Schema/Mermaid. Пока грузится — не плодим запросы.
+ */
+function startRenderer(flavor, RendererClass) {
+  if (RendererClass) {
+    instantiateRenderer(flavor, RendererClass);
+    return;
+  }
+
+  if (!flavor.flavorData.loadRenderer) return;
+  if (pendingRendererName === flavor.flavorName) return;
+
+  pendingRendererName = flavor.flavorName;
+  const generation = ++rendererLoadGeneration;
+
+  flavor.loadRenderer()
+    .then(LoadedRenderer => {
+      if (generation !== rendererLoadGeneration) return;
+      if (YarbpAppGlobals.flavor !== flavor || YarbpAppGlobals.renderer) return;
+      pendingRendererName = null;
+      instantiateRenderer(flavor, LoadedRenderer);
+    })
+    .catch(error => {
+      if (generation === rendererLoadGeneration) pendingRendererName = null;
+      console.error('[app] renderer load failed:', error);
+    });
+}
 
 function scheduleUpdateViews() {
   if (pendingUpdateFrame) return;
@@ -404,6 +450,11 @@ function updateViews() {
   }
 
   if (!YarbpAppGlobals.flavor || flavorChanged || !YarbpAppGlobals.renderer) {
+    // Тот же тяжёлый флейвор уже грузится — не начинаем загрузку заново.
+    if (!flavor.flavorData.renderer && pendingRendererName === flavor.flavorName) {
+      return;
+    }
+
     const renderPane = renderTextarea.closest('#render-pane');
 
     if (renderPane) {
@@ -415,13 +466,7 @@ function updateViews() {
     if (editorContainer) editorContainer.style.display = '';
 
     YarbpAppGlobals.flavor = flavor;
-    const renderer = new flavor.flavorData.renderer(
-      YarbpAppGlobals.lexer, YarbpAppGlobals.parser,
-      renderTextarea, renderHighlightDiv, syncRenderScroll
-    );
-    YarbpAppGlobals.renderer = renderer;
-    YarbpAppGlobals.lexer.setObserver(renderer);
-    YarbpAppGlobals.lexer.callRendererObserver();
+    startRenderer(flavor, flavor.flavorData.renderer);
   }
 }
 

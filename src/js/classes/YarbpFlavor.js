@@ -12,11 +12,6 @@ import { flexFormsSuggestions } from '../suggestions/flexFormsSuggestions.js';
 import { YarbpBasicRenderer } from './YarbpBasicRenderer.js'
 import { HTMLUIRenderer } from './renderers/HTMLUIRenderer.js'
 import { XPMRenderer } from './renderers/XPMRenderer.js'
-import { BPMNRenderer } from './renderers/BPMNRenderer.js';
-import { FlexFormsRenderer } from './renderers/FlexFormsRenderer.js';
-import { OpenAPIRenderer } from './renderers/OpenAPIRenderer.js';
-import { JsonSchemaRenderer } from './renderers/JsonSchemaRenderer.js';
-import { MermaidRenderer } from './renderers/MermaidRenderer.js';
 
 /* highlighters */
 import { XMLHighlighter } from './highlighters/XMLHighlighter.js'
@@ -126,33 +121,33 @@ const KnownFlavors = Object.freeze({
   BPMN: {
     names: ['бпмн', 'bpmn'],
     textExample: [],
-    renderer: BPMNRenderer,
+    loadRenderer: () => import('./renderers/BPMNRenderer.js').then(m => m.BPMNRenderer),
     suggestions: bpmnSuggestions
   },
   OPENAPI: {
     /* `! как openapi` / `! как OpenAPI` / `! as open-api` — одно и то же */
     names: ['openapi', 'open-api', 'swagger'],
     textExample: [],
-    renderer: OpenAPIRenderer,
+    loadRenderer: () => import('./renderers/OpenAPIRenderer.js').then(m => m.OpenAPIRenderer),
   },
   JSON_SCHEMA: {
     /* `! как схема` — схема данных для валидаторов, без путей и эндпоинтов */
     names: ['схема', 'jsonschema', 'json-schema'],
     textExample: [],
-    renderer: JsonSchemaRenderer,
+    loadRenderer: () => import('./renderers/JsonSchemaRenderer.js').then(m => m.JsonSchemaRenderer),
   },
   MERMAID: {
     /* `! как мермейд` — текстовая схема процесса для PR и markdown */
     names: ['мермейд', 'mermaid'],
     textExample: [],
-    renderer: MermaidRenderer,
+    loadRenderer: () => import('./renderers/MermaidRenderer.js').then(m => m.MermaidRenderer),
   },
   FLEX_FORMS: {
     /* `normalizeFlavorName` снимает `[-_ ()]` и приводит к нижнему регистру,
        поэтому в карте — только «сплющенные» имена: `как форма-тсд` → `форматсд`. */
     names: ['форматсд', 'тсд', 'flexforms', 'сканер'],
     textExample: [],
-    renderer: FlexFormsRenderer,
+    loadRenderer: () => import('./renderers/FlexFormsRenderer.js').then(m => m.FlexFormsRenderer),
     suggestions: flexFormsSuggestions,
   }
 });
@@ -168,6 +163,20 @@ export class YarbpFlavor {
     this.flavorName = this.normalizeFlavorName(flavorDirective);
     this.flavorData = FlavorMap.get(this.flavorName);
   };
+
+  /**
+   * Класс рендерера: статический для лёгких флейворов, динамический импорт —
+   * для тяжёлых (FlexForms/BPMN/OpenAPI/Schema/Mermaid). Так стартовый экран
+   * не грузит их код, пока пользователь не выбрал соответствующий флейвор.
+   */
+  async loadRenderer() {
+    if (!this.flavorData) return null;
+    if (this.flavorData.renderer) return this.flavorData.renderer;
+    if (typeof this.flavorData.loadRenderer === 'function') {
+      return this.flavorData.loadRenderer();
+    }
+    return null;
+  }
 
   /**
    * Директива → «сплющенное» имя флейвора: `! как Форма-ТСД` → `форматсд`.

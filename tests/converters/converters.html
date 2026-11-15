@@ -1097,8 +1097,10 @@
     }
 
     const openApiFlavor = new YarbpFlavor('как openapi');
+    const openApiRendererClass = openApiFlavor.flavorData.renderer ||
+      await openApiFlavor.loadRenderer();
     check('флейвор: «! как openapi» находит рендерер', !!openApiFlavor.flavorData &&
-      !!openApiFlavor.flavorData.renderer, String(openApiFlavor.flavorName));
+      !!openApiRendererClass, String(openApiFlavor.flavorName));
     check('флейвор: «! AS Open-API» — тот же флейвор',
       new YarbpFlavor('as Open-API').flavorName === openApiFlavor.flavorName);
 
@@ -1113,7 +1115,7 @@
     document.body.appendChild(apiPane);
 
     const apiAst = buildAST(apiSource).ast;
-    const apiRenderer = new openApiFlavor.flavorData.renderer(
+    const apiRenderer = new openApiRendererClass(
       { text: apiSource, tokens: [], setObserver() {}, callRendererObserver() {} },
       { getAST: () => apiAst },
       apiTextarea,
@@ -1283,8 +1285,10 @@
         JSON.stringify(Object.keys(rootSpec.$defs || {})));
 
       const schemaFlavor = new YarbpFlavor('как схема');
+      const schemaRendererClass = schemaFlavor.flavorData.renderer ||
+        await schemaFlavor.loadRenderer();
       check('флейвор: «! как схема» находит рендерер', !!schemaFlavor.flavorData &&
-        !!schemaFlavor.flavorData.renderer, String(schemaFlavor.flavorName));
+        !!schemaRendererClass, String(schemaFlavor.flavorName));
       check('флейвор: «! as json-schema» — тот же флейвор',
         new YarbpFlavor('as json-schema').flavorName === new YarbpFlavor('как jsonschema').flavorName);
 
@@ -1298,7 +1302,7 @@
       document.body.appendChild(schemaPane);
 
       const schemaAst = buildAST(schemaSource).ast;
-      const schemaRenderer = new schemaFlavor.flavorData.renderer(
+      const schemaRenderer = new schemaRendererClass(
         { text: schemaSource, tokens: [], setObserver() {}, callRendererObserver() {} },
         { getAST: () => schemaAst },
         schemaTextarea,
@@ -1420,8 +1424,10 @@
       quotes.split('\n')[2]);
 
     const mermaidFlavor = new YarbpFlavor('как мермейд');
+    const mermaidRendererClass = mermaidFlavor.flavorData.renderer ||
+      await mermaidFlavor.loadRenderer();
     check('флейвор: «! как мермейд» находит рендерер', !!mermaidFlavor.flavorData &&
-      !!mermaidFlavor.flavorData.renderer, String(mermaidFlavor.flavorName));
+      !!mermaidRendererClass, String(mermaidFlavor.flavorName));
 
     const mermaidPane = document.createElement('div');
     mermaidPane.className = 'editor-container';
@@ -1432,7 +1438,7 @@
     document.body.appendChild(mermaidPane);
 
     const mermaidAst = buildAST(mermaidSource).ast;
-    const mermaidRenderer = new mermaidFlavor.flavorData.renderer(
+    const mermaidRenderer = new mermaidRendererClass(
       { text: mermaidSource, tokens: [], setObserver() {}, callRendererObserver() {} },
       { getAST: () => mermaidAst },
       mermaidTextarea,

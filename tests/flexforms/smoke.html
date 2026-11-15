@@ -60,14 +60,16 @@ try {
   expect('пример «Форма ТСД» найден в «Примерах» (' + EXAMPLE_ID + ')', !!exampleFile);
 
   /* 1. Регистрация флейвора: normalizeFlavorName снимает «-» и пробелы. */
-  [['как форма-тсд', 'форматсд'], ['как тсд', 'тсд'],
-   ['as flexforms', 'flexforms'], ['как сканер', 'сканер']].forEach(([directive, normalized]) => {
+  for (const [directive, normalized] of [['как форма-тсд', 'форматсд'], ['как тсд', 'тсд'],
+   ['as flexforms', 'flexforms'], ['как сканер', 'сканер']]) {
     const flavor = new YarbpFlavor(directive);
+    const registeredRenderer = flavor.flavorData && (flavor.flavorData.renderer ||
+      await flavor.loadRenderer());
     expect('флейвор «' + directive + '» → ' + normalized,
       flavor.flavorName === normalized && !!flavor.flavorData &&
-      flavor.flavorData.renderer === FlexFormsRenderer,
-      String(flavor.flavorName) + ' / ' + String(flavor.flavorData && flavor.flavorData.renderer));
-  });
+      registeredRenderer === FlexFormsRenderer,
+      String(flavor.flavorName) + ' / ' + String(registeredRenderer));
+  }
 
   /* 2. Разметка → AST → предпросмотр. */
   const lexer = new YarbpLexer();

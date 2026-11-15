@@ -642,6 +642,17 @@
     check('редактор: Alt внутри блока не открывает подсказки',
       !!popup && popup.hidden === true,
       popup ? String(popup.hidden) : 'нет popup');
+
+    editor.value = join(
+      '! как бпмн',
+      'процесс = П',
+      '  событие = Старт',
+      '  задача = Дело'
+    );
+    editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    check('ленивый BPMN: рендерер загрузился и отрисовал схему',
+      doc.getElementById('render-textarea').value.includes('bpmn:definitions'));
   }
 
   appFrame.remove();
