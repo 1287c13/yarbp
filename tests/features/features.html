@@ -679,13 +679,15 @@ import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
     '! как форма',
     'форма',
     '  группа:плитка',
+    '    .направление горизонтально',
     '    табы .ид ops',
     '      таб#список',
     '        группа:набор-соответствий',
     '      таб#добавить',
     '        группа',
     '          поле = Количество / / да',
-    '            .доп-функционал очистить'
+    '            .доп-функционал очистить',
+    '            .тип-данных Число'
   );
   const uiParsed = build(uiCode);
   const uiGenerator = new UIGenerator(false);
@@ -698,6 +700,8 @@ import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
 
   const uiTabs = uiHostEl.querySelectorAll('.tab-btn');
   check('UI: табы отрисованы', uiTabs.length === 2, String(uiTabs.length));
+  check('UI: .направление горизонтально применяется',
+    !!uiHostEl.querySelector('.group-content.direction-horizontal'));
   if (uiTabs.length === 2) {
     uiTabs[1].click();
     check('UI: переключение на второй таб',
@@ -717,6 +721,9 @@ import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
 
   check('UI: форма, поле и очистка отрисованы',
     !!uiInput && !!uiClear && !!uiSubmit && !!uiList);
+  check('UI: .тип-данных сохранён в data-type',
+    !!uiInput && uiInput.getAttribute('data-type') === 'Число',
+    uiInput ? String(uiInput.getAttribute('data-type')) : 'нет поля');
 
   if (uiInput && uiClear && uiSubmit && uiList) {
     uiInput.value = '5';

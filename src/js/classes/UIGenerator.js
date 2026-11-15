@@ -53,6 +53,8 @@ export class UIGenerator {
         .field-clear { flex: 0 0 auto; width: 30px; height: 30px; padding: 0; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; cursor: pointer; font-size: 16px; line-height: 1; color: #6b7280; }
         .field-clear:hover { background: #f3f4f6; color: #111827; }
         .field-postfix { flex: 0 0 auto; color: #6b7280; font-size: .85rem; white-space: nowrap; }
+        .group-content.direction-horizontal { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+        .group-content.direction-vertical { display: block; }
         .ui-table-wrap { margin-top: 12px; }
         .ui-table { width: 100%; border-collapse: collapse; background: white; }
         .ui-table th, .ui-table td { border-bottom: 1px solid #e5e7eb; padding: 8px; text-align: left; vertical-align: top; }
@@ -201,11 +203,16 @@ export class UIGenerator {
   group(n, children) {
     const title = n.parsedValue?.label || '';
     const isTile = n.type === 'плитка';
+    const direction = String((n.props && n.props['направление']) || '').toLowerCase();
+    const directionClass = direction.includes('горизонт')
+      ? ' direction-horizontal'
+      : (direction.includes('вертик') ? ' direction-vertical' : '');
 
     if (isTile) {
-      return `<fieldset class="fieldset-card"><legend>${this.escapeHtml(title)}</legend>${children}</fieldset>`;
+      return `<fieldset class="fieldset-card"><legend>${this.escapeHtml(title)}</legend>` +
+        `<div class="group-content${directionClass}">${children}</div></fieldset>`;
     }
-    return children;
+    return `<div class="group-content${directionClass}">${children}</div>`;
   }
 
   renderCorrespondenceTable(n) {
@@ -337,6 +344,9 @@ export class UIGenerator {
     const attrs = [];
     if (!isSelect) attrs.push(`type="${this.mapFieldType(fieldType)}"`);
     attrs.push(`name="${this.escapeHtml(n.id || n.key || label)}"`);
+    if (n.props && n.props['тип-данных']) {
+      attrs.push(`data-type="${this.escapeHtml(n.props['тип-данных'])}"`);
+    }
     if (placeholder) attrs.push(`placeholder="${this.escapeHtml(placeholder)}"`);
     if (required) attrs.push('required');
 
