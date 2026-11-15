@@ -35,6 +35,8 @@
     CODE_BLOCK_HIGHLIGHT_DELAY_MS
   } from '../../src/js/classes/highlighters/CodeBlockHighlightPass.js';
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
+import { UIRuntime } from '../../src/js/classes/ui/UIRuntime.js';
+import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
 
   const resultBox = document.getElementById('result');
   const lines = [];
@@ -691,9 +693,8 @@
   uiHostEl.innerHTML = uiGenerator.generateHTML(uiParsed.ast);
   document.body.appendChild(uiHostEl);
 
-  const uiRuntimeEl = document.createElement('script');
-  uiRuntimeEl.textContent = uiGenerator.generateRuntimeJS();
-  document.body.appendChild(uiRuntimeEl);
+  const uiRuntime = new UIRuntime(uiHostEl);
+  uiRuntime.mount();
 
   const uiTabs = uiHostEl.querySelectorAll('.tab-btn');
   check('UI: табы отрисованы', uiTabs.length === 2, String(uiTabs.length));
@@ -740,6 +741,7 @@
   check('UI: remove-item удаляет строку формы',
     uiHostEl.querySelector('.repeatable-item') === null);
 
+  uiRuntime.destroy();
   uiHostEl.remove();
 
   /* ------------------------------------------------------------------ */
@@ -769,9 +771,8 @@
   actionHost.innerHTML = actionGenerator.generateHTML(actionParsed.ast);
   document.body.appendChild(actionHost);
 
-  const actionRuntime = document.createElement('script');
-  actionRuntime.textContent = actionGenerator.generateRuntimeJS();
-  document.body.appendChild(actionRuntime);
+  const actionRuntime = new UIRuntime(actionHost);
+  actionRuntime.mount();
 
   const actionTabs = actionHost.querySelectorAll('.tab-btn');
   const actionButtons = actionHost.querySelectorAll('.ui-action');
@@ -799,8 +800,30 @@
     !!actionList && actionList.querySelectorAll('.list-item').length === 1 &&
     actionList.textContent.includes('5') && !!actionInput && actionInput.value === '',
     actionList ? actionList.textContent.slice(0, 80) : 'нет списка');
+  check('UI: view-model получил строку приёмника',
+    !!actionRuntime.viewModel &&
+    (actionRuntime.viewModel.snapshot().lists['список'] || []).length === 1,
+    JSON.stringify(actionRuntime.viewModel ? actionRuntime.viewModel.snapshot() : null));
 
+  actionRuntime.destroy();
   actionHost.remove();
+
+  /* Standalone-выгрузка: UIRuntime встроен в HTML, форма работает без сети. */
+  const exportedHTML = await new HTMLExporter(actionParsed.ast, false).generateFullHTML();
+  const exportedFrame = document.createElement('iframe');
+  exportedFrame.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:0';
+  exportedFrame.srcdoc = exportedHTML;
+  const exportedLoaded = waitForLoad(exportedFrame);
+  document.body.appendChild(exportedFrame);
+  const exportedOk = await exportedLoaded;
+  const exportedDoc = exportedFrame.contentDocument;
+  const exportedTabs = exportedDoc ? exportedDoc.querySelectorAll('.tab-btn') : [];
+  if (exportedTabs.length === 2) exportedTabs[1].click();
+  check('выгрузка: форма из разметки и UIRuntime работают',
+    exportedOk && exportedTabs.length === 2 &&
+    exportedDoc.querySelector('[data-tab-id="добавить"]').classList.contains('active'),
+    exportedDoc ? 'tabs=' + exportedTabs.length : 'нет документа');
+  exportedFrame.remove();
 
   // Результат уже записан до UI-блока — обновляем, чтобы новые проверки
   // попали в отчёт, а не только в title.

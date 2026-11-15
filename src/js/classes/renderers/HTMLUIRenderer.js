@@ -1,6 +1,7 @@
 import { YarbpBasicRenderer } from "../YarbpBasicRenderer.js";
 import { UIGenerator } from "../UIGenerator.js";
 import { HTMLExporter } from "../HTMLExporter.js";
+import { UIRuntime } from "../ui/UIRuntime.js";
 import { Ticker } from "../../utils/Ticker.js";
 
 /** Пауза перед перерисовкой UI-макета: значения полей не должны дёргаться. */
@@ -10,6 +11,7 @@ export class HTMLUIRenderer extends YarbpBasicRenderer {
   constructor(...args) {
     super(...args);
     this.uiContainer = null;
+    this.runtime = null;
     this.ticker = new Ticker(UI_RENDER_DELAY_MS);
     this.rendered = false;
     this.lastTokens = null;
@@ -66,8 +68,10 @@ export class HTMLUIRenderer extends YarbpBasicRenderer {
     this.uiContainer.innerHTML = HTML;
 
     this.addExportButton();
-    this.attachRuntime();
+    this.runtime = new UIRuntime(this.uiContainer);
+    this.runtime.mount();
     this.restoreState(state);
+    this.runtime.syncFromDOM();
     this.syncRenderScroll();
 
     this.rendered = true;
@@ -114,6 +118,8 @@ export class HTMLUIRenderer extends YarbpBasicRenderer {
 
   destroy() {
     this.ticker.cancel();
+    if (this.runtime) this.runtime.destroy();
+    this.runtime = null;
     this.uiContainer = null;
   }
 
@@ -157,20 +163,12 @@ export class HTMLUIRenderer extends YarbpBasicRenderer {
 
     btn.addEventListener('click', () => {
       const exporter = new HTMLExporter(this.AST, isDark);
-      exporter.download();
+      exporter.download().catch(error => {
+        console.error('[HTMLUIRenderer] export failed:', error);
+      });
     });
 
     this.uiContainer.appendChild(btn);
-  }
-
-  attachRuntime() {
-    const oldScript = document.getElementById('yarbp-runtime');
-    if (oldScript) oldScript.remove();
-
-    const script = document.createElement('script');
-    script.id = 'yarbp-runtime';
-    script.textContent = this.generator.generateRuntimeJS();
-    document.body.appendChild(script);
   }
 
   syncRenderScroll() {}

@@ -25,7 +25,8 @@ suggestions/
 classes/
   YarbpFlavor.js         реестр «директива → конвертер/рендерер»
   YarbpBasicRenderer.js  базовый рендерер
-  UIGenerator.js         генератор UI-макета
+  UIGenerator.js         генератор UI-макета из AST (только разметка)
+  ui/UIRuntime.js        view-model и действия UI-макета
   HTMLExporter.js        выгрузка HTML
   ast-converters/        AST → JSON/XML/Protobuf/BPMN/OpenAPI/…
   highlighters/          подсветка ЯРБП, XML и фрагментов кода
@@ -38,4 +39,5 @@ modules/
 
 Направление зависимостей: `app.js` → `classes` / `suggestions` / `modules`;
 `classes` и `suggestions` → `core`; все могут использовать `utils`.
-`core` не зависит от `classes` и DOM.
+`core` не зависит от `classes` и DOM. Архитектура UI-генератора и действий
+формы описана в [гайде](../../readme.md#ui-generator-guide).

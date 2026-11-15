@@ -27,7 +27,7 @@
   import { YarbpHighlighter } from '../../src/js/classes/highlighters/YarbpHighlighter.js';
   import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   import { FileManager } from '../../src/js/modules/FileManager.js';
-  import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
+  import { UIRuntime } from '../../src/js/classes/ui/UIRuntime.js';
   import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
   import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
   import { FLEX_FORMS_RUNTIME } from '../../src/js/classes/renderers/flexforms/FlexFormsRuntime.js';
@@ -136,9 +136,8 @@
   /* ------------------------------------------------------------------ */
   /* 3a. UIGenerator: рантайм UI-макета не собирает HTML из ввода        */
   /* ------------------------------------------------------------------ */
-  const uiRuntime = new UIGenerator(false).generateRuntimeJS();
-  check('UIGenerator: runtime не использует innerHTML',
-    uiRuntime.indexOf('innerHTML') === -1);
+  check('UIRuntime: рантайм не использует innerHTML',
+    UIRuntime.toString().indexOf('innerHTML') === -1);
 
   const uiHost = document.createElement('div');
   uiHost.innerHTML = '<div class="fieldset-card"><div class="form-view">' +
@@ -147,9 +146,8 @@
     '<div class="list-view"><div class="items-list"></div></div></div>';
   document.body.appendChild(uiHost);
 
-  const uiScript = document.createElement('script');
-  uiScript.textContent = uiRuntime;
-  document.body.appendChild(uiScript);
+  const uiRuntime = new UIRuntime(uiHost);
+  uiRuntime.mount();
 
   uiHost.querySelector('input').value = PAYLOAD;
   uiHost.querySelector('.submit-item').click();
@@ -161,13 +159,14 @@
     !!uiItem && uiItem.textContent.indexOf(PAYLOAD) !== -1,
     uiItem ? '*' + uiItem.textContent + '*' : 'нет элемента');
 
+  uiRuntime.destroy();
   uiHost.remove();
 
   /* ------------------------------------------------------------------ */
   /* 3b. D-22: CSP у выгруженной UI-страницы                             */
   /* ------------------------------------------------------------------ */
-  const exportedUI = new HTMLExporter({ nodeType: 'ROOT', children: [] }, false)
-    .generateFullHTML();
+  const exportedUI = await new HTMLExporter(
+    { nodeType: 'ROOT', children: [] }, false).generateFullHTML();
   const exportedDoc = asDocument(exportedUI);
   const exportedCsp = exportedDoc.querySelector(
     'meta[http-equiv="Content-Security-Policy"]');

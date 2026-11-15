@@ -21,8 +21,8 @@ export class HTMLExporter {
     this.generator = new UIGenerator(isDark);
   }
 
-  download(filename = 'yarbp-form') {
-    const html = this.generateFullHTML();
+  async download(filename = 'yarbp-form') {
+    const html = await this.generateFullHTML();
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -32,9 +32,23 @@ export class HTMLExporter {
     URL.revokeObjectURL(url);
   }
 
-  generateFullHTML() {
+  /**
+   * Исходник UIRuntime — единственный источник поведения формы. Для
+   * standalone-страницы он встраивается целиком, поэтому выгрузка остаётся
+   * одним HTML-файлом без внешних модулей.
+   */
+  async loadRuntimeSource() {
+    const url = new URL('./ui/UIRuntime.js', import.meta.url);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('не удалось загрузить UIRuntime.js: ' + response.status);
+    }
+    return response.text();
+  }
+
+  async generateFullHTML() {
     const formHTML = this.generator.generateHTML(this.ast);
-    const runtimeJS = this.generator.generateRuntimeJS();
+    const runtimeJS = await this.loadRuntimeSource();
 
     const bgColor = this.isDark ? '#1a1a1a' : '#f3f4f6';
     const nonce = createNonce();
@@ -69,7 +83,9 @@ export class HTMLExporter {
   <div class="yarbp-form-container">
     ${formHTML}
   </div>
-  <script nonce="${nonce}">${runtimeJS}</script>
+  <script type="module" nonce="${nonce}">${runtimeJS}
+new UIRuntime(document).mount();
+  </script>
 </body>
 </html>`;
   }
