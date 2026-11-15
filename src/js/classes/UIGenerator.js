@@ -217,13 +217,20 @@ export class UIGenerator {
       this.parseKeyAndId(field);
       this.extractShorthand(field);
       const parsed = this.parseSugaredValue(field.value || '');
-      const name = field.id || field.key || 'field-' + columns.length;
-      const label = parsed.label || field.value || field.key || name;
+      const fieldProps = {};
+      (field.children || []).forEach(child => {
+        if (child.nodeType === 'MEANING' && child.prefix === '.') {
+          fieldProps[child.key] = child.value;
+        }
+      });
+      const label = parsed.label || field.value || field.key || 'field-' + columns.length;
+      const name = field.id || label;
       columns.push({
         name: name,
         label: label,
         placeholder: parsed.placeholder || '',
-        postfix: parsed.postfix || field.props?.['постфикс'] || '',
+        postfix: parsed.postfix || fieldProps['постфикс'] || '',
+        value: fieldProps['значение'] === undefined ? '' : fieldProps['значение'],
         type: this.mapFieldType(field.type || field.key || 'текст'),
       });
     });
@@ -234,7 +241,7 @@ export class UIGenerator {
       .map(column => `<th>${this.escapeHtml(column.label)}</th>`)
       .join('') + '<th></th>';
     const cells = columns.map(column =>
-      `<td><input type="${this.escapeHtml(column.type)}" name="${this.escapeHtml(column.name)}" data-field="${this.escapeHtml(column.name)}" placeholder="${this.escapeHtml(column.placeholder)}" />` +
+      `<td><input type="${this.escapeHtml(column.type)}" name="${this.escapeHtml(column.name)}" data-field="${this.escapeHtml(column.name)}" value="${this.escapeHtml(column.value)}" placeholder="${this.escapeHtml(column.placeholder)}" />` +
       (column.postfix ? `<span class="field-postfix">${this.escapeHtml(column.postfix)}</span>` : '') +
       '</td>').join('');
     const row = `<tr data-ui-table-row>${cells}` +

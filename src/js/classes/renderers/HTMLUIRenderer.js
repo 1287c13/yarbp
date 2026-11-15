@@ -40,6 +40,10 @@ export class HTMLUIRenderer extends YarbpBasicRenderer {
 
     const HTML = this.generator.generateHTML(this.AST);
     const state = this.captureState();
+    if (this.runtime) {
+      this.runtime.destroy();
+      this.runtime = null;
+    }
 
     const renderPane = this.renderTextarea.closest('#render-pane');
 
@@ -81,39 +85,13 @@ export class HTMLUIRenderer extends YarbpBasicRenderer {
 
   /** Снимок пользовательского состояния перед пересборкой разметки. */
   captureState() {
-    if (!this.uiContainer) return null;
-
-    const values = Array.from(this.uiContainer.querySelectorAll('input, select'))
-      .map(el => ({ name: el.name, type: el.type, value: el.value, checked: el.checked }));
-    const lists = Array.from(this.uiContainer.querySelectorAll('.items-list'))
-      .map(el => el.innerHTML);
-    const active = this.uiContainer.querySelector('.tab-btn.active');
-
-    return { values, lists, active: active ? active.dataset.tabTarget : null };
+    return this.runtime ? this.runtime.getState() : null;
   }
 
   /** Вернуть значения/строки/таб после пересборки. */
   restoreState(state) {
-    if (!state || !this.uiContainer) return;
-
-    const controls = Array.from(this.uiContainer.querySelectorAll('input, select'));
-    state.values.forEach(saved => {
-      const el = controls.find(node => node.name === saved.name);
-      if (!el) return;
-      if (saved.type === 'checkbox' || saved.type === 'radio') el.checked = saved.checked;
-      else el.value = saved.value;
-    });
-
-    const lists = this.uiContainer.querySelectorAll('.items-list');
-    state.lists.forEach((html, index) => {
-      if (lists[index]) lists[index].innerHTML = html;
-    });
-
-    if (state.active) {
-      const button = Array.from(this.uiContainer.querySelectorAll('.tab-btn'))
-        .find(node => node.dataset.tabTarget === state.active);
-      if (button) button.click();
-    }
+    if (!state || !this.runtime) return;
+    this.runtime.restore(state);
   }
 
   destroy() {

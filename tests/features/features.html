@@ -831,6 +831,7 @@ import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
     'форма',
     '  группа:таблица-соответствий',
     '    поле:строка = Номер',
+    '      .значение 7',
     '    поле:целое = Количество / / / шт.'
   );
   const tableParsed = build(tableCode);
@@ -843,22 +844,31 @@ import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
 
   const uiTable = tableHost.querySelector('[data-ui-table]');
   const tableAdd = tableHost.querySelector('.add-table-row');
-  check('UI: таблица-соответствий рисует колонки и постфикс',
+  check('UI: таблица-соответствий рисует колонки, значение и постфикс',
     !!uiTable && uiTable.querySelectorAll('thead th').length === 3 &&
     !!uiTable.querySelector('.field-postfix') &&
-    uiTable.querySelector('.field-postfix').textContent === 'шт.',
+    uiTable.querySelector('.field-postfix').textContent === 'шт.' &&
+    uiTable.querySelector('tbody input').value === '7',
     uiTable ? String(uiTable.querySelectorAll('thead th').length) : 'нет таблицы');
 
   const tableInput = uiTable ? uiTable.querySelector('tbody input') : null;
-  if (tableInput) {
-    tableInput.value = '7';
-    tableInput.dispatchEvent(new Event('input', { bubbles: true }));
-  }
   if (tableAdd) tableAdd.click();
   check('UI: таблица добавляет строку и обновляет view-model',
     !!uiTable && uiTable.querySelectorAll('tbody tr').length === 2 &&
     (tableRuntime.viewModel.snapshot().tables['corr-1'] || []).length === 2,
     uiTable ? String(uiTable.querySelectorAll('tbody tr').length) : 'нет таблицы');
+
+  const tableState = tableRuntime.getState();
+  if (tableInput) {
+    tableInput.value = '99';
+    tableInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  tableRuntime.restore(tableState);
+  const restoredTableInput = uiTable ? uiTable.querySelector('tbody input') : null;
+  check('UI: состояние таблицы восстанавливается из снимка',
+    !!restoredTableInput && restoredTableInput.value === '7' &&
+    (tableRuntime.getState().tables['corr-1'] || [])[0].Номер === '7',
+    restoredTableInput ? 'значение=' + restoredTableInput.value : 'нет поля');
 
   const tableRemove = uiTable ? uiTable.querySelector('.remove-table-row') : null;
   if (tableRemove) tableRemove.click();

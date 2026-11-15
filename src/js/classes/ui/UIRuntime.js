@@ -357,13 +357,114 @@ export class UIRuntime {
     this._syncModel();
   }
 
+  /** Сериализуемое состояние формы. */
+  getState() {
+    this._syncModel();
+    return this.viewModel.snapshot();
+  }
+
+  /**
+   * Восстановить поля, активный таб, списки и таблицы из снимка. Снимок
+   * приходит из getState() или UIViewModel.snapshot().
+   */
+  restore(state) {
+    if (!state) return this;
+    this.viewModel = new UIViewModel();
+    this.viewModel.activeTab = state.activeTab || null;
+    Object.keys(state.fields || {}).forEach(name => {
+      this.viewModel.setField(name, state.fields[name]);
+    });
+    Object.keys(state.lists || {}).forEach(id => {
+      this.viewModel.lists[id] = state.lists[id];
+    });
+    Object.keys(state.tables || {}).forEach(id => {
+      this.viewModel.tables[id] = state.tables[id];
+    });
+
+    this._applyFields();
+    this._restoreTables();
+    this._restoreLists();
+    this._applyActiveTab();
+    return this;
+  }
+
+  _applyFields() {
+    this.root.querySelectorAll('input, select').forEach(field => {
+      if (field.closest('[data-ui-table]')) return;
+      const value = this.viewModel.getField(field.name);
+      if (value === undefined) return;
+      if (field.type === 'checkbox' || field.type === 'radio') field.checked = !!value;
+      else field.value = value;
+    });
+  }
+
+  _restoreTables() {
+    this.root.querySelectorAll('[data-ui-table]').forEach(wrap => {
+      const rows = this.viewModel.tables[wrap.dataset.uiTable];
+      if (!Array.isArray(rows)) return;
+      const body = wrap.querySelector('tbody');
+      const template = wrap.querySelector('.ui-table-row-template');
+      if (!body || !template) return;
+      while (body.firstChild) body.removeChild(body.firstChild);
+      rows.forEach(values => {
+        const row = template.content.firstElementChild.cloneNode(true);
+        row.querySelectorAll('input, select').forEach(field => {
+          const key = field.dataset.field || field.name;
+          if (values[key] !== undefined) field.value = values[key];
+        });
+        body.appendChild(row);
+      });
+    });
+  }
+
+  _restoreLists() {
+    this.root.querySelectorAll('.items-list').forEach(list => {
+      const panel = list.closest('[data-tab-id]');
+      const id = panel ? panel.dataset.tabId : list.id;
+      const rows = this.viewModel.lists[id];
+      if (!Array.isArray(rows)) return;
+      while (list.firstChild) list.removeChild(list.firstChild);
+      rows.forEach(entry => {
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        const values = Array.isArray(entry) ? entry : [entry];
+        values.forEach(data => {
+          const span = document.createElement('span');
+          span.textContent = data && data.label
+            ? data.label + ': ' + (data.value || '')
+            : String(data && data.value || data || '');
+          item.appendChild(span);
+        });
+        list.appendChild(item);
+      });
+    });
+  }
+
+  _applyActiveTab() {
+    if (!this.viewModel.activeTab) return;
+    const button = Array.from(this.root.querySelectorAll('.tab-btn'))
+      .find(el => el.dataset.tabTarget === this.viewModel.activeTab);
+    if (button) this.activateTab(button.closest('.tabs'), button.dataset.tabTarget);
+  }
+
   _syncModel() {
     this.root.querySelectorAll('input, select').forEach(field => {
       this.viewModel.setField(field.name, field.value);
     });
     this.root.querySelectorAll('[data-ui-table]').forEach(wrap => this.syncTable(wrap));
+    this._syncListsFromDOM();
     const active = this.root.querySelector('.tab-btn.active');
     if (active) this.viewModel.setActiveTab(active.dataset.tabTarget);
+  }
+
+  _syncListsFromDOM() {
+    this.root.querySelectorAll('.items-list').forEach(list => {
+      const panel = list.closest('[data-tab-id]');
+      const id = panel ? panel.dataset.tabId : list.id;
+      if (this.viewModel.lists[id]) return;
+      this.viewModel.lists[id] = Array.from(list.querySelectorAll('.list-item'))
+        .map(item => ({ label: '', value: item.textContent.trim() }));
+    });
   }
 
   _onInput(event) {
