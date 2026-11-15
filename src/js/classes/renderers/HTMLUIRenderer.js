@@ -1,20 +1,43 @@
 import { YarbpBasicRenderer } from "../YarbpBasicRenderer.js";
 import { UIGenerator } from "../UIGenerator.js";
 import { HTMLExporter } from "../HTMLExporter.js";
+import { Ticker } from "../../utils/Ticker.js";
+
+/** Пауза перед перерисовкой UI-макета: значения полей не должны дёргаться. */
+const UI_RENDER_DELAY_MS = 300;
 
 export class HTMLUIRenderer extends YarbpBasicRenderer {
   constructor(...args) {
     super(...args);
     this.uiContainer = null;
+    this.ticker = new Ticker(UI_RENDER_DELAY_MS);
+    this.rendered = false;
+    this.lastTokens = null;
+    this.lastDark = null;
   }
 
   render() {
+    const isDark = document.body.classList.contains('dark');
+    if (!this.rendered) {
+      this.renderNow();
+      return;
+    }
+
+    if (this.lexer && this.lastTokens === this.lexer.tokens && this.lastDark === isDark) {
+      return;
+    }
+
+    this.ticker.schedule(() => this.renderNow());
+  }
+
+  renderNow() {
     this.AST = this.parser.getAST();
 
     const isDark = document.body.classList.contains('dark');
     this.generator = new UIGenerator(isDark);
 
     const HTML = this.generator.generateHTML(this.AST);
+    const state = this.captureState();
 
     const renderPane = this.renderTextarea.closest('#render-pane');
 
@@ -44,7 +67,54 @@ export class HTMLUIRenderer extends YarbpBasicRenderer {
 
     this.addExportButton();
     this.attachRuntime();
+    this.restoreState(state);
     this.syncRenderScroll();
+
+    this.rendered = true;
+    this.lastTokens = this.lexer ? this.lexer.tokens : null;
+    this.lastDark = isDark;
+  }
+
+  /** Снимок пользовательского состояния перед пересборкой разметки. */
+  captureState() {
+    if (!this.uiContainer) return null;
+
+    const values = Array.from(this.uiContainer.querySelectorAll('input, select'))
+      .map(el => ({ name: el.name, type: el.type, value: el.value, checked: el.checked }));
+    const lists = Array.from(this.uiContainer.querySelectorAll('.items-list'))
+      .map(el => el.innerHTML);
+    const active = this.uiContainer.querySelector('.tab-btn.active');
+
+    return { values, lists, active: active ? active.dataset.tabTarget : null };
+  }
+
+  /** Вернуть значения/строки/таб после пересборки. */
+  restoreState(state) {
+    if (!state || !this.uiContainer) return;
+
+    const controls = Array.from(this.uiContainer.querySelectorAll('input, select'));
+    state.values.forEach(saved => {
+      const el = controls.find(node => node.name === saved.name);
+      if (!el) return;
+      if (saved.type === 'checkbox' || saved.type === 'radio') el.checked = saved.checked;
+      else el.value = saved.value;
+    });
+
+    const lists = this.uiContainer.querySelectorAll('.items-list');
+    state.lists.forEach((html, index) => {
+      if (lists[index]) lists[index].innerHTML = html;
+    });
+
+    if (state.active) {
+      const button = Array.from(this.uiContainer.querySelectorAll('.tab-btn'))
+        .find(node => node.dataset.tabTarget === state.active);
+      if (button) button.click();
+    }
+  }
+
+  destroy() {
+    this.ticker.cancel();
+    this.uiContainer = null;
   }
 
   addExportButton() {
