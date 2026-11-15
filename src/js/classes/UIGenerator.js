@@ -46,6 +46,10 @@ export class UIGenerator {
         .input-group { margin-bottom: 12px; }
         .input-group label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 4px; }
         .input-group input, .input-group select { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.95rem; }
+        .field-row { display: flex; gap: 6px; align-items: center; }
+        .field-row input, .field-row select { flex: 1; min-width: 0; }
+        .field-clear { flex: 0 0 auto; width: 30px; height: 30px; padding: 0; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; cursor: pointer; font-size: 16px; line-height: 1; color: #6b7280; }
+        .field-clear:hover { background: #f3f4f6; color: #111827; }
         .items-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
         .list-item { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; }
         .btn-secondary { background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 0.9rem; width: 100%; }
@@ -90,13 +94,46 @@ export class UIGenerator {
     });
   });
 
+  // Очистить поле по .доп-функционал очистить
+  document.querySelectorAll('.field-clear').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const row = this.closest('.field-row');
+      const field = row && row.querySelector('input, select');
+      if (!field) return;
+
+      if (field.tagName === 'SELECT') field.selectedIndex = -1;
+      else field.value = '';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+      field.focus();
+    });
+  });
+
+  // Удалить повторяемую строку
+  document.querySelectorAll('.remove-item').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const item = this.closest('.repeatable-item');
+      if (item) item.remove();
+    });
+  });
+
   // Добавить из формы в список
   document.querySelectorAll('.submit-item').forEach(btn => {
     btn.addEventListener('click', function() {
       const card = this.closest('.fieldset-card');
       const formView = card.querySelector('.form-view');
       const itemsList = card.querySelector('.items-list');
-      
+
+      // required-поля проверяет браузер: без валидной формы строка не добавляется.
+      // Проверяем только поля текущего экрана, иначе пустые поля скрытых
+      // form-view (другие группы) блокировали бы добавление.
+      const invalid = Array.from(formView.querySelectorAll('input, select'))
+        .find(field => typeof field.checkValidity === 'function' && !field.checkValidity());
+      if (invalid) {
+        if (typeof invalid.reportValidity === 'function') invalid.reportValidity();
+        return;
+      }
+
       // Собираем данные
       const data = [];
       formView.querySelectorAll('input, select').forEach(field => {
@@ -310,6 +347,7 @@ export class UIGenerator {
     const placeholder = n.parsedValue?.placeholder || '';
     const required = n.parsedValue?.required;
     const isSelect = fieldType === 'выбор';
+    const clear = String((n.props && n.props['доп-функционал']) || '').includes('очистить');
 
     const attrs = [];
     if (!isSelect) attrs.push(`type="${this.mapFieldType(fieldType)}"`);
@@ -317,18 +355,17 @@ export class UIGenerator {
     if (placeholder) attrs.push(`placeholder="${this.escapeHtml(placeholder)}"`);
     if (required) attrs.push('required');
 
-    if (isSelect) {
-      return `
-        <div class="input-group">
-          <label>${this.escapeHtml(label)}</label>
-          <select ${attrs.join(' ')}>${children}</select>
-        </div>`;
-    }
+    const control = isSelect
+      ? `<select ${attrs.join(' ')}>${children}</select>`
+      : `<input ${attrs.join(' ')} />`;
+    const clearButton = clear
+      ? '<button type="button" class="field-clear" title="Очистить" aria-label="Очистить">×</button>'
+      : '';
 
     return `
       <div class="input-group">
         <label>${this.escapeHtml(label)}</label>
-        <input ${attrs.join(' ')} />
+        <div class="field-row">${control}${clearButton}</div>
       </div>`;
   }
 

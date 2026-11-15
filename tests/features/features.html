@@ -34,6 +34,7 @@
     CodeBlockHighlightPass,
     CODE_BLOCK_HIGHLIGHT_DELAY_MS
   } from '../../src/js/classes/highlighters/CodeBlockHighlightPass.js';
+  import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
 
   const resultBox = document.getElementById('result');
   const lines = [];
@@ -646,6 +647,70 @@
   appFrame.remove();
 
   /* ------------------------------------------------------------------ */
+  resultBox.textContent = lines.join('\n') + '\n';
+  /* ------------------------------------------------------------------ */
+  /* UI-рантайм: очистка, required, удаление строки                       */
+  /* ------------------------------------------------------------------ */
+  const uiCode = join(
+    '! как форма',
+    'форма',
+    '  группа:плитка',
+    '    табы .ид ops',
+    '      таб#список',
+    '        группа:набор-соответствий',
+    '      таб#добавить',
+    '        группа',
+    '          поле = Количество / / да',
+    '            .доп-функционал очистить'
+  );
+  const uiParsed = build(uiCode);
+  const uiGenerator = new UIGenerator(false);
+  const uiHostEl = document.createElement('div');
+  uiHostEl.innerHTML = uiGenerator.generateHTML(uiParsed.ast);
+  document.body.appendChild(uiHostEl);
+
+  const uiRuntimeEl = document.createElement('script');
+  uiRuntimeEl.textContent = uiGenerator.generateRuntimeJS();
+  document.body.appendChild(uiRuntimeEl);
+
+  const uiShow = uiHostEl.querySelector('.show-form-btn');
+  if (uiShow) uiShow.click();
+
+  const uiInput = uiHostEl.querySelector('.form-view input');
+  const uiClear = uiHostEl.querySelector('.field-clear');
+  const uiSubmit = uiHostEl.querySelector('.submit-item');
+  const uiList = uiHostEl.querySelector('.items-list');
+
+  check('UI: форма, поле и очистка отрисованы',
+    !!uiInput && !!uiClear && !!uiSubmit && !!uiList);
+
+  if (uiInput && uiClear && uiSubmit && uiList) {
+    uiInput.value = '5';
+    uiClear.click();
+    check('UI: очистка поля работает', uiInput.value === '');
+
+    uiSubmit.click();
+    check('UI: required не пускает пустое значение',
+      uiList.querySelectorAll('.list-item').length === 0,
+      String(uiList.querySelectorAll('.list-item').length));
+
+    uiInput.value = '5';
+    uiSubmit.click();
+    check('UI: строка добавлена после заполнения',
+      uiList.querySelectorAll('.list-item').length === 1 &&
+      uiList.textContent.includes('5'),
+      uiList.textContent.slice(0, 80));
+  }
+
+  const uiRemove = uiHostEl.querySelector('.remove-item');
+  if (uiRemove) uiRemove.click();
+  check('UI: remove-item удаляет строку формы',
+    uiHostEl.querySelector('.repeatable-item') === null);
+
+  uiHostEl.remove();
+
+  // Результат уже записан до UI-блока — обновляем, чтобы новые проверки
+  // попали в отчёт, а не только в title.
   resultBox.textContent = lines.join('\n') + '\n';
   document.title = failed ? 'FEATURES FAIL' : 'FEATURES PASS';
 </script>
