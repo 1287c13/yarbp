@@ -86,6 +86,7 @@ export class YarbpFlexFormsConverter {
   static STRING = 'STRING';
   static NUMBER = 'NUMBER';
   static NULL = 'NULL';
+  static CODE = 'CODE';              // фрагмент кода: value — текст, language — язык
 
   static FORM_KEY = 'форма';         // корневой узел формы
   static GROUP_KEY = 'группа';       // анонимный контейнер: создаёт «поля»
@@ -96,6 +97,18 @@ export class YarbpFlexFormsConverter {
   static ARRAY_ITEM_PREFIX = ':';    // префикс позиционного элемента массива
   static ARRAY_PREFIX = '..';        // префикс массивного узла (`..имя`, `..опции`)
   static TYPE_KEY = 'type';          // ключ вида узла в целевом формате
+  /**
+   * Язык фрагмента кода (`valueType: CODE`) — второе свойство рядом с `код`.
+   * Контракт расширения 1С (`kpp/docs/11-tsd-config.md`): `код` + `язык`, язык
+   * в нижнем регистре (`bsl`). Ключ пишется только для фрагментов кода.
+   */
+  static LANGUAGE_KEY = 'язык';
+  /**
+   * Объектные узлы, которые остаются СВОЙСТВОМ родителя, а не его ребёнком.
+   * `обработчики` — контейнер конфига (`{формированиеКэша: [...], сообщения: [...]}`),
+   * а не узел IR: расширение читает его как ключ корня и ждёт структуру без `type`.
+   */
+  static OBJECT_PROPS = new Set(['обработчики']);
   static KIND_KEY = 'вид';           // вид поля (суффикс ключа `поле:<вид>`)
   /**
    * Вид поля, который в целевом формате пишется НЕ в «вид», а в «тип»
@@ -353,6 +366,9 @@ export class YarbpFlexFormsConverter {
     const option = {};
     this._objectChildren(child).forEach(prop => {
       if (prop.name !== undefined) option[prop.name] = prop.value;
+      // Фрагмент кода в строке-обработчике (`: .имяТипа … .код ```bsl …`):
+      // `язык` пишется сразу за `код`, иначе в строке-объекте он потеряется.
+      if (prop.code !== undefined) option[YarbpFlexFormsConverter.LANGUAGE_KEY] = prop.code;
     });
     return option;
   }
@@ -425,6 +441,18 @@ export class YarbpFlexFormsConverter {
   _buildNode(head, rawProps, rawNode = null) {
     const plan = this._planProps(head, rawProps);
     const node = {};
+
+    // Контейнер-свойство (`обработчики`): не узел IR, а значение ключа родителя.
+    // `type` не пишется, дети становятся ключами объекта, порядок — по разметке.
+    // Так `обработчики` остаётся в корне конфига (`{формированиеКэша, сообщения}`),
+    // как его читает `фф_КонфигТСД.ПрочитатьОбработчики`.
+    if (YarbpFlexFormsConverter.OBJECT_PROPS.has(head.typeKey)) {
+      const children = [];
+      plan.childNodes.forEach(item => children.push(item));
+      this._mergeArrayProps(node, plan.rest);
+      this._mergeOwnChildren(node, children);
+      return node;
+    }
 
     // Узел «форма»: собственные свойства + контейнеры «поля» из групп.
     if (head.typeKey === YarbpFlexFormsConverter.FORM_KEY) {
@@ -831,6 +859,15 @@ export class YarbpFlexFormsConverter {
       plan.props.push({ name: prop.name, value: value });
       return;
     }
+    // Фрагмент кода (`valueType: CODE`) — два свойства подряд: текст и язык.
+    // Порядок важен: контракт расширения ждёт `код`, сразу за ним `язык`.
+    if (prop.code !== undefined) {
+      this._addProp(plan.rest, prop.name, prop.value);
+      plan.props.push({ name: prop.name, value: prop.value });
+      this._addProp(plan.rest, YarbpFlexFormsConverter.LANGUAGE_KEY, prop.code);
+      plan.props.push({ name: YarbpFlexFormsConverter.LANGUAGE_KEY, value: prop.code });
+      return;
+    }
     this._addProp(plan.rest, prop.name, prop.value);
     plan.props.push({ name: prop.name, value: prop.value });
   }
@@ -1060,12 +1097,23 @@ export class YarbpFlexFormsConverter {
       return { name: key === '' ? undefined : key, value: converted.value, array: true };
     }
     if (key === '') return converted;                           // узел без имени → children
+    // Фрагмент кода (`valueType: CODE`) — свойство плюс язык. Язык по умолчанию
+    // `bsl`: контракт расширения ждёт BSL, а fence без языка — это тот же код.
+    if (child.valueType === YarbpFlexFormsConverter.CODE) {
+      const language = child.language === undefined || child.language === null || child.language === ''
+        ? 'bsl'
+        : String(child.language).toLowerCase();
+      return { name: key, value: converted.value, code: language };
+    }
     // Скалярный узел: `_convertNode` вернул { name, value } — берём значение.
     if (child.valueType !== YarbpFlexFormsConverter.OBJECT) {
       return { name: key, value: converted.value };
     }
-    // Объектный узел с ключом — узел-ребёнок («операция», «поле», «таблица»):
-    // ключ задаёт вид узла, а не свойство родителя.
+    // Объектный узел с ключом: контейнер-свойство (`обработчики`) остаётся
+    // свойством родителя, остальные («операция», «поле», «таблица») — дети.
+    if (YarbpFlexFormsConverter.OBJECT_PROPS.has(key)) {
+      return { name: key, value: converted };
+    }
     return { node: converted };
   }
 

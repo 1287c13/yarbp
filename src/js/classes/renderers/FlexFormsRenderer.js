@@ -5,6 +5,7 @@ import {
   buildFormPage,
   buildPreviewMarkup,
   formConfigError,
+  formConfigWarnings,
   formFileName,
   FLEX_FORMS_PREVIEW_CSS,
   FLEX_FORMS_PHONE,
@@ -217,6 +218,11 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     }
 
     this.saveFile(buildFormConfig(IR), formFileName(IR, 'json'), 'application/json;charset=utf-8');
+
+    // Файл уже скачан: замечания не блокируют выгрузку, а говорят, что
+    // расширение 1С применит конфиг «как есть» (например, без типКлиента).
+    const warnings = formConfigWarnings(IR);
+    if (warnings.length) this.showExportError(warnings.join(' '), 'warning');
   }
 
   /**
@@ -263,22 +269,25 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
    * Отказ выгрузки показываем в панели, а не тостом: тост макета занят
    * сообщениями самой формы (хук, отправка), а молчание кнопки выглядит
    * поломкой. Плашка уходит сама.
+   *
+   * `tone = 'warning'` — мягкое замечание (`formConfigWarnings`): файл уже
+   * скачан, плашка лишь говорит, что на приёмке в 1С стоит проверить.
    */
-  showExportError(message) {
+  showExportError(message, tone = 'error') {
     if (!this.container || !this.container.isConnected) return;
 
     let box = this.container.querySelector('.ff-export-error');
     if (!box) {
       box = document.createElement('div');
-      box.className = 'ff-export-error';
       this.container.appendChild(box);
     }
+    box.className = 'ff-export-error' + (tone === 'warning' ? ' ff-export-error--warning' : '');
     box.textContent = message;
 
     clearTimeout(this.errorTimer);
     this.errorTimer = setTimeout(() => {
       if (box.parentNode) box.parentNode.removeChild(box);
-    }, 4000);
+    }, tone === 'warning' ? 7000 : 4000);
   }
 
   mountPreview(IR, serialized) {

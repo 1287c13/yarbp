@@ -172,6 +172,51 @@ export function formConfigError(ir) {
 }
 
 /**
+ * Мягкие замечания к конфигу. Пустой массив — замечаний нет.
+ *
+ * В отличие от `formConfigError` выгрузку не блокируют: старые формы без
+ * `типКлиента` и с пустыми обработчиками должны по-прежнему сохраняться
+ * (расширение 1С применит такой конфиг). Список — то, что на приёмке читают
+ * глазами: `kpp/docs/11-tsd-config.md`, §4.
+ */
+export function formConfigWarnings(ir) {
+  const warnings = [];
+  if (!ir || typeof ir !== 'object' || Array.isArray(ir)) return warnings;
+
+  const clientType = typeof ir['типКлиента'] === 'string' ? ir['типКлиента'].trim() : '';
+  if (!clientType) {
+    warnings.push('Нет «типКлиента»: 1С опубликует форму под типом по умолчанию, ' +
+      'а общая страница входа не будет знать, какую форму открывать после ключа.');
+  }
+
+  const handlers = ir['обработчики'];
+  if (handlers && typeof handlers === 'object' && !Array.isArray(handlers)) {
+    ['формированиеКэша', 'сообщения'].forEach(section => {
+      const rows = Array.isArray(handlers[section]) ? handlers[section] : [];
+      rows.forEach((row, index) => {
+        const code = row && typeof row === 'object' ? row['код'] : undefined;
+        if (typeof code !== 'string' || !code.trim()) {
+          warnings.push('Обработчик ' + section + '[' + index + ']: пустой «код» — ' +
+            'конфиг применится, но обработчик ничего не сделает.');
+        }
+      });
+    });
+  }
+
+  const watch = ir['watch'];
+  if (Array.isArray(watch)) {
+    watch.forEach(value => {
+      if (typeof value !== 'string' || value.indexOf('.') === -1) {
+        warnings.push('watch: «' + String(value) + '» без вида объекта ' +
+          '(ожидается «Справочник.Имя», «Документ.Имя»).');
+      }
+    });
+  }
+
+  return warnings;
+}
+
+/**
  * IR → полная HTML-страница формы.
  * @param {object|string} ir      конфиг формы (или уже готовый JSON-текст)
  * @param {{preview?: boolean, standalone?: boolean}} [options]
@@ -287,6 +332,8 @@ export const FLEX_FORMS_PREVIEW_CSS = [
   // Сообщение об ошибке выгрузки: не тост (его в предпросмотре нет), а плашка
   // под кнопкой — иначе отказ «ничего не скачалось» выглядит как поломка.
   '.ff-export-error{position:absolute;top:46px;left:16px;right:16px;z-index:6;padding:6px 10px;border-radius:8px;background:rgba(190,48,48,.94);color:#fff;font:12px/1.35 system-ui,sans-serif}',
+  // Мягкое замечание (файл уже скачан, конфиг применится): тот же блок, другой тон.
+  '.ff-export-error--warning{background:rgba(176,118,32,.95)}',
 ].join('\n');
 
 /**

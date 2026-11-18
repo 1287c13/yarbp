@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Тесты флейвора «форма-ТСД»: встроенный пример и браузерный дым.
+"""Тесты флейвора «форма-ТСД»: встроенный пример, браузерный дым, контракт.
 
 Что проверяется:
   1. Встроенный пример «Форма ТСД» в FileManager: компактная актуальная
@@ -8,6 +8,9 @@
   2. Дымовой тест в браузере: настоящие модули редактора, регистрация
      флейвора, монтирование предпросмотра примером из «Примеров» и
      совпадение IR примера с builtin-ir.json.
+  3. Контракт с кэш-сервисом (auth-contract.html + auth_server.py): ключ из
+     `?key=` в localStorage, заголовок X-Api-Key, Idempotency-Key, 401 →
+     страница входа.
 
 Запуск (из корня репозитория):
     python yarbp/tests/flexforms/run_tests.py
@@ -30,6 +33,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import auth_server
 from html import unescape as html_unescape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -100,7 +104,10 @@ def first_difference(actual, expected):
 # 1. Предопределённый пример в редакторе
 # --------------------------------------------------------------------------
 
-BUILTIN_ENTRY = re.compile(r"id:\s*'%s'[\s\S]*?content:\s*`([^`]*)`" % re.escape(BUILTIN_ID))
+# Разметка живёт в шаблонной строке: fence фрагмента кода экранирован как \`,
+# поэтому простой `[^`]*` обрывал бы разбор на первом fence. Берём строку до
+# НЕэкранированного обратного апострофа.
+BUILTIN_ENTRY = re.compile(r"id:\s*'%s'[\s\S]*?content:\s*`((?:\\.|[^`\\])*)`" % re.escape(BUILTIN_ID))
 
 
 def test_builtin_example():
@@ -303,6 +310,65 @@ def test_browser():
               actual_ir == expected_ir, first_difference(actual_ir, expected_ir))
 
 
+def test_auth_contract():
+    """Контракт формы с кэш-сервисом: ключ в заголовке, идемпотентность, 401."""
+    print('4. контракт с кэш-сервисом (auth-contract.html)')
+    browser = find_browser()
+    if not browser:
+        skip('auth-contract.html', 'не найден Chrome/Edge')
+        return
+
+    # Заглушка кэш-сервиса живёт в этом же процессе: страница теста, страница
+    # формы и «сервис» на одном origin — как выдача `/v1/clients/latest`.
+    server, base, _state = auth_server.start()
+    profile = tempfile.mkdtemp(prefix='yarbp-flexforms-auth-')
+
+    try:
+        url = base + '/yarbp/tests/flexforms/auth-contract.html?base=' + base
+        command = [
+            browser,
+            '--headless=new',
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--virtual-time-budget=30000',
+            '--user-data-dir=' + profile,
+            '--dump-dom',
+            url,
+        ]
+        process = subprocess.Popen(command, stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL)
+        try:
+            output = process.communicate(timeout=180)[0].decode('utf-8', 'replace')
+        except subprocess.TimeoutExpired:
+            process.kill()
+            check('auth-contract.html: браузер ответил', False, 'таймаут')
+            return
+    finally:
+        server.shutdown()
+        server.server_close()
+        shutil.rmtree(profile, ignore_errors=True)
+
+    match = re.search(r'<pre id="result">(.*?)</pre>', output, re.S)
+    if not match:
+        check('auth-contract.html: браузер отдал результат', False, output[-600:])
+        return
+
+    lines = [line for line in html_unescape(match.group(1)).splitlines() if line.strip()]
+    for line in lines:
+        print('    ' + line)
+
+    check('auth-contract.html: модули выполнились',
+          '<title>AUTH PASS</title>' in output or '<title>AUTH FAIL</title>' in output)
+
+    passed = [line for line in lines if line.startswith('OK')]
+    failed = [line for line in lines if line.startswith('FAIL')]
+
+    check('auth-contract.html: проверки отработали (%d)' % len(passed), len(passed) >= 13,
+          ' ok-строк: %d' % len(passed))
+    check('auth-contract.html: все проверки прошли', not failed, '; '.join(failed))
+
+
 # --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
@@ -337,8 +403,10 @@ def main(argv):
 
     if '--no-browser' not in argv:
         test_browser()
+        test_auth_contract()
     else:
         skip('smoke.html', 'нужен браузер: пример → IR проверяется настоящими модулями редактора')
+        skip('auth-contract.html', 'нужен браузер: заголовки ключа проверяются живым запросом')
 
     return summarise()
 

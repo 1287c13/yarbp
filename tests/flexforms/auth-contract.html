@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<!--
+  Контракт формы ТСД с кэш-сервисом: разметка → страница → заголовки/ошибки.
+
+  Проверяется то, что нельзя проверить статикой (kpp/docs/02-contract-tsd.md):
+    1. страница, выданная «сервисом» с `?key=<ключ>`, берёт ключ в localStorage
+       и убирает его из адреса (ADR-13);
+    2. хук штрихкода уходит с заголовком `X-Api-Key` и телом `{type, field, id,
+       requested_fields}`;
+    3. отправка уходит с `X-Api-Key` и `Idempotency-Key`; одинаковое тело даёт
+       тот же ключ, другое — другой (ADR-14);
+    4. `401` уводит форму на общую страницу входа `/v1/clients/auth?type=…` и
+       снимает негодный ключ.
+
+  Сервер-заглушка — auth_server.py (его поднимает run_tests.py), адрес приходит
+  в `?base=`. Страница теста и «сервис» живут на одном origin, как в проде.
+-->
+<html lang="ru">
+<head><meta charset="utf-8"><title>AUTH CONTRACT</title></head>
+<body>
+<pre id="result"></pre>
+<iframe id="frame" width="356" height="471" style="border:1px solid #ccc"></iframe>
+<script type="module">
+import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
+import { YarbpParser } from '../../src/js/core/YarbpParser.js';
+import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
+import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
+import { FileManager } from '../../src/js/modules/FileManager.js';
+
+const BASE = new URLSearchParams(location.search).get('base') || '';
+const TOKEN = 'ffk_0123abcd_0123456789abcdef0123456789abcdef';
+
+const report = [];
+const expect = (name, ok, detail) => {
+  report.push((ok ? 'OK   ' : 'FAIL ') + name + (ok || !detail ? '' : ' :: ' + detail));
+};
+const finish = () => {
+  const failed = report.filter(line => line.indexOf('FAIL') === 0);
+  document.getElementById('result').textContent = report.join('\n');
+  document.title = failed.length ? 'AUTH FAIL' : 'AUTH PASS';
+};
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function waitFor(probe, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try { const value = probe(); if (value) return value; } catch (e) { /* ещё не готово */ }
+    await sleep(100);
+  }
+  return null;
+}
+
+/** Разметка примера «Форма ТСД» → IR (тот же путь, что кнопка «JSON»). */
+function exampleIR() {
+  const example = new FileManager().data.files.find(file => file.id === 'builtin-9');
+  const lexer = new YarbpLexer();
+  lexer.setInitialState(example.content);
+  lexer.tokenize();
+  const parser = new YarbpParser(lexer);
+  return JSON.parse(new YarbpFlexFormsConverter(parser.getAST()).toJSON(2));
+}
+
+
+async function main() {
+  if (!BASE) { expect('адрес заглушки кэш-сервиса задан', false, 'нет ?base='); return; }
+
+  /* 1. Публикация: страница собирается тем же кодом, что кнопка «HTML». */
+  const ir = exampleIR();
+  ir['сервис'] = BASE;
+  const html = buildFormPage(ir, { standalone: true });
+  const published = await (await fetch(BASE + '/publish', { method: 'POST', body: html })).json();
+  expect('страница собрана и опубликована', !!published.ok && published.length > 10000,
+    JSON.stringify(published));
+
+  /* 2. Выдача с ключом: как `/v1/clients/latest?key=…`. */
+  const frame = document.getElementById('frame');
+  const loaded = new Promise(resolve => { frame.onload = resolve; });
+  frame.src = BASE + '/form?key=' + encodeURIComponent(TOKEN);
+  await loaded;
+
+  const win = await waitFor(() => {
+    const w = frame.contentWindow;
+    return w && w.readAccessToken && w.document.getElementById('a1_f1') ? w : null;
+  });
+  if (!win) { expect('форма отрисовалась в iframe', false, 'нет #a1_f1'); return; }
+  expect('форма отрисовалась в iframe', true);
+
+  expect('ключ из адреса прочитан', win.readAccessToken() === TOKEN,
+    String(win.readAccessToken()).slice(0, 12));
+  expect('ключ убран из адреса страницы', frame.contentWindow.location.search.indexOf('key=') === -1,
+    frame.contentWindow.location.search);
+  expect('ключ сохранён для следующих запросов',
+    frame.contentWindow.localStorage.getItem('ff_token') === TOKEN);
+
+  /* 3. Хук штрихкода: тело и заголовок по контракту. */
+  const hookMessage = {
+    type: 'Штрихкод', field: 'Штрихкод', id: '4600000000017', requested_fields: ['a1_f2', 'a1_f3'],
+  };
+  const hookReply = await win.handleHookRequest(BASE + '/link', hookMessage);
+  expect('хук ответил строкой товара',
+    !!(hookReply && hookReply.message && hookReply.message.requested_fields.length),
+    JSON.stringify(hookReply).slice(0, 160));
+
+  /* 4. Отправка: два одинаковых тела и одно другое. */
+  const body = { fields: [{ id: 'a1_f1', value: '4600000000017', name: 'Штрихкод' }], table: [] };
+  const other = { fields: [{ id: 'a1_f1', value: '4600000000024', name: 'Штрихкод' }], table: [] };
+  await win.sendMessage(body, BASE + '/processing', 'a2');
+  await win.sendMessage(body, BASE + '/processing', 'a2');
+  await win.sendMessage(other, BASE + '/processing', 'a2');
+
+  /* 5. Что реально получил сервис. */
+  const log = (await (await fetch(BASE + '/log')).json()).requests;
+  const link = log.filter(item => item.path === '/link').slice(-1)[0];
+  const sends = log.filter(item => item.path === '/processing');
+
+  const header = (item, name) => {
+    const keys = Object.keys((item && item.headers) || {});
+    const found = keys.find(key => key.toLowerCase() === name.toLowerCase());
+    return found ? String(item.headers[found]) : '';
+  };
+
+  expect('хук: ключ доступа в заголовке X-Api-Key', header(link, 'x-api-key') === TOKEN,
+    header(link, 'x-api-key'));
+  const linkBody = link ? JSON.parse(link.body) : {};
+  expect('хук: тело {type, field, id, requested_fields}',
+    linkBody.type === 'Штрихкод' && linkBody.field === 'Штрихкод' &&
+    linkBody.id === '4600000000017' && Array.isArray(linkBody.requested_fields) &&
+    linkBody.requested_fields.join('|') === 'a1_f2|a1_f3',
+    JSON.stringify(linkBody));
+
+  expect('отправка: три запроса дошли', sends.length === 3, String(sends.length));
+  expect('отправка: ключ доступа в заголовке',
+    sends.every(item => header(item, 'x-api-key') === TOKEN),
+    sends.map(item => header(item, 'x-api-key')).join(', '));
+
+  const keys = sends.map(item => header(item, 'idempotency-key'));
+  expect('отправка: Idempotency-Key есть и не длиннее 64 символов',
+    keys.every(key => !!key && key.length <= 64), JSON.stringify(keys));
+  expect('отправка: одинаковое тело → одинаковый ключ', keys[0] === keys[1],
+    keys[0] + ' / ' + keys[1]);
+  expect('отправка: другое тело → другой ключ', keys[0] !== keys[2],
+    keys[0] + ' / ' + keys[2]);
+  expect('отправка: тело {fields, table}',
+    sends.every(item => {
+      const parsed = JSON.parse(item.body);
+      return Array.isArray(parsed.fields) && Array.isArray(parsed.table);
+    }));
+
+  /* 6. 401: форма уходит на общую страницу входа, негодный ключ снят. */
+  let rejected = false;
+  try { await win.sendMessage(body, BASE + '/processing401', 'a2'); }
+  catch (e) { rejected = true; }
+  expect('401 — это ошибка отправки, а не «успех»', rejected);
+
+  const authLocation = await waitFor(() => {
+    const location = frame.contentWindow.location;
+    return location.pathname === '/v1/clients/auth' ? location : null;
+  });
+  expect('401 уводит на страницу входа /v1/clients/auth', !!authLocation,
+    authLocation ? authLocation.href : frame.contentWindow.location.href);
+  if (authLocation) {
+    const type = new URLSearchParams(authLocation.search).get('type');
+    expect('страница входа знает тип формы', type === 'ПодборТовара', String(type));
+  }
+  expect('негодный ключ снят из localStorage',
+    frame.contentWindow.localStorage.getItem('ff_token') === null,
+    String(frame.contentWindow.localStorage.getItem('ff_token')));
+}
+
+try {
+  await main();
+} catch (error) {
+  report.push('FAIL проверки выполнились :: ' + ((error && error.stack) || error));
+}
+finish();
+</script>
+</body>
+</html>
+

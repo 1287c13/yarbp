@@ -123,6 +123,34 @@ try {
     irActions.length === 2 && irActions.every(action => action.отображатьСтатистику === true),
     irActions.map(action => action.имя + '=' + String(action.отображатьСтатистику)).join(', '));
 
+  /* Контракт конфига для расширения 1С (`kpp/docs/11-tsd-config.md`):
+     `обработчики` — свойство корня (не узел children), а строки обработчиков
+     несут `код` и `язык`. Разъезд здесь ломает импорт конфига в 1С, а
+     builtin-ir.json ловит его побайтово — эти проверки объясняют, что именно. */
+  const irHandlers = irConfig.обработчики;
+  const irCacheRows = (irHandlers && irHandlers.формированиеКэша) || [];
+  const irMessageRows = (irHandlers && irHandlers.сообщения) || [];
+  expect('IR: «обработчики» — свойство корня, а не узел children',
+    !!irHandlers && typeof irHandlers === 'object' && !('type' in irHandlers) &&
+    !irNodes.some(node => node.type === 'обработчики'),
+    irHandlers ? JSON.stringify(Object.keys(irHandlers)) : 'нет обработчиков');
+  expect('IR: код обработчиков приезжает с языком bsl',
+    irCacheRows.length === 1 && irMessageRows.length === 1 &&
+    irCacheRows[0].язык === 'bsl' && irMessageRows[0].язык === 'bsl' &&
+    String(irCacheRows[0].код || '').indexOf('КлючКэша') !== -1 &&
+    String(irMessageRows[0].код || '').indexOf('ЗаказКлиента') !== -1 &&
+    irCacheRows[0].имяТипа === 'Справочник.Номенклатура' &&
+    irMessageRows[0].типСообщения === 'ПодборТовара',
+    JSON.stringify({ кэш: irCacheRows, сообщения: irMessageRows }).slice(0, 300));
+  expect('IR: ключи публикации формы на месте',
+    irConfig.типКлиента === 'ПодборТовара' && irConfig.версияКонфига === '1.0' &&
+    Array.isArray(irConfig.watch) && irConfig.watch.length === 2,
+    JSON.stringify({
+      типКлиента: irConfig.типКлиента,
+      версияКонфига: irConfig.версияКонфига,
+      watch: irConfig.watch,
+    }));
+
   const container = document.querySelector('#render-pane .ui-render-container');
   expect('контейнер предпросмотра создан', !!container);
   expect('редактор результата скрыт',
