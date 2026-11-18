@@ -465,13 +465,14 @@ function updateViews() {
 
   YarbpAppGlobals.indentGuides?.invalidate();
 
-  const firstDirective = YarbpAppGlobals.lexer.tokens.find(token => token.type === TokenTypes.DIRECTIVE);
+  const flavorDirective = YarbpAppGlobals.lexer.tokens.find(token =>
+    token.type === TokenTypes.DIRECTIVE && YarbpFlavor.isFlavorDirective(token.value));
 
   let flavor;
-  if (!firstDirective) {
+  if (!flavorDirective) {
     flavor = new YarbpFlavor('as lexer');
   } else {
-    flavor = new YarbpFlavor(firstDirective.value);
+    flavor = new YarbpFlavor(flavorDirective.value);
   }
 
   scheduleSuggestions(flavor, ast);
@@ -804,6 +805,17 @@ YarbpAppGlobals.indentGuides.init();
 // Инициализация файлового менеджера
 const fileManagerContainer = document.getElementById('file-manager-container');
 const fileManager = new FileManager();
+
+// Импорт объектов из других файлов песочницы (`! импорт`) и подсказки имён.
+// Подключаем до init: стартовый файл тоже должен сразу видеть импорт.
+YarbpAppGlobals.parser.setImportResolver(
+  key => fileManager.resolveImport(key),
+  () => fileManager.revision
+);
+YarbpAppGlobals.suggestionProvider.setFileCatalog(
+  () => fileManager.listImportableFiles()
+);
+
 fileManager.init(textarea, fileManagerContainer, updateViews);
 
 /* endregion */

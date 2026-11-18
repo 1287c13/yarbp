@@ -124,7 +124,11 @@
   }
 
   function detectFlavor(tokens) {
-    const directive = tokens.find(token => token.type === TokenTypes.DIRECTIVE);
+    // Как в app.js: флейвор задаёт первая директива `как`/`as`, а языковые
+    // директивы (`! импорт`, `! типизация-сахара`) могут стоять выше неё.
+    const directive = tokens.find(token =>
+      token.type === TokenTypes.DIRECTIVE &&
+      /^\s*(?:as|как)(?=[\s\-_]|$)/i.test(String(token.value || '')));
     // Как в app.js: без директивы редактор показывает lexer.
     if (!directive) return 'lexer';
 

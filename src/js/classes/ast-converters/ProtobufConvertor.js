@@ -178,6 +178,13 @@ export class YarbpProtoConverter {
     this._addLine('}');
   }
 
+  _childValue(node, key) {
+    const found = (node.children || []).find(child =>
+      child && child.nodeType === nodeTypes.MEANING &&
+      child.key === key && child.prefix === '.');
+    return found ? found.value : null;
+  }
+
   _prepareField(node, fieldNumber) {
     const fieldName = node.key;
     const repeated = node.prefix === '..' ? 'repeated ' : '';
@@ -192,7 +199,9 @@ export class YarbpProtoConverter {
       } else {
         enumName = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
       }
-      const enumValues = node.value ? node.value.trim().split(/\s+/) : [];
+      const explicitValues = this._childValue(node, 'значения');
+      const rawValues = explicitValues !== null ? explicitValues : node.value;
+      const enumValues = rawValues ? String(rawValues).trim().split(/\s+/).filter(Boolean) : [];
       if (!this.enums.some(e => e.name === enumName)) {
         this.enums.push({ name: enumName, values: enumValues, comments: node.comments || [] });
       }

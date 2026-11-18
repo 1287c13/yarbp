@@ -7,6 +7,7 @@ core/
   YarbpLexer.js        текст → токены
   YarbpParser.js       токены → AST
   macroPostprocess.js  раскрытие макросов после парсинга
+  languageDirectives.js `! типизация-сахара` и `! импорт` (AST до конвертеров)
 
 utils/
   escape.js            escText / escAttr / escJsonForHtml

@@ -44,6 +44,7 @@
     "42_substitution_object.txt",
     "43_code_block_macro_param.txt",
     "44a_bsl_markup.txt",
-    "44b_expected.txt"
+    "44b_expected.txt",
+    "45_language_directives.txt"
   ]
 }

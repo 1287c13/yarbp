@@ -105,22 +105,38 @@ export class UIGenerator {
     }
   }
 
+  /** Явные свойства узла (`.ключ значение`) в объект. */
+  collectProps(astNode) {
+    const props = {};
+    (astNode && astNode.children || []).forEach(child => {
+      if (child.nodeType === 'MEANING' && child.prefix === '.' && child.key !== 'shorthand') {
+        props[child.key] = child.value;
+      }
+    });
+    return props;
+  }
+
+  /**
+   * «Обязательность» из директивы `типизация-сахара`.
+   * Пустая строка, «нет», «no», «0», «false» — не обязательное; остальное —
+   * обязательное (как `*`/`да`/`yes` в позиционном сахаре).
+   */
+  isRequiredProp(value) {
+    if (value === true) return true;
+    if (value === false || value === null || value === undefined) return false;
+    const text = String(value).trim().toLowerCase();
+    return text !== '' && !['нет', 'no', '0', 'false', 'ложь'].includes(text);
+  }
+
   renderNode(astNode) {
     if (astNode.nodeType !== 'MEANING') return '';
 
     this.parseKeyAndId(astNode);
     this.extractShorthand(astNode);
 
-    const props = {};
-    if (astNode.children) {
-      astNode.children.forEach(child => {
-        if (child.nodeType === 'MEANING' && child.key !== 'shorthand' && child.prefix === '.') {
-          props[child.key] = child.value;
-        }
-      });
-    }
+    const props = this.collectProps(astNode);
     astNode.props = props;
-    astNode.parsedValue = this.parseSugaredValue(astNode.value);
+    astNode.parsedValue = this.parseSugaredValue(astNode.value, props);
 
     if (astNode.type === 'таблица-соответствий') {
       return this.renderCorrespondenceTable(astNode);
@@ -164,31 +180,56 @@ export class UIGenerator {
     }
   }
 
-  parseSugaredValue(value) {
-    if (typeof value !== 'string') return { raw: value };
-    const cleanValue = value.replace(/^=\s*/, '').trim();
-    const parts = cleanValue.split('/').map(p => p.trim());
-    const result = { raw: cleanValue };
+  parseSugaredValue(value, props = {}) {
+    const result = {
+      raw: typeof value === 'string' ? value.replace(/^=\s*/, '').trim() : value,
+    };
 
-    if (parts[0]) result.label = parts[0];
-    if (parts.length >= 2 && parts[1]) {
-      if (['*', 'да', 'yes'].includes(parts[1])) result.required = true;
-      else result.placeholder = parts[1];
+    if (typeof value === 'string') {
+      const cleanValue = value.replace(/^=\s*/, '').trim();
+      const parts = cleanValue.split('/').map(p => p.trim());
+
+      if (parts[0]) result.label = parts[0];
+      if (parts.length >= 2 && parts[1]) {
+        if (['*', 'да', 'yes'].includes(parts[1])) result.required = true;
+        else result.placeholder = parts[1];
+      }
+      if (parts.length >= 3 && parts[2]) {
+        if (['*', 'да', 'yes'].includes(parts[2])) result.required = true;
+        else result.postfix = parts[2];
+      }
+      // Канонический сахар: label / placeholder / required / postfix.
+      if (parts.length >= 4 && parts[3]) result.postfix = parts[3];
     }
-    if (parts.length >= 3 && parts[2]) {
-      if (['*', 'да', 'yes'].includes(parts[2])) result.required = true;
-      else result.postfix = parts[2];
+
+    /* Явные свойства из `! типизация-сахара` важнее позиционного разбора:
+       одно и то же значение может быть записано и как `= a / b`, и как
+       `.лэйбл a` + `.плейсхолдер b`. */
+    if (props['лэйбл'] !== undefined) result.label = props['лэйбл'];
+    if (props['плейсхолдер'] !== undefined) result.placeholder = props['плейсхолдер'];
+    if (props['обязательный'] !== undefined) {
+      result.required = this.isRequiredProp(props['обязательный']);
     }
-    // Канонический сахар: label / placeholder / required / postfix.
-    if (parts.length >= 4 && parts[3]) result.postfix = parts[3];
+    if (props['постфикс'] !== undefined) result.postfix = props['постфикс'];
+
     return result;
   }
 
-  parseOptionValue(value) {
-    if (typeof value !== 'string') return { label: '', value: '' };
-    const cleanValue = value.replace(/^=\s*/, '').trim();
-    const parts = cleanValue.split('/').map(p => p.trim());
-    return { label: parts[0] || '', value: parts[1] || parts[0] || '' };
+  parseOptionValue(value, props = {}) {
+    let label = '';
+    let optionValue = '';
+    if (typeof value === 'string') {
+      const cleanValue = value.replace(/^=\s*/, '').trim();
+      const parts = cleanValue.split('/').map(p => p.trim());
+      label = parts[0] || '';
+      optionValue = parts[1] || parts[0] || '';
+    }
+
+    if (props['представление'] !== undefined) label = props['представление'];
+    if (props['значение'] !== undefined) optionValue = props['значение'];
+    else if (props['представление'] !== undefined && !optionValue) optionValue = label;
+
+    return { label, value: optionValue };
   }
 
   escapeHtml(str) {
@@ -223,14 +264,10 @@ export class UIGenerator {
       if (field.nodeType !== 'MEANING') return;
       this.parseKeyAndId(field);
       this.extractShorthand(field);
-      const parsed = this.parseSugaredValue(field.value || '');
-      const fieldProps = {};
-      (field.children || []).forEach(child => {
-        if (child.nodeType === 'MEANING' && child.prefix === '.') {
-          fieldProps[child.key] = child.value;
-        }
-      });
-      const label = parsed.label || field.value || field.key || 'field-' + columns.length;
+      const fieldProps = this.collectProps(field);
+      const parsed = this.parseSugaredValue(field.value || '', fieldProps);
+      const label = parsed.label || fieldProps['лэйбл'] || fieldProps['имя'] ||
+        field.value || field.key || 'field-' + columns.length;
       const name = field.id || label;
       columns.push({
         name: name,
@@ -268,7 +305,9 @@ export class UIGenerator {
       if (field.nodeType !== 'MEANING') return '';
       this.parseKeyAndId(field);
       this.extractShorthand(field);
-      const label = field.value || field.id || field.key || '';
+      const fieldProps = this.collectProps(field);
+      const label = field.value || fieldProps['лэйбл'] || fieldProps['имя'] ||
+        fieldProps['текст'] || field.id || field.key || '';
       return `<div class="list-item"><span>${this.escapeHtml(label)}</span><span>—</span></div>`;
     }).join('');
     return `<div class="items-list">${items}</div>`;
@@ -284,7 +323,9 @@ export class UIGenerator {
       const id = tab.id || tab.key || `tab-${index}`;
       const isList = id.includes('список');
       const isForm = id.includes('добавить');
-      const label = String(tab.value || id).replace(/^=\s*/, '').trim() || 'Таб';
+      const tabProps = this.collectProps(tab);
+      const tabLabel = tabProps['заголовок'] || tabProps['лэйбл'];
+      const label = String(tabLabel || tab.value || id).replace(/^=\s*/, '').trim() || 'Таб';
       const panelId = `${groupId}-${index}`;
       const content = this.renderNode(tab);
       const customButtons = (tab.children || []).filter(
@@ -365,7 +406,8 @@ export class UIGenerator {
 
   button(n) {
     const props = n.props || {};
-    const label = String(n.parsedValue?.label || n.value || '').replace(/^=\s*/, '').trim();
+    const label = String(n.parsedValue?.label || props['подпись'] || props['лэйбл'] ||
+      n.value || '').replace(/^=\s*/, '').trim();
     if (!label) return '';
 
     const attrs = [];
@@ -394,7 +436,9 @@ export class UIGenerator {
   }
 
   label(n) {
-    return `<div style="font-weight:500;margin-bottom:8px;">${this.escapeHtml(n.value || '')}</div>`;
+    const props = n.props || {};
+    const text = n.value || props['текст'] || props['лэйбл'] || '';
+    return `<div style="font-weight:500;margin-bottom:8px;">${this.escapeHtml(text)}</div>`;
   }
 
   tab(n, children) {
@@ -406,7 +450,8 @@ export class UIGenerator {
       const shorthand = n.children.find(c => c.key === 'shorthand');
       if (shorthand?.value) n.value = shorthand.value.replace(/^=\s*/, '').trim();
     }
-    const parsed = this.parseOptionValue(n.value);
+    const props = n.props || this.collectProps(n);
+    const parsed = this.parseOptionValue(n.value, props);
     return `<option value="${this.escapeHtml(parsed.value)}">${this.escapeHtml(parsed.label)}</option>`;
   }
 

@@ -33,6 +33,7 @@ export function isFlagOn(value) {
  * слова (у методов OpenAPI такая проверка уже была).
  */
 const FIELD_ATTRS = Object.freeze(new Set([
+  'имя', 'название',
   'тип', 'элемент', 'формат', 'описание', 'пример', 'значение', 'обязательное',
 ]));
 
@@ -93,14 +94,14 @@ export function buildSchemaObject(node, ctx) {
   const description = ctx.childValue(node, 'описание');
 
   for (const child of ctx.children(node)) {
-    if (child.key === 'описание') continue;
+    if (child.key === 'описание' || child.key === 'имя' || child.key === 'название') continue;
 
     if (child.key !== 'поле') {
       ctx.warn(child, 'неизвестный узел «' + child.key + '» в схеме — пропущен');
       continue;
     }
 
-    const name = child.value;
+    const name = ctx.childValue(child, 'имя') || child.value;
     if (!name) {
       ctx.warn(child, 'поле без имени — пропущено');
       continue;
@@ -118,7 +119,8 @@ export function buildSchemaObject(node, ctx) {
   }
 
   if (!Object.keys(schema.properties).length) {
-    ctx.warn(node, 'в схеме «' + node.value + '» нет полей');
+    const name = ctx.childValue(node, 'имя') || node.value;
+    ctx.warn(node, 'в схеме «' + name + '» нет полей');
   }
   if (required.length) schema.required = required;
   if (description !== null) schema.description = String(description);

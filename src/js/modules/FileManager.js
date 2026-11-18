@@ -38,6 +38,8 @@ export class FileManager {
     this.autoSaveTimer = null;
     this.autoSaveInterval = 5000; // 5 секунд
     this._boundSyncFromUrl = null;
+    /** Версия содержимого файлов: импорт из другого файла должен обновлять AST. */
+    this.revision = 0;
   }
 
   /**
@@ -210,10 +212,12 @@ export class FileManager {
           name: 'JSON',
           slug: 'json',
           content: `! as json
+! типизация-сахара(заказ) номер / статус
 :
   .order_id 12345
   .status "new"
   .is_active yes
+  :заказ = 42 / новый
   :client .first_name Jack .last_name White .id '54312'
   ..items
     : .sku ART-001 .price 1299.99`,
@@ -225,10 +229,12 @@ export class FileManager {
           name: 'XML, anonymous objects',
           slug: 'xml-anonymous',
           content: `! as xml
+! типизация-сахара(заказ) номер / статус
 :
   .order_id 12345
   .status "new"
   .is_active yes
+  :заказ = 42 / новый
   :client .first_name Jack .last_name White .id '54312'
   ..items
     : .sku ART-001 .price 1299.99`,
@@ -240,7 +246,9 @@ export class FileManager {
           name: 'XML, explicit objects',
           slug: 'xml-explicit',
           content: `! as xml
+! типизация-сахара(заказ) номер / статус
 order .order_id 12345 .status "new" .is_active yes
+  заказ = 42 / новый
   client .first_name Jack .last_name White .id '54312'
   items
     item
@@ -269,6 +277,10 @@ Order
           name: 'XPO, full example',
           slug: 'xpo',
           content: `! как КПО
+! типизация-сахара(участник) имя
+! типизация-сахара(точка) имя
+! типизация-сахара(разделитель) имя
+! типизация-сахара(событие) имя
 
 дорожка
 
@@ -354,6 +366,11 @@ Order
           name: 'BPMN',
           slug: 'bpmn',
           content: `! как БПМН
+! типизация-сахара(процесс) имя / ид
+! типизация-сахара(задача) имя / ид
+! типизация-сахара(событие) имя / ид
+! типизация-сахара(шлюз) имя / ид
+! типизация-сахара(подпроцесс) имя / ид
 
 процесс = Процесс 1
   ..роли
@@ -418,13 +435,16 @@ Order
           // не дублируются — их подставляет конвертер (см. FlexFormsConvertor).
           // Таблица описана поколоночно, как в актуальном синтаксисе.
           content: `! как форма-тсд
+! типизация-сахара(операция) имя / ид
+! типизация-сахара(поле) имя / ид
+! типизация-сахара(таблица) имя / ид
 
 форма
   .заголовокФормы Отправка данных в 1С
   .сервис http://127.0.0.1:8765/rt_m_bot/hs/dp
   .типКлиента ПодборТовара
   .версияКонфига "1.0"
-  ..watch Справочник.Номенклатура Справочник.ХарактеристикиНоменклатуры
+  ..подписки Справочник.Номенклатура Справочник.ХарактеристикиНоменклатуры
 
   :обработчики
     ..формированиеКэша
@@ -502,6 +522,7 @@ Order
   }
 
   _saveData() {
+    this.revision += 1;
     const userFiles = this.data.files.filter(f => !f.isBuiltin);
     const isActiveUserFile = userFiles.some(f => f.id === this.data.activeFileId);
 
@@ -541,9 +562,65 @@ Order
     const activeFile = this.data.files.find(f => f.id === this.data.activeFileId);
     if (activeFile && this.editor) {
       this.editor.value = normalizeText(activeFile.content);
+      this.revision += 1;
       if (this.onContentChange) this.onContentChange();
     }
     this._highlightActiveInUI();
+  }
+
+  /** Файлы, доступные для `! импорт` и подсказок. */
+  listImportableFiles() {
+    return this.data.files
+      .filter(file => file && typeof file.content === 'string')
+      .map(file => ({
+        id: file.id,
+        name: file.name,
+        slug: file.slug || '',
+        isActive: file.id === this.data.activeFileId,
+      }));
+  }
+
+  /**
+   * Найти файл по имени/slug/id без учёта регистра.
+   *
+   * Возвращает объект для парсера: успех — `{ok:true, id, name, content}`,
+   * ошибка — `{ok:false, reason, candidates}`. Имя с пробелами ищется как
+   * есть: кавычки снимает директива, а не FileManager.
+   */
+  resolveImport(key) {
+    const needle = String(key ?? '').trim().toLowerCase();
+    const files = this.data.files.filter(file =>
+      file && typeof file.content === 'string');
+    const candidates = files.map(file => file.name).filter(Boolean);
+
+    if (!needle) return { ok: false, reason: 'missing', candidates };
+
+    const lower = value => String(value ?? '').trim().toLowerCase();
+    const matches = files.filter(file =>
+      lower(file.name) === needle ||
+      lower(file.slug) === needle ||
+      lower(file.id) === needle);
+
+    if (!matches.length) return { ok: false, reason: 'missing', candidates };
+    if (matches.length > 1) {
+      return {
+        ok: false,
+        reason: 'ambiguous',
+        candidates: matches.map(file => file.name).filter(Boolean),
+      };
+    }
+
+    const file = matches[0];
+    if (file.id === this.data.activeFileId) {
+      return { ok: false, reason: 'self', candidates: [file.name].filter(Boolean) };
+    }
+
+    return {
+      ok: true,
+      id: file.id,
+      name: file.name,
+      content: normalizeText(file.content),
+    };
   }
 
   /**

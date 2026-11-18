@@ -19,6 +19,29 @@ export function extractExplicitId(node) {
 }
 
 /**
+ * Имя узла: явное `.имя` (а также `.лэйбл`/`.название`) важнее значения
+ * после «=». Так `! типизация-сахара(задача) имя / ид` работает без
+ * специальных веток в каждом билдере, а старые документы без директивы
+ * продолжают брать имя из `value`.
+ */
+export function nodeName(node) {
+  for (const key of ['имя', 'лэйбл', 'название']) {
+    const value = childValue(node, key);
+    if (value !== null && value !== '') return value;
+  }
+  return node && node.value !== undefined ? node.value : null;
+}
+
+/** Текст артефакта: `.текст` → `.имя` → `.лэйбл` → значение после «=». */
+export function nodeText(node) {
+  for (const key of ['текст', 'имя', 'лэйбл']) {
+    const value = childValue(node, key);
+    if (value !== null && value !== '') return value;
+  }
+  return node && node.value !== undefined && node.value !== null ? node.value : '';
+}
+
+/**
  * Читает .х / .у.
  * null, если оба отсутствуют; иначе недостающее = 0.
  */

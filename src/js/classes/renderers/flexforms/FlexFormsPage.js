@@ -203,11 +203,11 @@ export function formConfigWarnings(ir) {
     });
   }
 
-  const watch = ir['watch'];
-  if (Array.isArray(watch)) {
-    watch.forEach(value => {
+  const subscriptions = ir['подписки'];
+  if (Array.isArray(subscriptions)) {
+    subscriptions.forEach(value => {
       if (typeof value !== 'string' || value.indexOf('.') === -1) {
-        warnings.push('watch: «' + String(value) + '» без вида объекта ' +
+        warnings.push('подписки: «' + String(value) + '» без вида объекта ' +
           '(ожидается «Справочник.Имя», «Документ.Имя»).');
       }
     });

@@ -144,12 +144,23 @@ try {
     JSON.stringify({ кэш: irCacheRows, сообщения: irMessageRows }).slice(0, 300));
   expect('IR: ключи публикации формы на месте',
     irConfig.типКлиента === 'ПодборТовара' && irConfig.версияКонфига === '1.0' &&
-    Array.isArray(irConfig.watch) && irConfig.watch.length === 2,
+    Array.isArray(irConfig['подписки']) && irConfig['подписки'].length === 2,
     JSON.stringify({
       типКлиента: irConfig.типКлиента,
       версияКонфига: irConfig.версияКонфига,
-      watch: irConfig.watch,
+      подписки: irConfig['подписки'],
     }));
+
+  /* Аудит контракта: английские ключи корня — только структурные type/children.
+     Бизнес-ключ watch не должен появляться ни в разметке, ни в IR. */
+  const latinRootKeys = Object.keys(irConfig)
+    .filter(key => /^[A-Za-z]/.test(key)).sort();
+  expect('IR: английские ключи только структурные type/children',
+    JSON.stringify(latinRootKeys) === '["children","type"]',
+    JSON.stringify(latinRootKeys));
+  expect('IR: английского watch нет',
+    !Object.prototype.hasOwnProperty.call(irConfig, 'watch'),
+    Object.keys(irConfig).join(', '));
 
   /* Проверка контракта перед выгрузкой (кнопка «Конфиг»): структурные ошибки
      блокируют экспорт, мягкие замечания — нет. Правило «не блокировать из-за
@@ -167,8 +178,8 @@ try {
   expect('выгрузка: старый конфиг без «типКлиента» не блокируется, но с замечанием',
     formConfigError(legacyConfig) === '' &&
     legacyWarnings.some(text => text.indexOf('типКлиента') !== -1) &&
-    formConfigWarnings({ ...legacyConfig, watch: ['Номенклатура'] })
-      .some(text => text.indexOf('watch') !== -1),
+    formConfigWarnings({ ...legacyConfig, 'подписки': ['Номенклатура'] })
+      .some(text => text.indexOf('подписки') !== -1),
     JSON.stringify(legacyWarnings));
   expect('выгрузка: пустой «код» обработчика — замечание, не ошибка',
     formConfigError({

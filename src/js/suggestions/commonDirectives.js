@@ -2,6 +2,8 @@ export const COMMON_DIRECTIVES = {
   names: [
     { label: 'как', insert: 'как ', doc: 'Значение "как" — здесь вы можете выбрать конвертер' },
     { label: 'as',  insert: 'as ',  doc: 'Value "as" — here you choose the converter' },
+    { label: 'импорт', insert: 'импорт ', doc: 'Импорт объекта из файла: импорт <объект> из <файл>' },
+    { label: 'типизация-сахара', insert: 'типизация-сахара() ', doc: 'Имена свойств и разделитель для сахара: типизация-сахара(<тег>) имя / имя' },
   ],
   values: {
     'как': {

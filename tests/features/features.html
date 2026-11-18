@@ -37,6 +37,7 @@
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
 import { UIRuntime } from '../../src/js/classes/ui/UIRuntime.js';
 import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
+import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
 
   const resultBox = document.getElementById('result');
   const lines = [];
@@ -888,6 +889,287 @@ import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
     uiTable ? String(uiTable.querySelectorAll('tbody tr').length) : 'нет таблицы');
   tableRuntime.destroy();
   tableHost.remove();
+
+  /* ------------------------------------------------------------------ */
+  /* 14. L-2: типизация сахара — AST, свойства, ошибки                   */
+  /* ------------------------------------------------------------------ */
+  const plain = (value) => {
+    if (Array.isArray(value)) return value.map(plain);
+    if (!value || typeof value !== 'object') return value;
+    const result = {};
+    Object.keys(value).forEach(key => {
+      if (['position', 'directives', 'comments', 'origin'].includes(key)) return;
+      result[key] = plain(value[key]);
+    });
+    return result;
+  };
+
+  const sugarA = build(join(
+    '! as ast',
+    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный',
+    'поле = Имя / Введите имя / да'
+  ));
+  const sugarB = build(join(
+    '! as ast',
+    'поле',
+    '  .лэйбл Имя',
+    '  .плейсхолдер Введите имя',
+    '  .обязательный да'
+  ));
+  const sugarNodeA = child(sugarA.ast, 'поле');
+  const sugarNodeB = child(sugarB.ast, 'поле');
+
+  check('L-2: value развёрнут в именованные свойства',
+    !!sugarNodeA && sugarNodeA.value === undefined &&
+    child(sugarNodeA, 'лэйбл')?.value === 'Имя' &&
+    child(sugarNodeA, 'плейсхолдер')?.value === 'Введите имя' &&
+    child(sugarNodeA, 'обязательный')?.value === true,
+    sugarNodeA ? JSON.stringify(plain(sugarNodeA)) : 'нет узла');
+  check('L-2: AST эквивалентен явной записи',
+    JSON.stringify(plain(sugarNodeA)) === JSON.stringify(plain(sugarNodeB)),
+    sugarNodeA && sugarNodeB
+      ? JSON.stringify(plain(sugarNodeA)) + ' != ' + JSON.stringify(plain(sugarNodeB))
+      : 'нет узла');
+
+  const sugarSlash = build(join(
+    '! as ast',
+    '! типизация-сахара(поле) имя // подсказка',
+    'поле = Кол-во // шт.'
+  ));
+  const slashNode = child(sugarSlash.ast, 'поле');
+  check('L-2: разделитель «//»',
+    child(slashNode, 'имя')?.value === 'Кол-во' &&
+    child(slashNode, 'подсказка')?.value === 'шт.',
+    slashNode ? JSON.stringify(plain(slashNode)) : 'нет узла');
+
+  const sugarEmpty = build(join(
+    '! as ast',
+    '! типизация-сахара(поле) имя / подсказка / обязательный',
+    'поле = Кол-во / / да'
+  ));
+  const sugarEmptyNode = child(sugarEmpty.ast, 'поле');
+  check('L-2: пустой сегмент не создаёт свойство',
+    !!sugarEmptyNode && !child(sugarEmptyNode, 'подсказка') &&
+    child(sugarEmptyNode, 'имя')?.value === 'Кол-во' &&
+    child(sugarEmptyNode, 'обязательный')?.value === true,
+    sugarEmptyNode ? JSON.stringify(plain(sugarEmptyNode)) : 'нет узла');
+
+  const sugarConflict = build(join(
+    '! as ast',
+    '! типизация-сахара(поле) лэйбл',
+    'поле = Из сахара',
+    '  .лэйбл Явно'
+  ));
+  const conflictNode = child(sugarConflict.ast, 'поле');
+  check('L-2: явное свойство важнее сахара',
+    child(conflictNode, 'лэйбл')?.value === 'Явно' &&
+    sugarConflict.parser.lastDiagnostics.some(item => /уже задано явно/.test(item.message)),
+    conflictNode ? JSON.stringify(plain(conflictNode)) : 'нет узла');
+
+  const sugarMalformed = build(join(
+    '! as ast',
+    '! типизация-сахара(поле) имя подсказка',
+    'поле = a b'
+  ));
+  const malformedNode = child(sugarMalformed.ast, 'поле');
+  check('L-2: malformed-директива не распознана и не даёт диагностики',
+    malformedNode?.value === 'a b' &&
+    !child(malformedNode, 'имя') &&
+    !sugarMalformed.parser.lastDiagnostics.some(item => /типизация-сахара/.test(item.message)),
+    malformedNode ? JSON.stringify(plain(malformedNode)) : 'нет узла');
+
+  check('L-2: языковая директива не считается флейвором',
+    !YarbpFlavor.isFlavorDirective('типизация-сахара(поле) лэйбл') &&
+    YarbpFlavor.isFlavorDirective('как аст') &&
+    YarbpFlavor.isFlavorDirective('as json'));
+
+  const sugarUiA = build(join(
+    '! как форма',
+    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    'форма',
+    '  поле = Имя / Введите имя / да / шт.'
+  ));
+  const sugarUiB = build(join(
+    '! как форма',
+    'форма',
+    '  поле',
+    '    .лэйбл Имя',
+    '    .плейсхолдер Введите имя',
+    '    .обязательный да',
+    '    .постфикс шт.'
+  ));
+  const uiA = new UIGenerator(false).generateHTML(sugarUiA.ast);
+  const uiB = new UIGenerator(false).generateHTML(sugarUiB.ast);
+  check('L-2: UI-генератор даёт одинаковый HTML',
+    uiA === uiB && uiA.includes('placeholder="Введите имя"') &&
+    uiA.includes('required') && uiA.includes('шт.'),
+    uiA === uiB ? 'HTML совпал' : 'HTML различается');
+
+  /* ------------------------------------------------------------------ */
+  /* 15. L-1: импорт объекта из файла проекта                            */
+  /* ------------------------------------------------------------------ */
+  const buildWithImport = (code, files) => {
+    const lexer = new YarbpLexer();
+    lexer.setInitialState(code);
+    lexer.tokenize();
+    const parser = new YarbpParser(lexer);
+    parser.setImportResolver(key => {
+      const value = files[key];
+      if (typeof value === 'string') {
+        return { ok: true, id: key, name: key, content: value };
+      }
+      return value || { ok: false, reason: 'missing', candidates: Object.keys(files) };
+    }, () => 0);
+    return { ast: parser.getAST(), parser };
+  };
+
+  const TSD_SOURCE = join(
+    '! как форма-тсд',
+    'форма',
+    '  .заголовокФормы Импортированная',
+    '  поле = Товар / a1_f1'
+  );
+
+  const imported = buildWithImport(join(
+    '! as ast',
+    '! импорт форма из tsd-form',
+    'заголовок = Мой'
+  ), { 'tsd-form': TSD_SOURCE });
+  const importedForm = child(imported.ast, 'форма');
+
+  check('L-1: объект импортирован из файла',
+    !!importedForm &&
+    child(importedForm, 'заголовокФормы')?.value === 'Импортированная',
+    importedForm ? JSON.stringify(plain(importedForm)) : 'нет объекта');
+  check('L-1: origin заполнен, позиция — у директивы',
+    importedForm?.origin?.fileName === 'tsd-form' &&
+    importedForm?.origin?.object === 'форма' &&
+    Number.isFinite(importedForm?.position?.start),
+    JSON.stringify(importedForm?.origin || null));
+  check('L-1: импортированный AST заморожен',
+    Object.isFrozen(importedForm) &&
+    Object.isFrozen((importedForm.children || [])[0]),
+    importedForm ? String(Object.isFrozen(importedForm)) : 'нет объекта');
+
+  const quoted = buildWithImport(join(
+    '! as ast',
+    '! импорт форма из "Форма ТСД"'
+  ), { 'Форма ТСД': TSD_SOURCE });
+  check('L-1: имя файла с пробелами — в кавычках',
+    !!child(quoted.ast, 'форма'),
+    JSON.stringify(plain(quoted.ast)));
+
+  const malformed = buildWithImport(join(
+    '! as ast',
+    '! импорт форма из Форма ТСД'
+  ), { 'Форма ТСД': TSD_SOURCE });
+  check('L-1: malformed-формат не импортирует и не даёт диагностики',
+    !child(malformed.ast, 'форма') &&
+    malformed.parser.lastDiagnostics.length === 0,
+    JSON.stringify(malformed.parser.lastDiagnostics));
+
+  const missing = buildWithImport(join(
+    '! as ast',
+    '! импорт форма из "Нет такого"'
+  ), { 'tsd-form': TSD_SOURCE });
+  check('L-1: неизвестный файл — диагностика',
+    missing.parser.lastDiagnostics.some(item => /не найден/.test(item.message)),
+    JSON.stringify(missing.parser.lastDiagnostics));
+
+  const noObject = buildWithImport(join(
+    '! as ast',
+    '! импорт отчёт из tsd-form'
+  ), { 'tsd-form': TSD_SOURCE });
+  check('L-1: неизвестный объект — диагностика со списком',
+    noObject.parser.lastDiagnostics.some(item =>
+      /нет объекта «отчёт»/.test(item.message) && /форма/.test(item.message)),
+    JSON.stringify(noObject.parser.lastDiagnostics));
+
+  const collision = buildWithImport(join(
+    '! as ast',
+    '! импорт форма из tsd-form',
+    'форма',
+    '  .своя да'
+  ), { 'tsd-form': TSD_SOURCE });
+  const collisionRoots = children(collision.ast).filter(node => node.key === 'форма');
+  check('L-1: дубль объекта не перезаписывает документ',
+    collisionRoots.length === 1 &&
+    child(collisionRoots[0], 'своя')?.value === true &&
+    collision.parser.lastDiagnostics.some(item => /уже есть/.test(item.message)),
+    JSON.stringify(collision.parser.lastDiagnostics));
+
+  const selfImport = buildWithImport(join(
+    '! as ast',
+    '! импорт форма из self'
+  ), { self: { ok: false, reason: 'self', candidates: ['self'] } });
+  check('L-1: импорт из текущего файла запрещён',
+    selfImport.parser.lastDiagnostics.some(item => /текущего файла/.test(item.message)),
+    JSON.stringify(selfImport.parser.lastDiagnostics));
+
+  const ambiguousImport = buildWithImport(join(
+    '! as ast',
+    '! импорт форма из dup'
+  ), { dup: { ok: false, reason: 'ambiguous', candidates: ['A', 'B'] } });
+  check('L-1: неоднозначное имя файла — диагностика',
+    ambiguousImport.parser.lastDiagnostics.some(item => /неоднозначен: A, B/.test(item.message)),
+    JSON.stringify(ambiguousImport.parser.lastDiagnostics));
+
+  const importedSugar = buildWithImport(join(
+    '! as ast',
+    '! импорт заказ из sugar'
+  ), {
+    sugar: join(
+      '! типизация-сахара(заказ) номер / статус',
+      'заказ = 42 / новый'
+    )
+  });
+  const importedOrder = child(importedSugar.ast, 'заказ');
+  check('L-1: сахар файла-источника раскрыт до импорта',
+    child(importedOrder, 'номер')?.value === 42 &&
+    child(importedOrder, 'статус')?.value === 'новый',
+    importedOrder ? JSON.stringify(plain(importedOrder)) : 'нет объекта');
+
+  const importedMacro = buildWithImport(join(
+    '! as ast',
+    '! импорт заказ из macro'
+  ), {
+    macro: join(
+      '@шаблон',
+      '  .номер 7',
+      'заказ',
+      '  шаблон'
+    )
+  });
+  const macroOrder = child(importedMacro.ast, 'заказ');
+  const macroBody = child(macroOrder, 'шаблон');
+  check('L-1: макросы файла-источника раскрыты до импорта',
+    child(macroBody, 'номер')?.value === 7,
+    macroOrder ? JSON.stringify(plain(macroOrder)) : 'нет объекта');
+
+  const evilImport = buildWithImport(join(
+    '! как форма',
+    '! импорт злой из evil'
+  ), {
+    evil: join(
+      '! как форма',
+      'злой',
+      '  поле = <img src=x onerror=alert(1)>'
+    )
+  });
+  const evilHtml = new UIGenerator(false).generateHTML(evilImport.ast);
+  check('L-1: импортированное значение экранируется',
+    !evilHtml.includes('<img') && evilHtml.includes('&lt;img'),
+    evilHtml.slice(0, 200));
+
+  const afterContent = buildWithImport(join(
+    '! as ast',
+    'первый = 1',
+    '! импорт форма из tsd-form'
+  ), { 'tsd-form': TSD_SOURCE });
+  const afterKeys = children(afterContent.ast).map(node => node.key);
+  check('L-1: объект вставлен в позицию директивы',
+    afterKeys.indexOf('первый') < afterKeys.indexOf('форма'),
+    JSON.stringify(afterKeys));
 
   // Результат уже записан до UI-блока — обновляем, чтобы новые проверки
   // попали в отчёт, а не только в title.

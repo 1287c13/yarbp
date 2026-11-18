@@ -649,11 +649,86 @@
   removeStored('tsd-form-state');
 
   /* ------------------------------------------------------------------ */
+  /* 10. L-1: резолвер файлов для `! импорт`                             */
+  /* ------------------------------------------------------------------ */
+  const importManager = makeManager('yarbp_files_test_import');
+  const importable = importManager.listImportableFiles();
+
+  check('L-1: список файлов для импорта содержит «Форма ТСД»',
+    importable.some(file => file.id === 'builtin-9' && file.name === 'Форма ТСД'),
+    JSON.stringify(importable.slice(0, 4)));
+
+  const bySlug = importManager.resolveImport('tsd-form');
+  check('L-1: файл находится по slug',
+    bySlug.ok === true && bySlug.name === 'Форма ТСД' &&
+    bySlug.content.includes('! как форма-тсд'),
+    JSON.stringify({ ok: bySlug.ok, name: bySlug.name }));
+
+  const byName = importManager.resolveImport('Форма ТСД');
+  check('L-1: файл находится по имени с пробелами',
+    byName.ok === true && byName.id === 'builtin-9',
+    JSON.stringify({ ok: byName.ok, id: byName.id }));
+
+  const byId = importManager.resolveImport('builtin-9');
+  check('L-1: файл находится по id',
+    byId.ok === true && byId.name === 'Форма ТСД',
+    JSON.stringify({ ok: byId.ok, name: byId.name }));
+
+  const userManager = makeManager('yarbp_files_test_import_user', [
+    { id: 'user-1', name: 'Мой файл', content: 'объект\n  .а 1' },
+    { id: 'user-2', name: 'Текущий', content: 'текущий' },
+  ], 'user-2');
+  const userFile = userManager.resolveImport('Мой файл');
+  check('L-1: пользовательский файл тоже импортируется',
+    userFile.ok === true && userFile.id === 'user-1' &&
+    userFile.content.includes('объект'),
+    JSON.stringify({ ok: userFile.ok, name: userFile.name }));
+
+  const missingFile = importManager.resolveImport('Нет такого');
+  check('L-1: неизвестный файл даёт кандидатов',
+    missingFile.ok === false && missingFile.reason === 'missing' &&
+    missingFile.candidates.includes('Форма ТСД'),
+    JSON.stringify(missingFile));
+
+  const duplicateManager = makeManager('yarbp_files_test_import_dup', [
+    { id: 'dup-a', name: 'Дубль', content: 'a' },
+    { id: 'dup-b', name: 'Дубль', content: 'b' },
+  ], null);
+  const ambiguous = duplicateManager.resolveImport('дубль');
+  check('L-1: одинаковые имена файлов — неоднозначность',
+    ambiguous.ok === false && ambiguous.reason === 'ambiguous' &&
+    ambiguous.candidates.length === 2,
+    JSON.stringify(ambiguous));
+
+  importManager.data.activeFileId = 'builtin-9';
+  const selfFile = importManager.resolveImport('tsd-form');
+  check('L-1: импорт из активного файла запрещён',
+    selfFile.ok === false && selfFile.reason === 'self',
+    JSON.stringify(selfFile));
+  importManager.data.activeFileId = 'builtin-7';
+
+  const importLexer = new YarbpLexer();
+  importLexer.setInitialState('! as ast\n! импорт форма из tsd-form');
+  importLexer.tokenize();
+  const importParser = new YarbpParser(importLexer);
+  importParser.setImportResolver(
+    key => importManager.resolveImport(key),
+    () => importManager.revision
+  );
+  const importAst = importParser.getAST();
+  const importedForm = (importAst.children || []).find(node => node.key === 'форма');
+  check('L-1: парсер импортирует объект через FileManager',
+    !!importedForm && importedForm.origin?.fileName === 'Форма ТСД' &&
+    (importedForm.children || []).some(child => child.key === 'подписки'),
+    importedForm ? JSON.stringify(importedForm.origin) : 'нет формы');
+
+  /* ------------------------------------------------------------------ */
   ['yarbp_files_test_a', 'yarbp_files_test_b', 'yarbp_files_test_c',
    'yarbp_files_test_d', 'yarbp_files_test_e', 'yarbp_files_test_f',
    'yarbp_files_test_g', 'yarbp_files_test_blocked', 'yarbp_files_test_key',
    'yarbp_files_test_builtin', 'yarbp_files_test_builtin_untouched',
-   'yarbp_files_test_pagehide',
+   'yarbp_files_test_pagehide', 'yarbp_files_test_import',
+   'yarbp_files_test_import_dup', 'yarbp_files_test_import_user',
    'yarbp_builtin_folder_expanded']
     .forEach(key => removeStored(key));
 

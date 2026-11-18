@@ -61,11 +61,13 @@ export class YarbpXPMConverter {
     const sizeX = rootChildren.reduce((max, actor) => {
       if (actor.key === YarbpXPMConverter.VOCABULARY.participant) {
         const tilesWithoutImage = (actor.children || [])
-          .filter(child => child.key !== YarbpXPMConverter.VOCABULARY.image)
+          .filter(child => child.key !== YarbpXPMConverter.VOCABULARY.image &&
+            child.prefix !== '.')
           .length;
         return Math.max(max, tilesWithoutImage + 1);
       }
-      return Math.max(max, (actor.children || []).length);
+      return Math.max(max, (actor.children || [])
+        .filter(child => child.prefix !== '.').length);
     }, 0);
     const sizeY = rootChildren.length;
 
@@ -108,7 +110,7 @@ export class YarbpXPMConverter {
     // Остальные дети — начиная с x = 1
     let x = 1;
     (actor.children || []).forEach(tile => {
-      if (tile.key === YarbpXPMConverter.VOCABULARY.image) return;
+      if (tile.key === YarbpXPMConverter.VOCABULARY.image || tile.prefix === '.') return;
       const tileRepr = this._getTileByCoords(x, y);
       if (!tileRepr) return;
       const props = this._extractProps(tile, { roleName });
@@ -120,6 +122,7 @@ export class YarbpXPMConverter {
   _layoutPlainActor(actor, y) {
     let x = 0;
     (actor.children || []).forEach(tile => {
+      if (tile.prefix === '.') return;
       const tileRepr = this._getTileByCoords(x, y);
       if (!tileRepr) return;
       const props = this._extractProps(tile);
@@ -132,9 +135,24 @@ export class YarbpXPMConverter {
   // Иконки
   // ---------------------------------------------------------------------------
 
+  /**
+   * Явный текст узла: `.имя` → `.заголовок` → `.текст`.
+   * Возвращает пустую строку, если ничего не задано; вызывающий решает,
+   * использовать ли старый `value`.
+   */
+  _nodeText(node, keys = ['имя', 'заголовок', 'текст']) {
+    for (const key of keys) {
+      const found = findChildrenByKeyValue(node, 'key', key)[0];
+      if (!found || found.value === undefined || found.value === null) continue;
+      const text = String(found.value).trim();
+      if (text !== '') return text;
+    }
+    return '';
+  }
+
   _extractRoleName(actor) {
     if (actor && actor.key === YarbpXPMConverter.VOCABULARY.participant) {
-      return (actor.value || '').trim();
+      return this._nodeText(actor) || (actor.value || '').trim();
     }
     return '';
   }
@@ -454,7 +472,7 @@ export class YarbpXPMConverter {
       case YarbpXPMConverter.VOCABULARY.event:
         return this._extractEventProps(tile);
       case YarbpXPMConverter.VOCABULARY.divider:
-        return { title: (tile.value || '').trim() };
+        return { title: this._nodeText(tile, ['имя', 'заголовок']) || (tile.value || '').trim() };
       case YarbpXPMConverter.VOCABULARY.lines:
         return {};
     }
@@ -468,7 +486,7 @@ export class YarbpXPMConverter {
   }
 
   _extractPointProps(tile) {
-    let title = tile.value;
+    let title = this._nodeText(tile) || tile.value || '';
 
     let annotations;
     let annotationParent = findChildrenByKeyValue(tile, 'key', 'аннотации')[0];
@@ -625,7 +643,7 @@ export class YarbpXPMConverter {
       id: null,
       decisionTable: null,
       introduction: null,
-      title: (tile.value || '').trim(),
+      title: this._nodeText(tile) || (tile.value || '').trim(),
       pointStyle: 'diamond',
       bypassEnabled: false,
       listText: '',

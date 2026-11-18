@@ -61,7 +61,7 @@ export class YarbpJsonSchemaConverter {
         continue;
       }
 
-      const name = node.value;
+      const name = this.nodeText(node, ['имя', 'название']) || node.value;
       if (!name) {
         this.warn(node, 'схема без имени — пропущена');
         continue;
@@ -77,7 +77,7 @@ export class YarbpJsonSchemaConverter {
     this.result = {
       $schema: DRAFT,
       title: String(
-        (api && this.childValue(api, 'заголовок')) ||
+        (api && this.nodeText(api, ['заголовок', 'имя', 'название'])) ||
         (api && api.value) || order[0] || 'Схема'
       ),
     };
@@ -159,6 +159,15 @@ export class YarbpJsonSchemaConverter {
       if (child.key === key) return child.value === undefined ? null : child.value;
     }
     return null;
+  }
+
+  /** Явное текстовое свойство (`.имя`, `.заголовок`, …) до `value`. */
+  nodeText(node, keys) {
+    for (const key of keys || []) {
+      const value = this.childValue(node, key);
+      if (value !== null && value !== '') return value;
+    }
+    return '';
   }
 
   childValues(node, key) {

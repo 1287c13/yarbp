@@ -45,7 +45,7 @@ const RESPONSE_TEXT = Object.freeze({
 
 /** Атрибуты метода — всё остальное в методе считается опечаткой. */
 const OPENAPI_METHOD_KEYS = Object.freeze(new Set([
-  'операция', 'ответ', 'запрос', 'тег', 'обязательное', 'ид',
+  'операция', 'глагол', 'ответ', 'запрос', 'тег', 'обязательное', 'ид',
 ]));
 
 /** Секции (`..пути`, `..схемы`): контейнеры, которые конвертер разворачивает. */
@@ -87,7 +87,8 @@ export class YarbpOpenAPIConverter {
     const version = this.childValue(api, 'версия');
     const description = this.childValue(api, 'описание');
 
-    this.result.info.title = String(this.childValue(api, 'заголовок') || api.value || '');
+    this.result.info.title = String(
+      this.nodeText(api, ['заголовок', 'имя', 'название']) || api.value || '');
     this.result.info.version = version === null ? '0.0.0' : String(version);
     if (version === null) {
       this.warn(api, 'у api нет .версия — подставлено 0.0.0');
@@ -103,11 +104,11 @@ export class YarbpOpenAPIConverter {
       if (OPENAPI_API_ATTRS.has(node.key)) continue;
 
       if (node.key === 'сервер') {
-        const url = node.value;
+        const url = this.nodeText(node, ['адрес', 'сервер']) || node.value;
         if (!url) this.warn(node, 'сервер без адреса — пропущен');
         else servers.push({ url: String(url) });
       } else if (node.key === 'путь') {
-        const path = node.value;
+        const path = this.nodeText(node, ['адрес', 'путь']) || node.value;
         if (!path || !String(path).startsWith('/')) {
           this.warn(node, 'путь должен начинаться с «/»: «' + (path || '') + '»');
           continue;
@@ -119,7 +120,7 @@ export class YarbpOpenAPIConverter {
         }
         paths[String(path)] = this.buildPath(node);
       } else if (node.key === 'схема') {
-        const name = node.value;
+        const name = this.nodeText(node, ['имя', 'название']) || node.value;
         if (!name) {
           this.warn(node, 'схема без имени — пропущена');
           continue;
@@ -155,14 +156,14 @@ export class YarbpOpenAPIConverter {
     const description = this.childValue(node, 'описание');
 
     for (const child of this.meaningChildren(node)) {
-      if (child.key === 'описание') continue;
+      if (child.key === 'описание' || child.key === 'адрес') continue;
 
       if (child.key !== 'метод') {
         this.warn(child, 'неизвестный узел «' + child.key + '» в пути — пропущен');
         continue;
       }
 
-      const verb = String(child.value || '').toLowerCase();
+      const verb = String(this.nodeText(child, ['глагол', 'метод']) || child.value || '').toLowerCase();
       if (!verb) {
         this.warn(child, 'метод без имени (get/post/…) — пропущен');
         continue;
@@ -175,7 +176,8 @@ export class YarbpOpenAPIConverter {
     }
 
     if (!Object.keys(ops).length) {
-      this.warn(node, 'у пути «' + node.value + '» нет ни одного метода');
+      const path = this.nodeText(node, ['адрес', 'путь']) || node.value;
+      this.warn(node, 'у пути «' + path + '» нет ни одного метода');
     }
 
     const result = {};
@@ -247,7 +249,8 @@ export class YarbpOpenAPIConverter {
   checkRefs(api) {
     const known = new Set();
     for (const node of this.apiNodes(api)) {
-      if (node.key === 'схема' && node.value) known.add(String(node.value));
+      const name = this.nodeText(node, ['имя', 'название']) || node.value;
+      if (node.key === 'схема' && name) known.add(String(name));
     }
 
     for (const node of this.apiNodes(api)) {
@@ -329,6 +332,15 @@ export class YarbpOpenAPIConverter {
       if (child.key === key) return child.value === undefined ? null : child.value;
     }
     return null;
+  }
+
+  /** Явное текстовое свойство (`.имя`, `.заголовок`, …) до `value`. */
+  nodeText(node, keys) {
+    for (const key of keys || []) {
+      const value = this.childValue(node, key);
+      if (value !== null && value !== '') return value;
+    }
+    return '';
   }
 
   childValues(node, key) {

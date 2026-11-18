@@ -41,6 +41,7 @@
   import { YarbpOpenAPIConverter } from '../../src/js/classes/ast-converters/OpenAPIConvertor.js';
   import { YarbpJsonSchemaConverter } from '../../src/js/classes/ast-converters/JsonSchemaConvertor.js';
   import { YarbpMermaidConverter } from '../../src/js/classes/ast-converters/MermaidConvertor.js';
+  import { YarbpXPMConverter } from '../../src/js/classes/ast-converters/XPMConverter.js';
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
   import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   import { BPMNRenderer } from '../../src/js/classes/renderers/BPMNRenderer.js';
@@ -566,7 +567,7 @@
   /* ------------------------------------------------------------------ */
   /* 12. B-1: диагностика сборки BPMN                                    */
   /*     Конвертер сообщает, что не понял: неизвестный узел, дубль id,    */
-  /*     узел без входящего потока, процесс без старта, «.имя» у задачи.  */
+  /*     узел без входящего потока, процесс без старта, `.имя` у задачи.  */
   /* ------------------------------------------------------------------ */
   const warningsOf = (code) => {
     const converter = new YarbpBPMNConverter(buildAST(code).ast, { source: code });
@@ -608,11 +609,15 @@
     noStartWarnings.some(item => /нет входящего потока/.test(item.message)),
     JSON.stringify(noStartWarnings));
 
-  const nameWarnings = warningsOf(['! как бпмн', 'процесс = П', '  событие = Старт',
-    '  задача = Дело', '    .имя Из ребёнка'].join('\n'));
-  check('B-1: подсказка про «.имя» у задачи',
-    nameWarnings.some(item => /\.имя игнорируется/.test(item.message)),
-    JSON.stringify(nameWarnings));
+  const nameDoc = ['! как бпмн', 'процесс = П', '  событие = Старт',
+    '  задача = Дело', '    .имя Из ребёнка'].join('\n');
+  const nameXml = new YarbpBPMNConverter(
+    buildAST(nameDoc).ast, { source: nameDoc }).convert();
+  const nameWarnings = warningsOf(nameDoc);
+  check('B-1: «.имя» задачи используется, а не игнорируется',
+    nameXml.includes('name="Из ребёнка"') &&
+    !nameWarnings.some(item => /\.имя игнорируется/.test(item.message)),
+    JSON.stringify(nameWarnings) + ' / ' + nameXml.slice(0, 160));
 
   /* Панель показывает диагностику строкой под схемой. */
   const warnPane = document.createElement('div');
@@ -1459,6 +1464,145 @@
       mermaidPane.querySelectorAll('.mermaid-status').length === 0);
     mermaidPane.remove();
   }
+
+  /* ------------------------------------------------------------------ */
+  /* 16. L-2: конвертеры читают явные свойства                           */
+  /* ------------------------------------------------------------------ */
+  const sugarJsonCode = [
+    '! as json',
+    '! типизация-сахара(заказ) номер / статус',
+    'заказ = 42 / новый'
+  ].join('\n');
+  const sugarJson = new YarbpJSONConverter(buildAST(sugarJsonCode).ast).convert();
+  check('L-2: JSON — свойства вместо value',
+    sugarJson.заказ?.номер === 42 && sugarJson.заказ?.статус === 'новый',
+    JSON.stringify(sugarJson));
+
+  const sugarXmlCode = [
+    '! as xml',
+    '! типизация-сахара(заказ) номер / статус',
+    'заказ = 42 / новый'
+  ].join('\n');
+  const sugarXml = new YarbpXMLConverter(buildAST(sugarXmlCode).ast).convert();
+  check('L-2: XML — свойства вместо value',
+    sugarXml.includes('номер="42"') && sugarXml.includes('статус="новый"'),
+    sugarXml);
+
+  const sugarProtoCode = [
+    '! as proto',
+    '! типизация-сахара(поле) значения',
+    'заказ',
+    '  .поле:enum = A B'
+  ].join('\n');
+  const sugarProto = new YarbpProtoConverter(buildAST(sugarProtoCode).ast).convert();
+  check('L-2: proto — enum из .значения',
+    sugarProto.includes('A = 0') && sugarProto.includes('B = 1'),
+    sugarProto);
+
+  const sugarBpmnCode = [
+    '! как бпмн',
+    '! типизация-сахара(процесс) имя / ид',
+    '! типизация-сахара(событие) имя / ид',
+    '! типизация-сахара(задача) имя / ид',
+    'процесс = Заказ / Process_1',
+    '  событие = Старт / e1',
+    '  задача = Дело / t1'
+  ].join('\n');
+  const sugarBpmn = new YarbpBPMNConverter(buildAST(sugarBpmnCode).ast).convert();
+  const sugarBpmnFlags = {
+    processId: sugarBpmn.includes('id="Process_1"'),
+    event: sugarBpmn.includes('name="Старт"'),
+    task: sugarBpmn.includes('name="Дело"'),
+    id: sugarBpmn.includes('id="t1"'),
+  };
+  check('L-2: BPMN — имена и id из свойств',
+    Object.values(sugarBpmnFlags).every(Boolean),
+    JSON.stringify(sugarBpmnFlags) + ' / ' + sugarBpmn.slice(0, 600));
+
+  const sugarFlexCode = [
+    '! как форма-тсд',
+    '! типизация-сахара(операция) имя / ид',
+    '! типизация-сахара(поле) имя / ид',
+    'форма',
+    '  операция = Подобрать / a1',
+    '    группа',
+    '      поле:штрихкод = Штрихкод / f1'
+  ].join('\n');
+  const sugarFlex = JSON.stringify(
+    new YarbpFlexFormsConverter(buildAST(sugarFlexCode).ast).convert());
+  check('L-2: ТСД — имя/ид из свойств',
+    sugarFlex.includes('"имя":"Подобрать"') &&
+    sugarFlex.includes('"ид":"a1"') &&
+    sugarFlex.includes('"имя":"Штрихкод"') &&
+    sugarFlex.includes('"ид":"f1"'),
+    sugarFlex.slice(0, 400));
+
+  const sugarOpenApiCode = [
+    '! как openapi',
+    '! типизация-сахара(api) заголовок / версия',
+    '! типизация-сахара(путь) адрес / описание',
+    '! типизация-сахара(метод) глагол / операция',
+    '! типизация-сахара(схема) имя / описание',
+    '! типизация-сахара(поле) имя / тип',
+    'api = Заказы / 1.0.0',
+    '  ..пути',
+    '    путь = /orders / Список',
+    '      метод = get / Список заказов .ответ 200',
+    '  ..схемы',
+    '    схема = Заказ',
+    '      поле = id / целое .обязательное да'
+  ].join('\n');
+  const sugarOpenApi = new YarbpOpenAPIConverter(buildAST(sugarOpenApiCode).ast).convert();
+  check('L-2: OpenAPI — заголовок/путь/глагол/схема/поле',
+    sugarOpenApi.info?.title === 'Заказы' &&
+    sugarOpenApi.paths?.['/orders']?.get?.summary === 'Список заказов' &&
+    sugarOpenApi.components?.schemas?.['Заказ']?.properties?.id?.type === 'integer',
+    JSON.stringify(sugarOpenApi).slice(0, 400));
+
+  const sugarSchemaCode = [
+    '! как схема',
+    '! типизация-сахара(схема) имя',
+    '! типизация-сахара(поле) имя / тип',
+    'api = Заказ',
+    '  ..схемы',
+    '    схема = Заказ',
+    '      поле = id / целое'
+  ].join('\n');
+  const sugarSchema = new YarbpJsonSchemaConverter(buildAST(sugarSchemaCode).ast).convert();
+  check('L-2: JSON Schema — имя схемы и поля из свойств',
+    sugarSchema.$defs?.['Заказ']?.properties?.id?.type === 'integer',
+    JSON.stringify(sugarSchema).slice(0, 400));
+
+  const sugarXpmCode = [
+    '! как кпо',
+    '! типизация-сахара(участник) имя',
+    '! типизация-сахара(точка) имя',
+    'участник = Актор',
+    '  точка = Первая'
+  ].join('\n');
+  const sugarXpm = new YarbpXPMConverter(buildAST(sugarXpmCode).ast).convert();
+  check('L-2: XPM — роль и точка из свойств, свойства не стали плитками',
+    (sugarXpm.tiles || []).some(tile => tile.config?.roleName === 'Актор') &&
+    (sugarXpm.tiles || []).some(tile => tile.config?.title === 'Первая') &&
+    (sugarXpm.tiles || []).length === 2,
+    JSON.stringify(sugarXpm).slice(0, 400));
+
+  const builtinExamples = new FileManager('yarbp_converters_builtins')._getDefaultData();
+  const xpmExample = builtinExamples.files.find(file => file.id === 'builtin-7');
+  const bpmnExample = builtinExamples.files.find(file => file.id === 'builtin-8');
+  let xpmExampleResult = null;
+  let bpmnExampleXml = '';
+  let builtinError = '';
+  try {
+    xpmExampleResult = new YarbpXPMConverter(buildAST(xpmExample.content).ast).convert();
+    bpmnExampleXml = new YarbpBPMNConverter(buildAST(bpmnExample.content).ast).convert();
+  } catch (error) {
+    builtinError = String(error && error.message || error);
+  }
+  check('L-2: встроенные XPM/BPMN-примеры с сахаром собираются',
+    !builtinError && (xpmExampleResult.tiles || []).length > 0 &&
+    bpmnExampleXml.includes('bpmn:definitions'),
+    builtinError || 'нет результата');
 
   /* ------------------------------------------------------------------ */
   resultBox.textContent = lines.join('\n') + '\n';

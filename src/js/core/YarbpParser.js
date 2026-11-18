@@ -1,6 +1,7 @@
-import { TokenTypes } from './YarbpLexer.js';
+import { YarbpLexer, TokenTypes } from './YarbpLexer.js';
 import { splitWithEscaping, dedentMultilineString } from '../utils/utils.js'
 import { expandMacros } from './macroPostprocess.js'
+import { applySugarTyping, applyImports } from './languageDirectives.js'
 
 export const nodeTypes = Object.freeze({
   ROOT: 'ROOT',           /* single general root for document*/
@@ -88,6 +89,12 @@ export class YarbpParser {
     this.cachedTokens = null;
     this.cachedAST = null;
     this.cachedDiagnostics = [];
+    this.cachedImportVersion = null;
+
+    /* Импорт объектов из других документов песочницы: резолвер и версия
+       содержимого файлов. Без резолвера проход импорта не запускается. */
+    this.importResolver = null;
+    this.importVersionProvider = null;
 
     /* Нефатальные замечания раскрытия подстановок (нет ключа, цикл и т.п.).
        В AST не попадают, чтобы не менять golden-снимки и контракт конвертеров. */
@@ -318,11 +325,51 @@ export class YarbpParser {
     return text.includes('@') || text.includes('((');
   }
 
+  /**
+   * Подключить резолвер файлов для `! импорт`.
+   *
+   * @param {Function} resolver — ключ файла → {ok, id, name, content} или
+   *   {ok:false, reason, candidates}; см. FileManager.resolveImport.
+   * @param {Function} [versionProvider] — версия содержимого файлов: при её
+   *   изменении кэш AST пересобирается, даже если текст текущего документа
+   *   не менялся.
+   */
+  setImportResolver(resolver, versionProvider = null) {
+    this.importResolver = typeof resolver === 'function' ? resolver : null;
+    this.importVersionProvider = typeof versionProvider === 'function' ? versionProvider : null;
+    this.invalidate();
+  }
+
+  /** Сбросить кэш AST (например, после изменения другого файла). */
+  invalidate() {
+    this.cachedTokens = null;
+    this.cachedAST = null;
+    this.cachedDiagnostics = [];
+    this.cachedImportVersion = null;
+  }
+
+  /**
+   * Разбор импортируемого документа: без резолвера импорта (MVP — один
+   * уровень), но со своими макросами и своим `! типизация-сахара`.
+   */
+  parseImportedFile(text) {
+    const lexer = new YarbpLexer();
+    lexer.setInitialState(text);
+    lexer.tokenize();
+    const parser = new YarbpParser(lexer);
+    return {
+      ast: parser.getAST(),
+      diagnostics: parser.lastDiagnostics || [],
+    };
+  }
+
   getAST() {
     // Пока токены не пересобраны, AST тот же: за один пересчёт его просят
     // дважды (подсказки и рендерер). `tokenize()` создаёт новый массив токенов,
     // поэтому ссылка — надёжный признак «документ не менялся».
-    if (this.cachedAST && this.cachedTokens === this.lexer.tokens) {
+    const importVersion = this.importVersionProvider ? this.importVersionProvider() : 0;
+    if (this.cachedAST && this.cachedTokens === this.lexer.tokens &&
+        this.cachedImportVersion === importVersion) {
       this.lastDiagnostics = this.cachedDiagnostics;
       return this.cachedAST;
     }
@@ -339,10 +386,34 @@ export class YarbpParser {
       ? expandMacros(ast, diagnostics, this.lexer?.text || '')
       : withChildren(ast);
 
+    /* Импорт объектов из других документов — до L-2: файл-источник
+       приходит уже со своим раскрытым сахаром. */
+    if (this.importResolver) {
+      applyImports(result, {
+        tokens: this.lexer?.tokens || [],
+        sourceText: this.lexer?.text || '',
+        diagnostics,
+        resolveImport: this.importResolver,
+        parseFile: text => this.parseImportedFile(text),
+      });
+    }
+
+    /* Языковые директивы (`! типизация-сахара`) меняют AST до конвертеров:
+       `тег = 1 / 2` превращается в явные `.свойство 1`. Без директив проход
+       ничего не делает и не трогает старые документы. */
+    applySugarTyping(result, {
+      tokens: this.lexer?.tokens || [],
+      sourceText: this.lexer?.text || '',
+      diagnostics,
+      resolveType: value => this.resolveType(value),
+      resolveValue: value => this.resolveValue(value),
+    });
+
     deepFreeze(result);
     this.cachedTokens = this.lexer.tokens;
     this.cachedAST = result;
     this.cachedDiagnostics = diagnostics;
+    this.cachedImportVersion = importVersion;
     this.lastDiagnostics = diagnostics;
     return result;
   }

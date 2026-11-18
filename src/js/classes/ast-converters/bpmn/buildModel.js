@@ -9,6 +9,7 @@ import {
 } from './BpmnModel.js';
 import {
   IdGenerator, extractExplicitId, childValue, readBounds, readJoinBounds,
+  nodeName, nodeText,
 } from './utils.js';
 import {
   TASK_TAG_MAP, DEFAULT_TASK_TAG,
@@ -184,11 +185,11 @@ function buildProcess(node, ctx) {
   // B-7: `.ид` у процесса нужен, чтобы на него можно было ссылаться из
   // `задача .тип вызов .вызывает = <ид>`. Без `.ид` — как раньше, авто-id.
   process.id = extractExplicitId(node) || ctx.idGen.next('Process');
-  process.name = node.value;
+  process.name = nodeName(node);
   // B-7: `.исполняемый да` → isExecutable, `.пул = <имя>` → имя пула-участника.
   // Без ключей поведение прежнее, поэтому старые схемы не меняются.
   process.isExecutable = isFlagOn(childValue(node, 'исполняемый'));
-  process.poolName = childValue(node, 'пул') || node.value;
+  process.poolName = childValue(node, 'пул') || nodeName(node) || null;
   process.bounds = readBounds(node);
   process.position = node.position;
   process._pendingArtifacts = {
@@ -202,7 +203,7 @@ function buildProcess(node, ctx) {
   const rolesNode = children.find(c => c.key === 'роли');
   if (rolesNode) {
     for (const roleNode of rolesNode.children || []) {
-      const laneName = childValue(roleNode, 'имя') || roleNode.value || null;
+      const laneName = nodeName(roleNode) || null;
       const lane = new BpmnLane(ctx.idGen.next('Lane'), laneName);
       lane.bounds = readBounds(roleNode);
       process.lanes.push(lane);
@@ -285,7 +286,7 @@ function buildNode(node, ctx, process, opts) {
  * ------------------------------------------------------------------ */
 
 function buildEvent(node, ctx, process, opts) {
-  const name       = node.value || null;
+  const name       = nodeName(node);
   const explicitId = extractExplicitId(node);
   const location   = childValue(node, 'расположение');
   const typeValue  = childValue(node, 'тип');
@@ -360,16 +361,10 @@ function idPrefixForEvent(tag) {
  * ------------------------------------------------------------------ */
 
 function buildTask(node, ctx, process, opts) {
-  const name       = node.value || null;
+  const name       = nodeName(node);
   const explicitId = extractExplicitId(node);
   const typeValue  = childValue(node, 'тип');
   const tag        = TASK_TAG_MAP[typeValue] || DEFAULT_TASK_TAG;
-
-  // Имя задачи берётся из значения после «=»; `.имя` внутри узла не читается,
-  // но выглядит правдоподобно — поэтому предупреждаем, а не молчим.
-  if (childValue(node, 'имя') !== null) {
-    warn(ctx, node, 'имя задачи берётся из значения после «=»: .имя игнорируется');
-  }
 
   const roleValue = childValue(node, 'роль');
   if (roleValue !== null) {
@@ -444,11 +439,9 @@ function readLoopCharacteristics(node) {
 function buildArtifacts(node, task, ctx, process, opts) {
   const artifacts = (node.children || []).filter(isArtifact);
   for (const art of artifacts) {
-    // Значение у артефакта обязательно, но `данные Товар` без «=» разбирается
-    // как узел без значения, а слово «Товар» вообще не попадает в AST
-    // (дефект §17.5 №13). Показать это в предупреждении — единственное, что
-    // можно сделать на уровне конвертера, не трогая парсер.
-    if (art.value === undefined || art.value === null) {
+    // Значение у артефакта обязательно, но оно может прийти и явным
+    // свойством (`.имя`, `.текст`) после `! типизация-сахара`.
+    if (nodeText(art) === '') {
       warn(ctx, art, 'у артефакта «' + art.key + '» нет значения — ' +
         'пишите «' + art.key + ' = <значение>»');
     }
@@ -466,7 +459,7 @@ function buildArtifacts(node, task, ctx, process, opts) {
 }
 
 function buildComment(node, task, ctx, process) {
-  const text = node.value || '';
+  const text = nodeText(node);
   const id = ctx.idGen.next('TextAnnotation');
   const ta = new BpmnTextAnnotation({ id, text });
   // bounds посчитает BpmnDiGenerator после layout
@@ -498,7 +491,7 @@ function resolveDataObject(process, ctx, name) {
 }
 
 function buildDataObject(node, task, ctx, process) {
-  const name = node.value || null;
+  const name = nodeName(node);
   const dataObjectId = resolveDataObject(process, ctx, name);
 
   const refId = ctx.idGen.next('DataObjectReference');
@@ -521,7 +514,7 @@ function buildDataObject(node, task, ctx, process) {
 
 /** `.данные-вход Товар` — задача читает данные (dataInputAssociation). */
 function buildDataInput(node, task, ctx, process) {
-  const name = node.value || null;
+  const name = nodeName(node);
   const dataObjectId = resolveDataObject(process, ctx, name);
 
   const refId = ctx.idGen.next('DataObjectReference');
@@ -544,7 +537,7 @@ function buildDataInput(node, task, ctx, process) {
 
 /** `.группа = <имя>` — рамка группы вокруг задачи (B-7). */
 function buildGroup(node, task, ctx, process) {
-  const name = node.value || null;
+  const name = nodeName(node);
 
   // По BPMN у группы нет своего имени: подпись живёт в categoryValue.
   let category = process._category;
@@ -565,7 +558,7 @@ function buildGroup(node, task, ctx, process) {
 }
 
 function buildDataStore(node, task, ctx, process) {
-  const name = node.value || null;
+  const name = nodeName(node);
   const id = ctx.idGen.next('DataStoreReference');
   const ref = new BpmnDataStoreReference({ id, name });
 
@@ -630,7 +623,7 @@ function buildBoundaryBranches(node, parentTask, ctx, process, opts) {
   const branches = [];
   for (const segment of segments) {
     const boundaryNode = segment[0];
-    const name = boundaryNode.value || null;
+    const name = nodeName(boundaryNode);
     const explicitId = extractExplicitId(boundaryNode);
     const id = explicitId || ctx.idGen.next('BoundaryEvent');
     const boundary = new BpmnFlowNode({ id, tag: 'boundaryEvent', name });
@@ -677,7 +670,7 @@ function buildBoundaryBranches(node, parentTask, ctx, process, opts) {
  * ------------------------------------------------------------------ */
 
 function buildGateway(node, ctx, process, opts) {
-  const name       = node.value || null;
+  const name       = nodeName(node);
   const explicitId = extractExplicitId(node);
   const typeValue  = childValue(node, 'тип');
   const tag        = GATEWAY_TAG_MAP[typeValue] || DEFAULT_GATEWAY_TAG;
@@ -810,7 +803,7 @@ function buildGateway(node, ctx, process, opts) {
  * ------------------------------------------------------------------ */
 
 function buildSubProcess(node, ctx, process, opts) {
-  const name       = node.value || null;
+  const name       = nodeName(node);
   const explicitId = extractExplicitId(node);
   const id = explicitId || ctx.idGen.next('Activity');
   const self = new BpmnFlowNode({ id, tag: 'subProcess', name });

@@ -5,6 +5,15 @@ import { resolveContext } from './contextResolver.js';
 const HINT = '▼ Alt';
 
 export class SuggestionProvider {
+  constructor() {
+    this.fileCatalog = null;
+  }
+
+  /** Источник имён файлов для подсказок `! импорт`. */
+  setFileCatalog(provider) {
+    this.fileCatalog = typeof provider === 'function' ? provider : null;
+  }
+
   update({ tokens, ast, cursorOffset, text, flavor, force = false }) {
     if (!tokens || !tokens.length) return null;
     if (this.isInsideCodeBlock(tokens, cursorOffset)) return null;
@@ -70,6 +79,10 @@ export class SuggestionProvider {
     }
 
     const directiveName = parts[0];
+    if (directiveName.toLowerCase() === 'импорт') {
+      return this.resolveImportDirectiveContext(token, cursorOffset, text, force);
+    }
+
     const entry = COMMON_DIRECTIVES.values[directiveName];
     if (!entry) return null;
 
@@ -79,6 +92,46 @@ export class SuggestionProvider {
     const sorted = this.sortByPrefix(entry.variants, prefix);
     if (!sorted.length) return null;
     return { suggestions: sorted, blockDoc: entry.blockDoc || '', replaceFrom: from, replace: true, prefix: word };
+  }
+
+  /**
+   * `! импорт <объект> из <файл>`: после `из ` подсказываем имена файлов
+   * проекта. Файлы с пробелами вставляются в кавычках — как требует парсер.
+   */
+  resolveImportDirectiveContext(token, cursorOffset, text, force) {
+    const valueUpToCursor = token.value.slice(0, this.offsetInValue(token, cursorOffset));
+    const match = valueUpToCursor.match(/\sиз\s+([\s\S]*)$/iu);
+    if (!match) return null;
+
+    const after = match[1];
+    const prefix = after.trim().replace(/^"/, '').replace(/"$/, '');
+    const fileStartInValue = valueUpToCursor.length - after.length;
+    const replaceFrom = token.start + 1 + fileStartInValue;
+    const files = this.fileCatalog ? this.fileCatalog() : [];
+
+    if (!files.length) return null;
+
+    const variants = files.map(file => {
+      const needsQuotes = /\s/.test(file.name);
+      return {
+        label: file.name,
+        insert: needsQuotes ? '"' + file.name + '"' : file.name,
+        doc: (file.slug ? 'slug: ' + file.slug : 'файл проекта') +
+          (file.isActive ? ' · текущий' : ''),
+      };
+    });
+
+    const sorted = this.sortByPrefix(variants, prefix);
+    if (!sorted.length) return null;
+    if (!force && prefix && sorted.some(v => v.label === prefix)) return null;
+
+    return {
+      suggestions: sorted,
+      blockDoc: 'Файлы проекта для импорта',
+      replaceFrom,
+      replace: true,
+      prefix,
+    };
   }
 
   resolveFlavorContext(ast, cursorOffset, text, config, force) {
