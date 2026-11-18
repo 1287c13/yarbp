@@ -65,7 +65,7 @@ pointer-events: none; z-index: 1; margin: 0; border: none; }
 .ide-code-val { color: #335272; text-decoration: none; }
 .ide-code-type { color: #b800d5; text-decoration: none; }
 /* Фрагмент кода: границы рисует основной проход, содержимое — отложенный. */
-.ide-code-codeblock { background-color: #f4f7fb; }
+.ide-code-codeblock { }
 .ide-code-fence { color: #6a737d; }
 .ide-code-body .code-kw { color: #0033b3; }
 .ide-code-body .code-str { color: #a31515; }
