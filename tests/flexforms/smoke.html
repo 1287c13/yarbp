@@ -27,7 +27,7 @@
    run_tests.py сравнивает с builtin-ir.json побайтово. */
 import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
 import { FlexFormsRenderer } from '../../src/js/classes/renderers/FlexFormsRenderer.js';
-import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
+import { buildFormPage, formConfigError, formConfigWarnings } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
 import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
 import { YarbpParser } from '../../src/js/core/YarbpParser.js';
 import { flexFormsSuggestions } from '../../src/js/suggestions/flexFormsSuggestions.js';
@@ -150,6 +150,35 @@ try {
       версияКонфига: irConfig.версияКонфига,
       watch: irConfig.watch,
     }));
+
+  /* Проверка контракта перед выгрузкой (кнопка «Конфиг»): структурные ошибки
+     блокируют экспорт, мягкие замечания — нет. Правило «не блокировать из-за
+     замечаний» держится только на этом коде, поэтому проверяется здесь. */
+  const legacyConfig = { type: 'форма', children: [] };
+  const legacyWarnings = formConfigWarnings(legacyConfig);
+  expect('выгрузка: пример проходит проверку без ошибок и замечаний',
+    formConfigError(irConfig) === '' && formConfigWarnings(irConfig).length === 0,
+    formConfigError(irConfig) + ' / ' + JSON.stringify(formConfigWarnings(irConfig)));
+  const brokenConfig = { type: 'форма' };
+  expect('выгрузка: нет массива children — блокирующая ошибка',
+    formConfigError(brokenConfig).indexOf('children') !== -1 &&
+    formConfigError(null).indexOf('не собрана') !== -1,
+    formConfigError(brokenConfig) + ' / ' + formConfigError(null));
+  expect('выгрузка: старый конфиг без «типКлиента» не блокируется, но с замечанием',
+    formConfigError(legacyConfig) === '' &&
+    legacyWarnings.some(text => text.indexOf('типКлиента') !== -1) &&
+    formConfigWarnings({ ...legacyConfig, watch: ['Номенклатура'] })
+      .some(text => text.indexOf('watch') !== -1),
+    JSON.stringify(legacyWarnings));
+  expect('выгрузка: пустой «код» обработчика — замечание, не ошибка',
+    formConfigError({
+      type: 'форма', children: [], 'типКлиента': 'ПодборТовара',
+      'обработчики': { 'формированиеКэша': [{ 'имяТипа': 'Справочник.Номенклатура', 'код': '   ' }] },
+    }) === '' &&
+    formConfigWarnings({
+      type: 'форма', children: [], 'типКлиента': 'ПодборТовара',
+      'обработчики': { 'формированиеКэша': [{ 'имяТипа': 'Справочник.Номенклатура', 'код': '   ' }] },
+    }).some(text => text.indexOf('пустой «код»') !== -1));
 
   const container = document.querySelector('#render-pane .ui-render-container');
   expect('контейнер предпросмотра создан', !!container);

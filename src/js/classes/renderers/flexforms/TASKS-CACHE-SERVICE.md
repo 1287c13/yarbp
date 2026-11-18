@@ -9,9 +9,12 @@
 Состояние на момент написания: конструктор выгружает конфиг под контракт
 расширения, движок умеет работать с кэш-сервисом — ключ из `?key=` →
 `localStorage.ff_token`, заголовок `X-Api-Key` у хука, отправки и пинга,
-`Idempotency-Key` у отправки, `401` → `/v1/clients/auth?type=…`. Проверено
-живьём: `tests/flexforms/auth-contract.html` (18 проверок, заглушка
-`tests/flexforms/auth_server.py`) — зелёное.
+`Idempotency-Key` у отправки, `401` → `/v1/clients/auth?type=…`. Адрес входа
+берётся от корня хоста кэш-сервиса, а не склеивается с `сервис` (адресом
+1С-шлюза) — иначе на проде получался бы `/rt_m_bot/hs/dp/v1/clients/auth`.
+Проверено живьём: `tests/flexforms/auth-contract.html` (23 проверки, заглушка
+`tests/flexforms/auth_server.py`) — зелёное; тест публикует форму именно с
+адресом шлюза, поэтому склейку адреса входа он ловит.
 
 Порядок = приоритет; задача 1 обязательна, без неё остальное не видно на ТСД.
 
@@ -113,6 +116,30 @@ curl -s -o /dev/null -w '%{http_code}\n' 'http://<host>/v1/clients/latest?type=�
 
 ---
 
+## 5. Разрешить `X-Api-Key` и `Idempotency-Key` в CORS (кэш-сервис или шлюз)
+
+`X-Api-Key` и `Idempotency-Key` — не «простые» заголовки: браузер сперва шлёт
+`OPTIONS` (preflight), и если сервис не разрешил их, ключ доступа не уедет, а
+запрос упадёт до отправки. Пока страница и хук живут на одном хосте, preflight
+не наступает; как только `.хук`/`.урл` указывают на другой хост (или на 1С-базу
+напрямую, как в примере `http://127.0.0.1:8765/rt_m_bot/hs/dp`), — наступает.
+
+**Что сделать.** На ответах `/link`, `/processing`, `/ping` (и на `OPTIONS` к ним):
+
+```text
+Access-Control-Allow-Origin: <origin страницы или *>
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: Content-Type, X-Api-Key, Idempotency-Key
+Access-Control-Max-Age: 600
+```
+
+**Приёмка.** `curl -i -X OPTIONS <адрес>/link -H "Origin: https://tsd.local" \
+-H "Access-Control-Request-Headers: x-api-key, idempotency-key"` → `204` и оба
+заголовка в `Access-Control-Allow-Headers`. В заглушке теста это уже сделано
+(`tests/flexforms/auth_server.py`, `CORS_HEADERS`).
+
+---
+
 ## Что принято как есть (менять не нужно)
 
 | Решение | Почему |
@@ -122,3 +149,4 @@ curl -s -o /dev/null -w '%{http_code}\n' 'http://<host>/v1/clients/latest?type=�
 | в конфиге нет `хэш`, `автор`, `дата`, `auth` | читателей в 1С нет; ключ доступа — только в `localStorage` и заголовке (ADR-13) |
 | `watch` — массив имён `Справочник.Имя` / `Документ.Имя` | так его пишет конвертер (`..watch`), так его ждёт подписка обновления кэша |
 | `обработчики` — свойство корня без `type` | так его собирает `OBJECT_PROPS` конвертера; разбор в 1С читает корень, а не `children` |
+| страница входа — `/v1/clients/auth` от корня хоста кэш-сервиса | `сервис` в конфиге — адрес 1С-шлюза с префиксом базы; склейка дала бы `/rt_m_bot/hs/dp/v1/clients/auth` и 404. Проверяет `auth-contract.html` |

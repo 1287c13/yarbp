@@ -9,11 +9,12 @@
        requested_fields}`;
     3. отправка уходит с `X-Api-Key` и `Idempotency-Key`; одинаковое тело даёт
        тот же ключ, другое — другой (ADR-14);
-    4. `401` уводит форму на общую страницу входа `/v1/clients/auth?type=…` и
-       снимает негодный ключ.
+    4. `401` уводит форму на общую страницу входа `/v1/clients/auth?type=…` (по корню
+       хоста кэш-сервиса, а не по адресу 1С-шлюза из `сервис`) и снимает негодный ключ.
 
   Сервер-заглушка — auth_server.py (его поднимает run_tests.py), адрес приходит
-  в `?base=`. Страница теста и «сервис» живут на одном origin, как в проде.
+  в `?base=`. Страница теста и «сервис» живут на одном origin, как в проде;
+  `сервис` в конфиге — адрес 1С-шлюза с префиксом базы (`/rt_m_bot/hs/dp`).
 -->
 <html lang="ru">
 <head><meta charset="utf-8"><title>AUTH CONTRACT</title></head>
@@ -28,6 +29,10 @@ import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexForm
 import { FileManager } from '../../src/js/modules/FileManager.js';
 
 const BASE = new URLSearchParams(location.search).get('base') || '';
+/* Адрес 1С-шлюза с префиксом базы — так `сервис` выглядит в проде
+   (`http://127.0.0.1:8765/rt_m_bot/hs/dp`). Страница входа живёт по корню хоста
+   кэш-сервиса, поэтому склеивать её с `сервис` нельзя: получится 404. */
+const GW = BASE + '/rt_m_bot/hs/dp';
 const TOKEN = 'ffk_0123abcd_0123456789abcdef0123456789abcdef';
 
 const report = [];
@@ -67,11 +72,28 @@ async function main() {
 
   /* 1. Публикация: страница собирается тем же кодом, что кнопка «HTML». */
   const ir = exampleIR();
-  ir['сервис'] = BASE;
+  ir['сервис'] = GW;
   const html = buildFormPage(ir, { standalone: true });
   const published = await (await fetch(BASE + '/publish', { method: 'POST', body: html })).json();
   expect('страница собрана и опубликована', !!published.ok && published.length > 10000,
     JSON.stringify(published));
+
+  /* 1a. CORS: `X-Api-Key` и `Idempotency-Key` — не «простые» заголовки, поэтому
+     браузер сперва спрашивает preflight. Если сервис их не разрешил, ключ доступа
+     не уедет вовсе. Заглушка показывает, как должен отвечать настоящий сервис. */
+  const preflight = await fetch(BASE + '/link', {
+    method: 'OPTIONS',
+    headers: {
+      'Origin': location.origin,
+      'Access-Control-Request-Headers': 'x-api-key, idempotency-key',
+    },
+  });
+  const allowedHeaders = (preflight.headers.get('access-control-allow-headers') || '').toLowerCase();
+  expect('preflight: сервис разрешает X-Api-Key и Idempotency-Key',
+    preflight.status === 204 &&
+    allowedHeaders.indexOf('x-api-key') !== -1 &&
+    allowedHeaders.indexOf('idempotency-key') !== -1,
+    preflight.status + ' / ' + allowedHeaders);
 
   /* 2. Выдача с ключом: как `/v1/clients/latest?key=…`. */
   const frame = document.getElementById('frame');
@@ -93,11 +115,17 @@ async function main() {
   expect('ключ сохранён для следующих запросов',
     frame.contentWindow.localStorage.getItem('ff_token') === TOKEN);
 
-  /* 3. Хук штрихкода: тело и заголовок по контракту. */
+  /* 3. Склейка адресов и хук штрихкода: тело и заголовок по контракту. */
+  expect('движок склеил «сервис» + относительный «хук»',
+    win.resolveFormUrl('/link', GW) === GW + '/link',
+    win.resolveFormUrl('/link', GW));
+  expect('форма взяла адрес сервиса из конфига', win.state.serviceUrl === GW,
+    String(win.state.serviceUrl));
+
   const hookMessage = {
     type: 'Штрихкод', field: 'Штрихкод', id: '4600000000017', requested_fields: ['a1_f2', 'a1_f3'],
   };
-  const hookReply = await win.handleHookRequest(BASE + '/link', hookMessage);
+  const hookReply = await win.handleHookRequest(GW + '/link', hookMessage);
   expect('хук ответил строкой товара',
     !!(hookReply && hookReply.message && hookReply.message.requested_fields.length),
     JSON.stringify(hookReply).slice(0, 160));
@@ -105,14 +133,14 @@ async function main() {
   /* 4. Отправка: два одинаковых тела и одно другое. */
   const body = { fields: [{ id: 'a1_f1', value: '4600000000017', name: 'Штрихкод' }], table: [] };
   const other = { fields: [{ id: 'a1_f1', value: '4600000000024', name: 'Штрихкод' }], table: [] };
-  await win.sendMessage(body, BASE + '/processing', 'a2');
-  await win.sendMessage(body, BASE + '/processing', 'a2');
-  await win.sendMessage(other, BASE + '/processing', 'a2');
+  await win.sendMessage(body, GW + '/processing', 'a2');
+  await win.sendMessage(body, GW + '/processing', 'a2');
+  await win.sendMessage(other, GW + '/processing', 'a2');
 
   /* 5. Что реально получил сервис. */
   const log = (await (await fetch(BASE + '/log')).json()).requests;
-  const link = log.filter(item => item.path === '/link').slice(-1)[0];
-  const sends = log.filter(item => item.path === '/processing');
+  const link = log.filter(item => item.route === '/link').slice(-1)[0];
+  const sends = log.filter(item => item.route === '/processing');
 
   const header = (item, name) => {
     const keys = Object.keys((item && item.headers) || {});
@@ -120,6 +148,8 @@ async function main() {
     return found ? String(item.headers[found]) : '';
   };
 
+  expect('хук дошёл по пути 1С-шлюза (сервис + /link)',
+    !!link && link.path === '/rt_m_bot/hs/dp/link', link ? link.path : 'запроса нет');
   expect('хук: ключ доступа в заголовке X-Api-Key', header(link, 'x-api-key') === TOKEN,
     header(link, 'x-api-key'));
   const linkBody = link ? JSON.parse(link.body) : {};
@@ -149,7 +179,7 @@ async function main() {
 
   /* 6. 401: форма уходит на общую страницу входа, негодный ключ снят. */
   let rejected = false;
-  try { await win.sendMessage(body, BASE + '/processing401', 'a2'); }
+  try { await win.sendMessage(body, GW + '/processing401', 'a2'); }
   catch (e) { rejected = true; }
   expect('401 — это ошибка отправки, а не «успех»', rejected);
 
@@ -158,6 +188,10 @@ async function main() {
     return location.pathname === '/v1/clients/auth' ? location : null;
   });
   expect('401 уводит на страницу входа /v1/clients/auth', !!authLocation,
+    authLocation ? authLocation.href : frame.contentWindow.location.href);
+  expect('страница входа — по корню хоста, без префикса базы 1С',
+    !!authLocation && authLocation.pathname === '/v1/clients/auth' &&
+    authLocation.href.indexOf('rt_m_bot') === -1,
     authLocation ? authLocation.href : frame.contentWindow.location.href);
   if (authLocation) {
     const type = new URLSearchParams(authLocation.search).get('type');
