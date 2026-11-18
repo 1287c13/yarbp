@@ -942,6 +942,43 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
     child(slashNode, 'подсказка')?.value === 'шт.',
     slashNode ? JSON.stringify(plain(slashNode)) : 'нет узла');
 
+  for (const separator of [',', '|']) {
+    const parsed = build(join(
+      '! as ast',
+      '! типизация-сахара(поле) имя ' + separator + ' ид',
+      'поле = A ' + separator + ' B'
+    ));
+    const node = child(parsed.ast, 'поле');
+    check('L-2: разделитель «' + separator + '»',
+      child(node, 'имя')?.value === 'A' && child(node, 'ид')?.value === 'B',
+      node ? JSON.stringify(plain(node)) : 'нет узла');
+  }
+
+  const sugarDuplicate = build(join(
+    '! as ast',
+    '! типизация-сахара(поле) имя',
+    '! типизация-сахара(поле) имя / ид',
+    'поле = A / B'
+  ));
+  const duplicateNode = child(sugarDuplicate.ast, 'поле');
+  check('L-2: дубль директивы — последняя выигрывает, есть предупреждение',
+    child(duplicateNode, 'имя')?.value === 'A' &&
+    child(duplicateNode, 'ид')?.value === 'B' &&
+    sugarDuplicate.parser.lastDiagnostics.some(item => /повторно/.test(item.message)),
+    JSON.stringify(sugarDuplicate.parser.lastDiagnostics));
+
+  const sugarExtra = build(join(
+    '! as ast',
+    '! типизация-сахара(поле) имя / ид',
+    'поле = A / B / C'
+  ));
+  const extraNode = child(sugarExtra.ast, 'поле');
+  check('L-2: лишние сегменты видны в диагностике',
+    child(extraNode, 'имя')?.value === 'A' &&
+    child(extraNode, 'ид')?.value === 'B' &&
+    sugarExtra.parser.lastDiagnostics.some(item => /сегментов больше/.test(item.message)),
+    JSON.stringify(sugarExtra.parser.lastDiagnostics));
+
   const sugarEmpty = build(join(
     '! as ast',
     '! типизация-сахара(поле) имя / подсказка / обязательный',
@@ -1004,6 +1041,32 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
     uiA === uiB && uiA.includes('placeholder="Введите имя"') &&
     uiA.includes('required') && uiA.includes('шт.'),
     uiA === uiB ? 'HTML совпал' : 'HTML различается');
+
+  const optionSugar = build(join(
+    '! как форма',
+    '! типизация-сахара(опция) представление / значение',
+    'форма',
+    '  поле:выбор = Магазин',
+    '    опция = Розница / shop-1'
+  ));
+  const optionHtml = new UIGenerator(false).generateHTML(optionSugar.ast);
+  check('L-2: опция читает представление/значение',
+    optionHtml.includes('value="shop-1"') && optionHtml.includes('>Розница</option>'),
+    optionHtml.slice(0, 300));
+
+  const captionSugar = build(join(
+    '! как форма',
+    '! типизация-сахара(кнопка) подпись',
+    '! типизация-сахара(надпись) текст',
+    'форма',
+    '  кнопка = Добавить',
+    '    .навигация #tabs.список',
+    '  надпись = Привет'
+  ));
+  const captionHtml = new UIGenerator(false).generateHTML(captionSugar.ast);
+  check('L-2: кнопка читает подпись, надпись — текст',
+    captionHtml.includes('>Добавить</button>') && captionHtml.includes('>Привет</div>'),
+    captionHtml.slice(0, 300));
 
   /* ------------------------------------------------------------------ */
   /* 15. L-1: импорт объекта из файла проекта                            */
