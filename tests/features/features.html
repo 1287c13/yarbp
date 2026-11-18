@@ -954,6 +954,38 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
       node ? JSON.stringify(plain(node)) : 'нет узла');
   }
 
+  const globalSugar = build(join(
+    '! as ast',
+    '! типизация-сахара лэйбл / значение',
+    'поле = A / B',
+    'опция = X / Y'
+  ));
+  const globalField = child(globalSugar.ast, 'поле');
+  const globalOption = child(globalSugar.ast, 'опция');
+  check('L-2: без тега правило применяется ко всем тегам',
+    child(globalField, 'лэйбл')?.value === 'A' &&
+    child(globalField, 'значение')?.value === 'B' &&
+    child(globalOption, 'лэйбл')?.value === 'X' &&
+    child(globalOption, 'значение')?.value === 'Y',
+    JSON.stringify({ поле: plain(globalField), опция: plain(globalOption) }));
+
+  const specificVsGlobal = build(join(
+    '! as ast',
+    '! типизация-сахара имя / ид',
+    '! типизация-сахара(поле) лэйбл / значение',
+    'поле = A / B',
+    'опция = X / Y'
+  ));
+  const overriddenField = child(specificVsGlobal.ast, 'поле');
+  const inheritedOption = child(specificVsGlobal.ast, 'опция');
+  check('L-2: частное правило тега важнее глобального',
+    child(overriddenField, 'лэйбл')?.value === 'A' &&
+    child(overriddenField, 'значение')?.value === 'B' &&
+    !child(overriddenField, 'имя') &&
+    child(inheritedOption, 'имя')?.value === 'X' &&
+    child(inheritedOption, 'ид')?.value === 'Y',
+    JSON.stringify({ поле: plain(overriddenField), опция: plain(inheritedOption) }));
+
   const sugarDuplicate = build(join(
     '! as ast',
     '! типизация-сахара(поле) имя',

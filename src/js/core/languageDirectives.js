@@ -13,6 +13,7 @@
 const MEANING = 'MEANING';
 
 const SUGAR_RE = /^\s*типизация-сахара\s*\(\s*([^\s()]+)\s*\)\s*([\s\S]*)$/iu;
+const SUGAR_GLOBAL_RE = /^\s*типизация-сахара(?=\s|$)\s*([\s\S]+)$/iu;
 const NAME_RE = /^[\p{L}\p{N}_-]+$/u;
 const PART_RE = /[\p{L}\p{N}_-]+|[^\s\p{L}\p{N}_-]+/gu;
 
@@ -39,24 +40,20 @@ export function collectDirectives(tokens, sourceText = '') {
 }
 
 /**
- * `типизация-сахара(<тег>) имя-1 / имя-2` → {tag, names, separator}.
+ * Имена свойств и разделитель из правой части директивы.
  *
  * Разделитель — единственная серия символов вне `[\p{L}\p{N}_-]`, например
  * `/`, `//`, `,`, `|`. Одно имя можно объявить без разделителя. Любая
  * неоднозначность (разные разделители, лишний/недостающий разделитель,
  * пустые имена) — не директива, возвращаем null.
  */
-export function parseSugarDirective(value) {
-  const match = String(value ?? '').match(SUGAR_RE);
-  if (!match) return null;
-
-  const tag = match[1].trim();
-  const rest = match[2].trim();
-  if (!tag || !rest) return null;
+function parseSugarNames(rest) {
+  const text = String(rest ?? '').trim();
+  if (!text) return null;
 
   const names = [];
   const separators = [];
-  for (const part of rest.matchAll(PART_RE)) {
+  for (const part of text.matchAll(PART_RE)) {
     const token = part[0];
     if (NAME_RE.test(token)) names.push(token);
     else separators.push(token);
@@ -66,14 +63,36 @@ export function parseSugarDirective(value) {
 
   if (!separators.length) {
     if (names.length !== 1) return null;
-    return { tag, names, separator: null };
+    return { names, separator: null };
   }
 
   const separator = separators[0];
   if (separators.some(item => item !== separator)) return null;
   if (separators.length !== names.length - 1) return null;
 
-  return { tag, names, separator };
+  return { names, separator };
+}
+
+/**
+ * `типизация-сахара(<тег>) имя-1 / имя-2` → {tag, names, separator}.
+ *
+ * Без скобок (`типизация-сахара имя-1 / имя-2`) тег не указан: правило
+ * применяется ко всем тегам (`tag: null`). Частное правило для тега важнее
+ * глобального.
+ */
+export function parseSugarDirective(value) {
+  const text = String(value ?? '');
+  const specific = text.match(SUGAR_RE);
+  if (specific) {
+    const tag = specific[1].trim();
+    const names = tag ? parseSugarNames(specific[2]) : null;
+    return names ? { tag, ...names } : null;
+  }
+
+  const global = text.match(SUGAR_GLOBAL_RE);
+  if (!global) return null;
+  const names = parseSugarNames(global[1]);
+  return names ? { tag: null, ...names } : null;
 }
 
 /**
@@ -155,9 +174,10 @@ export function applySugarTyping(ast, options = {}) {
     const spec = parseSugarDirective(directive.value);
     if (!spec) continue;
     if (specs.has(spec.tag)) {
+      const scope = spec.tag === null ? 'все теги' : 'тег «' + spec.tag + '»';
       diagnostics.push({
-        message: 'директива «типизация-сахара» для тега «' + spec.tag +
-          '» объявлена повторно — используется последняя',
+        message: 'директива «типизация-сахара» для ' + scope +
+          ' объявлена повторно — используется последняя',
         start: directive.start,
       });
     }
@@ -166,6 +186,7 @@ export function applySugarTyping(ast, options = {}) {
 
   if (!specs.size) return ast;
 
+  const synthetic = new WeakSet();
   const visit = (node) => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
@@ -173,9 +194,15 @@ export function applySugarTyping(ast, options = {}) {
       return;
     }
 
-    if (node.nodeType === MEANING &&
-        typeof node.value === 'string') {
-      const spec = specs.get(baseKey(node.key));
+    /* Синтетические свойства этого прохода не разворачиваем повторно:
+       иначе глобальное правило применяется к самому себе бесконечно. */
+    if (synthetic.has(node)) return;
+
+    const sugarValue = typeof node.value === 'string' &&
+      (node.prefix !== '.' || node.value.startsWith('='));
+
+    if (node.nodeType === MEANING && sugarValue) {
+      const spec = specs.get(baseKey(node.key)) || specs.get(null);
       if (spec) {
         const clean = node.value.replace(/^=\s*/, '');
         const parts = splitSugarValue(clean, spec.separator);
@@ -204,8 +231,9 @@ export function applySugarTyping(ast, options = {}) {
             });
             continue;
           }
-          node.children.push(makeProperty(
-            part, key, position, resolveType, resolveValue));
+          const property = makeProperty(part, key, position, resolveType, resolveValue);
+          synthetic.add(property);
+          node.children.push(property);
         }
 
         delete node.value;
