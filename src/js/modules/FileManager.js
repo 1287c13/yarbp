@@ -212,12 +212,10 @@ export class FileManager {
           name: 'JSON',
           slug: 'json',
           content: `! as json
-! типизация-сахара(заказ) номер / статус
 :
   .order_id 12345
   .status "new"
   .is_active yes
-  :заказ = 42 / новый
   :client .first_name Jack .last_name White .id '54312'
   ..items
     : .sku ART-001 .price 1299.99`,
@@ -229,12 +227,10 @@ export class FileManager {
           name: 'XML, anonymous objects',
           slug: 'xml-anonymous',
           content: `! as xml
-! типизация-сахара(заказ) номер / статус
 :
   .order_id 12345
   .status "new"
   .is_active yes
-  :заказ = 42 / новый
   :client .first_name Jack .last_name White .id '54312'
   ..items
     : .sku ART-001 .price 1299.99`,
@@ -246,9 +242,7 @@ export class FileManager {
           name: 'XML, explicit objects',
           slug: 'xml-explicit',
           content: `! as xml
-! типизация-сахара(заказ) номер / статус
 order .order_id 12345 .status "new" .is_active yes
-  заказ = 42 / новый
   client .first_name Jack .last_name White .id '54312'
   items
     item
@@ -277,10 +271,6 @@ Order
           name: 'XPO, full example',
           slug: 'xpo',
           content: `! как КПО
-! типизация-сахара(участник) имя
-! типизация-сахара(точка) имя
-! типизация-сахара(разделитель) имя
-! типизация-сахара(событие) имя
 
 дорожка
 
@@ -366,11 +356,6 @@ Order
           name: 'BPMN',
           slug: 'bpmn',
           content: `! как БПМН
-! типизация-сахара(процесс) имя / ид
-! типизация-сахара(задача) имя / ид
-! типизация-сахара(событие) имя / ид
-! типизация-сахара(шлюз) имя / ид
-! типизация-сахара(подпроцесс) имя / ид
 
 процесс = Процесс 1
   ..роли
@@ -435,9 +420,6 @@ Order
           // не дублируются — их подставляет конвертер (см. FlexFormsConvertor).
           // Таблица описана поколоночно, как в актуальном синтаксисе.
           content: `! как форма-тсд
-! типизация-сахара(операция) имя / ид
-! типизация-сахара(поле) имя / ид
-! типизация-сахара(таблица) имя / ид
 
 форма
   .заголовокФормы Отправка данных в 1С

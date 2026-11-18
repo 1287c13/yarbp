@@ -1599,7 +1599,7 @@
   } catch (error) {
     builtinError = String(error && error.message || error);
   }
-  check('L-2: встроенные XPM/BPMN-примеры с сахаром собираются',
+  check('L-2: встроенные XPM/BPMN-примеры собираются',
     !builtinError && (xpmExampleResult.tiles || []).length > 0 &&
     bpmnExampleXml.includes('bpmn:definitions'),
     builtinError || 'нет результата');
