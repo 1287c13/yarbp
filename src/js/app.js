@@ -686,8 +686,14 @@ if (textarea) {
   textarea.addEventListener('keydown', (e) => {
     if (YarbpAppGlobals.suggestionUI.handleKey(e)) return;
 
-    // Alt — принудительный вызов подсказок
-    if (e.key === 'Alt' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    // Alt и Ctrl+Space — принудительный вызов подсказок. В начале строки
+    // список сам не открывается (там hint и Tab = отступ), поэтому явный
+    // вызов — единственный способ посмотреть варианты, не начиная ввод.
+    const isAlt = e.key === 'Alt' && !e.shiftKey && !e.ctrlKey && !e.metaKey;
+    const isCtrlSpace = e.code === 'Space' && e.ctrlKey &&
+      !e.altKey && !e.shiftKey && !e.metaKey;
+
+    if (isAlt || isCtrlSpace) {
       e.preventDefault();
 
       let ast = null;
@@ -710,6 +716,13 @@ if (textarea) {
         else YarbpAppGlobals.suggestionUI.hide();
       });
       return;
+    }
+
+    // Обычное движение каретки закрывает список: он привязан к позиции,
+    // в которой был открыт. Alt+стрелки не трогаем — это чужие шорткаты.
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']
+        .includes(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      YarbpAppGlobals.suggestionUI.hide();
     }
 
     // Ctrl+/ (и Cmd+/ на macOS) — массовое комментирование/раскомментирование
@@ -735,7 +748,14 @@ if (textarea) {
         indentLines(textarea, start, end);
       }
       else {
+        const before = textarea.value;
         document.execCommand('insertText', false, '  ');
+        // execCommand устарел и в некоторых окружениях (в т.ч. headless)
+        // молча ничего не делает. Отступ обязан появиться в любом случае.
+        if (textarea.value === before) {
+          textarea.setRangeText('  ', start, start, 'end');
+        }
+        textarea.setSelectionRange(start + 2, start + 2);
       }
 
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -763,8 +783,17 @@ if (textarea) {
         }
 
         if (spacesToRemove > 0) {
-          textarea.setSelectionRange(start - spacesToRemove, start);
+          const before = textarea.value;
+          const target = start - spacesToRemove;
+          textarea.setSelectionRange(target, start);
           document.execCommand('insertText', false, '');
+          if (textarea.value === before) {
+            textarea.setRangeText('', target, start, 'end');
+          }
+          // Каретка — на первый непробельный символ. Иначе после удаления
+          // отступа она остаётся на переводе строки, и следующий Alt
+          // продолжает контекст предыдущей строки.
+          textarea.setSelectionRange(target, target);
         }
       }
 

@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>autocomplete scenario</title>
+<link rel="stylesheet" href="../../src/css/editor.css">
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; color: #111; }
+  #code-pane { position: relative; width: 900px; height: 420px; margin: 8px; }
+  #code-textarea {
+    width: 100%; height: 100%; box-sizing: border-box;
+    padding: 10px; resize: none; border: 1px solid #ccc;
+    font: 12px/1.5 'JetBrains Mono', Consolas, monospace;
+    white-space: pre; overflow: auto;
+  }
+  #result { margin: 0; padding: 12px; white-space: pre-wrap;
+    font: 12px/1.45 'JetBrains Mono', Consolas, monospace; }
+</style>
+</head>
+<body>
+<div id="code-pane">
+  <textarea id="code-textarea" spellcheck="false"></textarea>
+</div>
+<pre id="result">running...</pre>
+<script>
+  window.addEventListener('unhandledrejection', (event) => {
+    const box = document.getElementById('result');
+    if (!box) return;
+    box.textContent = 'REJECTION: ' +
+      ((event.reason && (event.reason.stack || event.reason.message)) ||
+       String(event.reason));
+    document.title = 'AUTOCOMPLETE FAIL';
+  });
+  window.addEventListener('error', (event) => {
+    const box = document.getElementById('result');
+    if (!box) return;
+    box.textContent = 'LOAD ERROR: ' + (event.message || '') +
+      ' @ ' + (event.filename || '') + ':' + (event.lineno || '');
+  });
+</script>
+<script type="module">
+import { YarbpLexer, TokenTypes } from '../../src/js/core/YarbpLexer.js';
+import { YarbpParser } from '../../src/js/core/YarbpParser.js';
+import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
+import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
+import { SuggestionProvider } from '../../src/js/suggestions/SuggestionProvider.js';
+import { SuggestionUI } from '../../src/js/suggestions/SuggestionUI.js';
+import { Ticker } from '../../src/js/utils/Ticker.js';
+
+const resultBox = document.getElementById('result');
+const lines = [];
+const stages = [];
+let failed = 0;
+
+function stage(name) {
+  stages.push(name);
+  document.title = 'AUTOCOMPLETE … ' + name;
+}
+
+function check(name, ok, detail = '') {
+  if (!ok) failed++;
+  lines.push((ok ? 'ok   ' : 'FAIL ') + name + (ok || !detail ? '' : ' — ' + detail));
+}
+
+function join(...parts) { return parts.join('\n'); }
+function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+function fail(message) {
+  const last = stages.length ? stages[stages.length - 1] : 'сценарий';
+  throw new Error(last + ': ' + message);
+}
+
+/* ------------------------------------------------------------------ */
+/* Стенд: настоящие SuggestionProvider/SuggestionUI и тот же контракт  */
+/* клавиш, что в app.js (Tab = отступ в начале строки, Alt/Ctrl+Space — */
+/* вызов, Escape — закрыть). Тяжёлый рендерер ТСД здесь не участвует.  */
+/* ------------------------------------------------------------------ */
+const pane = document.getElementById('code-pane');
+const editor = document.getElementById('code-textarea');
+const view = window;
+const lexer = new YarbpLexer();
+const parser = new YarbpParser(lexer);
+const provider = new SuggestionProvider();
+const ticker = new Ticker();
+const ui = new SuggestionUI(editor, pane);
+const popup = ui.root;
+
+let pendingUpdateFrame = 0;
+
+function currentFlavor() {
+  const directive = lexer.tokens.find(token =>
+    token.type === TokenTypes.DIRECTIVE &&
+    YarbpFlavor.isFlavorDirective(token.value));
+  return new YarbpFlavor(directive ? directive.value : 'as lexer');
+}
+
+function scheduleSuggestions(flavor, ast, force = false) {
+  ticker.schedule(() => {
+    const result = provider.update({
+      tokens: lexer.tokens,
+      ast,
+      cursorOffset: editor.selectionStart,
+      text: editor.value,
+      flavor,
+      force,
+    });
+    if (result) ui.show(result);
+    else ui.hide();
+  });
+}
+
+function updateViews() {
+  lexer.setInitialState(editor.value);
+  lexer.tokenize();
+
+  let ast = null;
+  try {
+    ast = parser.getAST();
+  } catch (error) {
+    console.error('[autocomplete-test] AST build failed:', error);
+  }
+
+  scheduleSuggestions(currentFlavor(), ast);
+}
+
+function scheduleUpdateViews() {
+  if (pendingUpdateFrame) return;
+
+  pendingUpdateFrame = requestAnimationFrame(() => {
+    pendingUpdateFrame = 0;
+    updateViews();
+  });
+
+  // Страховка для headless: rAF может не прийти, а подсказки должны обновиться.
+  setTimeout(() => {
+    if (!pendingUpdateFrame) return;
+    cancelAnimationFrame(pendingUpdateFrame);
+    pendingUpdateFrame = 0;
+    updateViews();
+  }, 100);
+}
+
+function fireInput() {
+  editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+}
+
+editor.addEventListener('input', scheduleUpdateViews);
+
+editor.addEventListener('keydown', (e) => {
+  if (ui.handleKey(e)) return;
+
+  const isAlt = e.key === 'Alt' && !e.shiftKey && !e.ctrlKey && !e.metaKey;
+  const isCtrlSpace = e.code === 'Space' && e.ctrlKey &&
+    !e.altKey && !e.shiftKey && !e.metaKey;
+
+  if (isAlt || isCtrlSpace) {
+    e.preventDefault();
+
+    let ast = null;
+    try {
+      ast = parser.getAST();
+    } catch (error) {
+      console.error('[autocomplete-test] AST build failed:', error);
+    }
+
+    scheduleSuggestions(currentFlavor(), ast, true);
+    return;
+  }
+
+  if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']
+      .includes(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    ui.hide();
+  }
+
+  if (e.key === 'Tab' && !e.shiftKey) {
+    e.preventDefault();
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+
+    if (start === end) {
+      const before = editor.value;
+      document.execCommand('insertText', false, '  ');
+      if (editor.value === before) {
+        editor.setRangeText('  ', start, start, 'end');
+      }
+      editor.setSelectionRange(start + 2, start + 2);
+    }
+
+    fireInput();
+  } else if (e.key === 'Tab' && e.shiftKey) {
+    e.preventDefault();
+    const start = editor.selectionStart;
+    let spaces = 0;
+
+    if (start >= 2 && editor.value.slice(start - 2, start) === '  ') spaces = 2;
+    else if (start >= 1 && editor.value[start - 1] === ' ') spaces = 1;
+
+    if (spaces > 0) {
+      const before = editor.value;
+      const target = start - spaces;
+      editor.setSelectionRange(target, start);
+      document.execCommand('insertText', false, '');
+      if (editor.value === before) {
+        editor.setRangeText('', target, start, 'end');
+      }
+      editor.setSelectionRange(target, target);
+    }
+
+    fireInput();
+  }
+});
+
+stage('harness ready');
+check('стенд: поле ввода и меню подсказок созданы',
+  !!editor && !!popup);
+
+function type(text, delay = 180) {
+  const start = editor.selectionStart;
+  const end = editor.selectionEnd;
+  editor.setRangeText(text, start, end, 'end');
+  fireInput();
+  return wait(delay);
+}
+
+function newline(indent, delay = 180) {
+  return type('\n' + ' '.repeat(Math.max(0, indent)), delay);
+}
+
+function press(key, options = {}, delay = 180) {
+  const event = new view.KeyboardEvent('keydown', {
+    key,
+    code: options.code || key,
+    bubbles: true,
+    cancelable: true,
+    ...options,
+  });
+  editor.dispatchEvent(event);
+  return wait(delay).then(() => event);
+}
+
+function menuOpen() {
+  return !!popup && popup.hidden === false;
+}
+
+function menuState() {
+  if (!menuOpen()) return 'closed';
+  return popup.classList.contains('hint-mode') ? 'hint' : 'list';
+}
+
+function labels() {
+  return Array.from(popup.querySelectorAll('.suggestion-list li'))
+    .map(item => item.textContent.trim());
+}
+
+function activeLabel() {
+  const active = popup.querySelector('.suggestion-list li.active');
+  return active ? active.textContent.trim() : '';
+}
+
+function hintText() {
+  const hint = popup.querySelector('.suggestion-hint');
+  return hint && !hint.hidden ? hint.textContent.trim() : '';
+}
+
+async function waitState(state, timeout = 1200) {
+  // Счётчик попыток, а не Date.now(): в headless-режиме с
+  // --virtual-time-budget часы могут стоять, пока таймеры «перематываются».
+  const attempts = Math.max(1, Math.ceil(timeout / 40));
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (menuState() === state) return true;
+    await wait(40);
+  }
+  return menuState() === state;
+}
+
+async function waitLabels(expected, timeout = 900) {
+  const attempts = Math.max(1, Math.ceil(timeout / 60));
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (menuState() === 'list' && labels().includes(expected)) return true;
+    await wait(60);
+  }
+  return menuState() === 'list' && labels().includes(expected);
+}
+
+function activate(label) {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (activeLabel().startsWith(label)) return true;
+    editor.dispatchEvent(new view.KeyboardEvent('keydown', {
+      key: 'ArrowDown', code: 'ArrowDown', bubbles: true, cancelable: true,
+    }));
+  }
+  return activeLabel().startsWith(label);
+}
+
+/**
+ * Набрать префикс, дождаться списка, проверить ожидаемый вариант и принять
+ * его клавишей Tab — ровно так, как это делает пользователь.
+ */
+async function complete(prefix, expected, name) {
+  await type(prefix);
+
+  let opened = await waitState('list');
+  if (opened && !labels().includes(expected)) {
+    opened = await waitLabels(expected);
+  }
+  const items = labels();
+
+  if (!opened || !items.includes(expected)) {
+    fail('после «' + prefix + '» нет «' + expected + '» (' +
+      menuState() + ': ' + items.join(' | ') + ')');
+  }
+
+  check(name + ': после «' + prefix + '» открыт список', true);
+  check(name + ': в списке есть «' + expected + '»', true);
+
+  const active = activate(expected);
+  if (!active) {
+    fail('не удалось выбрать «' + expected + '» (активен «' +
+      activeLabel() + '»)');
+  }
+  check(name + ': активен ожидаемый вариант', true);
+
+  await press('Tab', {}, 200);
+  return true;
+}
+
+async function expectHint(name) {
+  const ok = await waitState('hint');
+  if (!ok) {
+    fail(name + ': ожидалась подсказка, а не список (' +
+      menuState() + ': ' + labels().join(' | ') + ')');
+  }
+  if (!hintText().includes('Tab') || !hintText().includes('Alt')) {
+    fail(name + ': текст подсказки не объясняет Tab и Alt (' +
+      hintText() + ')');
+  }
+  check(name + ': показана подсказка, а не список', true);
+}
+
+function expectText(name, expected) {
+  if (editor.value !== expected) {
+    fail(name + ': ожидался текст ' + JSON.stringify(expected) +
+      ', получен ' + JSON.stringify(editor.value.slice(-200)));
+  }
+  check(name, true);
+}
+
+let source = '';
+
+try {
+
+stage('scenario: empty');
+/* ------------------------------------------------------------------ */
+/* 1. Пустой документ: hint вместо списка, Tab = отступ, меню скрывается */
+/* ------------------------------------------------------------------ */
+editor.value = '';
+editor.focus();
+editor.setSelectionRange(0, 0);
+fireInput();
+await wait(250);
+
+await expectHint('пустой документ');
+
+const beforeTab = editor.value;
+const tabEvent = await press('Tab', {}, 180);
+check('Tab в начале строки обработан редактором, а не меню',
+  tabEvent.defaultPrevented);
+check('Tab в начале строки вставил ровно два пробела',
+  editor.value === beforeTab + '  ', JSON.stringify(editor.value));
+check('Tab в начале строки не принял подсказку',
+  editor.value.trim() === '', JSON.stringify(editor.value));
+
+await press('Tab', { shiftKey: true }, 180);
+check('Shift+Tab убрал отступ',
+  editor.value === beforeTab, JSON.stringify(editor.value));
+
+await press('Alt', { altKey: true }, 250);
+let opened = await waitState('list');
+let items = labels();
+check('Alt открывает меню в пустом документе', opened, menuState());
+check('в пустом документе предлагаются директивы',
+  items.includes('! как') && items.includes('! импорт') &&
+  items.includes('! типизация-сахара'),
+  items.join(' | '));
+
+await press('Escape', {}, 160);
+check('Escape скрывает меню', !menuOpen(), menuState());
+check('Escape не меняет текст', editor.value === beforeTab,
+  JSON.stringify(editor.value));
+
+await press(' ', { code: 'Space', ctrlKey: true }, 250);
+opened = await waitState('list');
+check('Ctrl+Space снова открывает меню', opened, menuState());
+await press('Escape', {}, 160);
+
+stage('scenario: directive');
+/* ------------------------------------------------------------------ */
+/* 2. Начало документа только подсказками: ! как форма-тсд            */
+/* ------------------------------------------------------------------ */
+await type('!');
+opened = await waitState('list');
+items = labels();
+check('после «!» список директив обновлён', opened, menuState());
+check('в списке после «!» четыре директивы', items.length === 4,
+  items.join(' | '));
+
+await type('к');
+await wait(300);
+items = labels();
+check('ввод буквы сокращает список до директивы «как»',
+  items.length === 1 && items[0] === 'как', items.join(' | '));
+
+await press('Tab', {}, 250);
+expectText('директива вставлена целиком', '! как ');
+check('курсор после директивы', editor.selectionStart === editor.value.length,
+  String(editor.selectionStart));
+
+opened = await waitState('list');
+items = labels();
+check('после «! как » предложены конвертеры',
+  opened && items.includes('форма-тсд'), items.join(' | '));
+
+await type('ф');
+await wait(300);
+items = labels();
+check('буква «ф» оставляет формы и отсекает остальные конвертеры',
+  items.includes('форма-тсд') && items.includes('форма') &&
+  !items.includes('кпо') && !items.includes('джейсон'), items.join(' | '));
+
+await type('орма-т');
+await wait(300);
+items = labels();
+check('уточнение «орма-т» оставляет только «форма-тсд»',
+  items.length === 1 && items[0] === 'форма-тсд', items.join(' | '));
+
+await press('Tab', {}, 250);
+expectText('конвертер вставлен с переводом строки',
+  '! как форма-тсд\n');
+
+await expectHint('строка после директивы');
+await press('Tab', {}, 180);
+check('Tab после директивы делает отступ',
+  editor.value === '! как форма-тсд\n  ', JSON.stringify(editor.value));
+await press('Tab', { shiftKey: true }, 180);
+
+await press('Alt', { altKey: true }, 250);
+opened = await waitState('list');
+items = labels();
+check('после директивы Alt показывает корень формы',
+  opened && items.includes('форма'), items.join(' | '));
+await press('Tab', {}, 250);
+expectText('корень «форма» вставлен шаблоном',
+  '! как форма-тсд\nформа\n  ');
+
+await expectHint('внутри формы');
+
+stage('scenario: form header');
+/* ------------------------------------------------------------------ */
+/* 3. Свойства формы и обработчики                                    */
+/* ------------------------------------------------------------------ */
+await type('.з');
+await wait(300);
+items = labels();
+check('свойства формы: «.з» даёт два варианта',
+  items.includes('.заголовокФормы') && items.includes('.заголовокПоляДействия'),
+  items.join(' | '));
+
+await type('аголовокФ');
+await wait(300);
+items = labels();
+check('свойства формы: уточнение до «.заголовокФормы»',
+  items.length === 1 && items[0] === '.заголовокФормы', items.join(' | '));
+await press('Tab', {}, 220);
+stage('header: title key inserted');
+await type('Отправка данных в 1С');
+stage('header: title value typed');
+await newline(2);
+stage('header: title newline');
+
+await complete('.сер', '.сервис', 'форма: сервис');
+stage('header: service key');
+await type('http://127.0.0.1:8765/rt_m_bot/hs/dp');
+await newline(2);
+stage('header: service value');
+
+await complete('.типК', '.типКлиента', 'форма: типКлиента');
+stage('header: client key');
+const clientValueShown = await waitLabels('ПодборТовара');
+items = labels();
+check('типКлиента: предложено известное значение',
+  clientValueShown && items.includes('ПодборТовара'), items.join(' | '));
+await press('Tab', {}, 220);
+await newline(2);
+stage('header: client value');
+
+await complete('.вер', '.версияКонфига', 'форма: версияКонфига');
+stage('header: version key');
+await type('"1.0"');
+await newline(2);
+stage('header: version value');
+
+await complete('..под', '..подписки', 'форма: подписки');
+stage('header: subscriptions key');
+await type('Справочник.Номенклатура Справочник.ХарактеристикиНоменклатуры');
+await newline(2);
+stage('header: subscriptions value');
+
+await complete(':об', ':обработчики', 'форма: обработчики');
+await expectHint('внутри обработчиков');
+
+stage('scenario: handlers');
+await complete('..ф', '..формированиеКэша', 'обработчики: кэш');
+await expectHint('внутри формирования кэша');
+
+await type(':');
+opened = await waitState('list');
+items = labels();
+check('строка обработчика: предложен «:»', opened && items.includes(':'),
+  items.join(' | '));
+await press('Tab', {}, 220);
+
+await complete('.и', '.имяТипа', 'кэш: имяТипа');
+await type('Справочник.Номенклатура');
+await newline(8);
+
+await complete('.к', '.код', 'кэш: код');
+await type('(( обработчик-кэш ))');
+await newline(4);
+
+await complete('..с', '..сообщения', 'обработчики: сообщения');
+await complete(':', ':', 'сообщения: строка');
+await complete('.типС', '.типСообщения', 'сообщения: типСообщения');
+await type('ПодборТовара');
+await newline(8);
+
+await complete('.к', '.код', 'сообщения: код');
+await type('(( обработчик-сообщение ))');
+await newline(2);
+
+stage('scenario: operations');
+/* ------------------------------------------------------------------ */
+/* 4. Операции, поля и таблица                                        */
+/* ------------------------------------------------------------------ */
+await complete('оп', 'операция =', 'операция 1');
+await type('Подобрать товар / a1');
+await newline(4);
+
+await complete('.при', '.приемник', 'операция 1: приемник');
+await type('a2_t1');
+await newline(4);
+
+await complete('гр', 'группа', 'операция 1: группа');
+await expectHint('внутри группы 1');
+
+await complete('поле:ш', 'поле:штрихкод', 'группа 1: штрихкод');
+await type('Штрихкод / a1_f1');
+await newline(8);
+
+await complete('.х', '.хук', 'штрихкод: хук');
+await type('/link');
+await newline(8);
+
+await complete('.об', '.объектДляПоиска', 'штрихкод: объектДляПоиска');
+await type('РегистрСведений.ШтрихкодыНоменклатуры');
+await newline(8);
+
+await complete('.по', '.поискПо', 'штрихкод: поискПо');
+await type('Штрихкод');
+await newline(8);
+
+await complete('..при', '..приемник', 'штрихкод: приемник');
+await type('a1_f2 a1_f3 a1_f4');
+await newline(8);
+
+await complete('.вы', '.вызывать', 'штрихкод: вызывать');
+await type('a1');
+await newline(6);
+
+await complete('поле:н', 'поле:надпись', 'группа 1: товар');
+await type('Товар / a1_f2');
+await newline(6);
+
+await complete('поле:н', 'поле:надпись', 'группа 1: характеристика');
+await type('Характеристика / a1_f3');
+await newline(6);
+
+await complete('поле:ч', 'поле:число', 'группа 1: количество');
+await type('Кол‑во / a1_f4');
+await newline(2);
+
+await complete('оп', 'операция =', 'операция 2');
+await type('Отправить результат / a2');
+await newline(4);
+
+await complete('..пров', '..проверятьЗаполнение', 'операция 2: проверки');
+await type('a2_f1 a2_t1');
+await newline(4);
+
+await complete('.ур', '.урл', 'операция 2: урл');
+await type('/processing');
+await newline(4);
+
+await complete('гр', 'группа', 'операция 2: группа 1');
+await expectHint('внутри группы 2');
+
+await complete('поле:в', 'поле:выбор', 'группа 2: магазин');
+await type('Магазин / a2_f1');
+await newline(8);
+
+await complete('.т', '.тип', 'магазин: тип');
+await type('Справочник.Магазины');
+await newline(8);
+
+await complete('..о', '..опции', 'магазин: опции');
+await type(':');
+opened = await waitState('list');
+items = labels();
+check('опции: предложена строка «:»', opened && items.includes(':'),
+  items.join(' | '));
+await press('Tab', {}, 220);
+
+await complete('.з', '.значение', 'опция 1: значение');
+await type('000-000-000-000');
+await newline(12);
+
+await complete('.и', '.имя', 'опция 1: имя');
+await type('Магазин 1');
+await newline(12);
+
+await complete(':', ':', 'опция 2: строка');
+check('опция 2 выровнена на уровень списка',
+  editor.value.endsWith('          :\n            '),
+  JSON.stringify(editor.value.slice(-80)));
+
+await complete('.з', '.значение', 'опция 2: значение');
+await type('000-000-000-001');
+await newline(12);
+
+await complete('.и', '.имя', 'опция 2: имя');
+await type('Магазин 2');
+await newline(4);
+
+await complete('гр', 'группа', 'операция 2: группа 2');
+await expectHint('внутри группы 3');
+
+await complete('табл', 'таблица =', 'группа 3: таблица');
+await type('Товары в заказе / a2_t1');
+await newline(8);
+
+await complete('.ред', '.редактируемая', 'таблица: редактируемая');
+opened = await waitState('list');
+items = labels();
+check('таблица: логическое значение предложено списком',
+  opened && items.includes('да') && items.includes('нет'), items.join(' | '));
+await press('Tab', {}, 220);
+await newline(8);
+
+await complete(':', ':', 'таблица: колонка 1');
+await complete('.и', '.имя', 'колонка 1: имя');
+await type('Товар');
+await newline(10);
+
+await complete('.приемник:Справочник.Н', '.приемник:Справочник.Номенклатура',
+  'колонка 1: приемник');
+await type('Номенклатура');
+await newline(10);
+
+await complete(':', ':', 'таблица: колонка 2');
+await complete('.и', '.имя', 'колонка 2: имя');
+await type('Характеристика');
+await newline(10);
+
+await complete('.приемник:Справочник.Х', '.приемник:Справочник.ХарактеристикиНоменклатуры',
+  'колонка 2: приемник');
+await type('Характеристика');
+await newline(10);
+
+await complete(':', ':', 'таблица: колонка 3');
+await complete('.и', '.имя', 'колонка 3: имя');
+await type('Кол‑во');
+await newline(10);
+
+await complete('.приемник:Число', '.приемник:Число(15,3)',
+  'колонка 3: приемник');
+await type('Количество');
+await newline(0);
+
+stage('scenario: macros');
+/* ------------------------------------------------------------------ */
+/* 5. Макросы обработчиков — произвольные значения, набираются вручную */
+/* ------------------------------------------------------------------ */
+await type('.обработчик-кэш', 120);
+await newline(0, 120);
+await type('```bsl\n// code cache\n```', 220);
+await newline(0, 120);
+
+await type('.обработчик-сообщение', 120);
+await newline(0, 120);
+await type('```bsl\n// code message\n```', 220);
+await newline(0, 120);
+
+stage('scenario: parse');
+/* ------------------------------------------------------------------ */
+/* 6. Разметка разбирается, AST и IR содержат всю форму                */
+/* ------------------------------------------------------------------ */
+source = editor.value;
+
+check('сценарий: разметка не пустая', source.length > 500,
+  String(source.length));
+
+const lexer = new YarbpLexer();
+lexer.setInitialState(source);
+lexer.tokenize();
+
+const badTokens = lexer.tokens.filter(token => token.type === 'UNPARSED');
+check('итог: лексер не оставил неразобранных токенов',
+  badTokens.length === 0,
+  badTokens.map(token => token.value + ':' + token.error).join(' | '));
+
+let ast = null;
+try {
+  ast = new YarbpParser(lexer).getAST();
+} catch (error) {
+  check('итог: AST собран без исключения', false, String(error));
+}
+check('итог: AST собран', !!ast);
+
+let diagnostics = [];
+let ir = null;
+if (ast) {
+  const parser = new YarbpParser(lexer);
+  ast = parser.getAST();
+  diagnostics = parser.lastDiagnostics || [];
+  check('итог: нет диагностик разбора',
+    diagnostics.length === 0, JSON.stringify(diagnostics).slice(0, 300));
+
+  try {
+    ir = new YarbpFlexFormsConverter(ast).convert();
+  } catch (error) {
+    check('итог: конвертер ТСД собрал IR', false, String(error));
+  }
+}
+
+check('IR: корень — форма', !!ir && ir.type === 'форма');
+check('IR: шапка формы собрана',
+  !!ir && ir['заголовокФормы'] === 'Отправка данных в 1С' &&
+  ir['сервис'] === 'http://127.0.0.1:8765/rt_m_bot/hs/dp' &&
+  ir['типКлиента'] === 'ПодборТовара' &&
+  ir['версияКонфига'] === '1.0' &&
+  Array.isArray(ir['подписки']) && ir['подписки'].length === 2,
+  ir ? JSON.stringify({
+    заголовокФормы: ir['заголовокФормы'],
+    сервис: ir['сервис'],
+    типКлиента: ir['типКлиента'],
+    версияКонфига: ir['версияКонфига'],
+    подписки: ir['подписки'],
+  }) : 'нет IR');
+
+const handlers = ir && ir['обработчики'];
+const cacheRows = (handlers && handlers['формированиеКэша']) || [];
+const messageRows = (handlers && handlers['сообщения']) || [];
+
+check('IR: обработчики — свойство корня, а не узел children',
+  !!handlers && typeof handlers === 'object' && !('type' in handlers));
+check('IR: обработчик кэша собран',
+  cacheRows.length === 1 &&
+  cacheRows[0]['имяТипа'] === 'Справочник.Номенклатура' &&
+  String(cacheRows[0]['код']).includes('code cache') &&
+  cacheRows[0]['язык'] === 'bsl',
+  JSON.stringify(cacheRows).slice(0, 240));
+check('IR: обработчик сообщений собран',
+  messageRows.length === 1 &&
+  messageRows[0]['типСообщения'] === 'ПодборТовара' &&
+  String(messageRows[0]['код']).includes('code message') &&
+  messageRows[0]['язык'] === 'bsl',
+  JSON.stringify(messageRows).slice(0, 240));
+
+function collectNodes(node, output) {
+  if (!node || typeof node !== 'object') return output;
+  if (Array.isArray(node)) {
+    node.forEach(item => collectNodes(item, output));
+    return output;
+  }
+  if (node.type) output.push(node);
+  if (Array.isArray(node.children)) {
+    node.children.forEach(item => collectNodes(item, output));
+  }
+  return output;
+}
+
+const irNodes = collectNodes(ir, []);
+const operations = irNodes.filter(node => node.type === 'операция');
+const fields = irNodes.filter(node => node.type === 'поле');
+const table = irNodes.find(node => node.type === 'таблица');
+const choice = fields.find(field => field['вид'] === 'выбор');
+
+check('IR: обе операции собраны', operations.length === 2,
+  operations.map(item => item['имя']).join(' | '));
+check('IR: первая операция имеет приёмник и поля',
+  operations.length === 2 &&
+  operations[0]['ид'] === 'a1' &&
+  operations[0]['приемник'] === 'a2_t1' &&
+  fields.some(field => field['ид'] === 'a1_f1' && field['хук'] === '/link') &&
+  fields.some(field => field['ид'] === 'a1_f4'),
+  operations.length ? JSON.stringify(operations[0]).slice(0, 300) : 'нет операций');
+check('IR: вторая операция имеет урл и проверки',
+  operations.length === 2 &&
+  operations[1]['ид'] === 'a2' &&
+  operations[1]['урл'] === '/processing',
+  operations.length > 1 ? JSON.stringify(operations[1]).slice(0, 300) : 'нет операции');
+check('IR: поле-выбор собрало опции',
+  !!choice && Array.isArray(choice.children) && choice.children.length === 2 &&
+  choice.children[0]['имя'] === 'Магазин 1' &&
+  choice.children[1]['имя'] === 'Магазин 2',
+  choice ? JSON.stringify(choice.children) : 'нет поля-выбора');
+check('IR: таблица собрана поколоночно',
+  !!table &&
+  table['шапка'].join('|') === 'Товар|Характеристика|Кол‑во' &&
+  table['измерения'].join('|') === 'Товар|Характеристика' &&
+  table['ресурсы'].join('|') === 'Кол‑во' &&
+  table['именаВПриемнике'].join('|') === 'Номенклатура|Характеристика|Количество' &&
+  table['типы'].join('|') ===
+    'Справочник.Номенклатура|Справочник.ХарактеристикиНоменклатуры|Число(15,3)',
+  table ? JSON.stringify({
+    шапка: table['шапка'],
+    измерения: table['измерения'],
+    ресурсы: table['ресурсы'],
+    именаВПриемнике: table['именаВПриемнике'],
+    типы: table['типы'],
+  }) : 'нет таблицы');
+
+} catch (error) {
+  check('сценарий: исключение', false,
+    String(error && (error.stack || error.message) || error));
+}
+
+if (failed) {
+  lines.push('');
+  lines.push('--- итоговая разметка ---');
+  lines.push(source);
+}
+
+resultBox.textContent = lines.join('\n') + '\n';
+document.title = failed ? 'AUTOCOMPLETE FAIL' : 'AUTOCOMPLETE PASS';
+</script>
+</body>
+</html>
+
+

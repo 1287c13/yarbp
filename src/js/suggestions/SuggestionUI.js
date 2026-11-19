@@ -1,9 +1,22 @@
 import { measureCharWidth } from '../utils/utils.js';
 
+let uiCounter = 0;
+
+/**
+ * Меню подсказок с тремя явными состояниями: `idle` / `hint` / `list`.
+ *
+ * - в `hint` (начало строки) список не перехватывает `Tab`: он уходит в
+ *   редактор и делает отступ;
+ * - в `list` `Tab` принимает вариант, `↑`/`↓` выбирают, `Escape` закрывает;
+ * - при непустом выделении `Tab` не «полузаменяет» выделение: меню
+ *   закрывается, а отступ делает редактор.
+ */
 export class SuggestionUI {
   constructor(textarea, container) {
     this.textarea = textarea;
     this.container = container;
+
+    const id = 'yarbp-suggestions-' + (++uiCounter);
 
     this.root = document.createElement('div');
     this.root.className = 'suggestion-popup';
@@ -11,6 +24,8 @@ export class SuggestionUI {
 
     this.list = document.createElement('ul');
     this.list.className = 'suggestion-list';
+    this.list.id = id;
+    this.list.setAttribute('role', 'listbox');
 
     this.blockDocBox = document.createElement('div');
     this.blockDocBox.className = 'suggestion-block-doc';
@@ -21,6 +36,7 @@ export class SuggestionUI {
     this.hintBox = document.createElement('div');
     this.hintBox.className = 'suggestion-hint';
     this.hintBox.hidden = true;
+    this.hintBox.setAttribute('role', 'status');
 
     this.root.appendChild(this.list);
     this.root.appendChild(this.blockDocBox);
@@ -28,9 +44,15 @@ export class SuggestionUI {
     this.root.appendChild(this.hintBox);
     container.appendChild(this.root);
 
+    this.state = 'idle';
     this.activeIndex = 0;
     this.current = null;
-    this.isHintMode = false;
+
+    if (this.textarea) {
+      this.textarea.setAttribute('aria-controls', id);
+      this.textarea.setAttribute('aria-autocomplete', 'list');
+      this.textarea.setAttribute('aria-expanded', 'false');
+    }
 
     this.list.addEventListener('mousedown', (e) => {
       const li = e.target.closest('li');
@@ -42,49 +64,67 @@ export class SuggestionUI {
   }
 
   isOpen() {
-    return !this.root.hidden;
+    return this.state !== 'idle' && !this.root.hidden;
   }
 
   show({ suggestions, blockDoc, replaceFrom, replace, hint, prefix }) {
-    if ((!suggestions || !suggestions.length) && hint) {
+    const variants = suggestions || [];
+
+    if (variants.length) {
+      this.state = 'list';
+      this.current = {
+        suggestions: variants,
+        blockDoc: blockDoc || '',
+        replaceFrom,
+        replace: replace !== false,
+        prefix: prefix || '',
+      };
+      this.activeIndex = this.findActiveIndex(variants, prefix);
+
+      this.root.hidden = false;
+      this.root.classList.remove('hint-mode');
+
+      this.renderList();
+      this.renderDoc();
+      this.renderHint(null);
+      this.position();
+      this.textarea?.setAttribute('aria-expanded', 'true');
+      return;
+    }
+
+    if (hint) {
+      this.state = 'hint';
       this.current = null;
-      this.isHintMode = true;
+      this.activeIndex = 0;
+
+      this.root.hidden = false;
       this.root.classList.add('hint-mode');
+
       this.renderHint(hint);
       this.position();
-      this.root.hidden = false;
+      this.textarea?.setAttribute('aria-expanded', 'true');
       return;
     }
 
-    if (!suggestions || !suggestions.length) {
-      this.hide();
-      return;
-    }
-
-    this.isHintMode = false;
-    this.root.classList.remove('hint-mode');
-    this.current = { suggestions, blockDoc, replaceFrom, replace: replace !== false, prefix };
-    this.activeIndex = this.findActiveIndex(suggestions, prefix);
-
-    this.renderList();
-    this.renderDoc();
-    this.renderHint(null);
-    this.position();
-    this.root.hidden = false;
+    this.hide();
   }
 
   findActiveIndex(suggestions, prefix) {
     if (!prefix) return 0;
-    const p = prefix.toLowerCase();
-    const idx = suggestions.findIndex(s => s.label.toLowerCase().startsWith(p));
+    const p = String(prefix).toLowerCase();
+    const idx = suggestions.findIndex(s =>
+      String(s.label).toLowerCase().startsWith(p));
     return idx >= 0 ? idx : 0;
   }
 
   hide() {
+    this.state = 'idle';
     this.root.hidden = true;
     this.root.classList.remove('hint-mode');
     this.current = null;
-    this.isHintMode = false;
+    this.activeIndex = 0;
+    this.textarea?.setAttribute('aria-expanded', 'false');
+    this.textarea?.removeAttribute('aria-activedescendant');
   }
 
   refresh() {
@@ -95,14 +135,35 @@ export class SuggestionUI {
   renderList() {
     this.list.innerHTML = '';
     this.list.hidden = false;
+    this.blockDocBox.hidden = false;
+    this.itemDocBox.hidden = false;
     if (!this.current) return;
+
     this.current.suggestions.forEach((s, i) => {
       const li = document.createElement('li');
       li.textContent = s.label;
       li.dataset.index = i;
+      li.id = this.list.id + '-item-' + i;
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', i === this.activeIndex ? 'true' : 'false');
       if (i === this.activeIndex) li.classList.add('active');
       this.list.appendChild(li);
     });
+
+    this.updateActiveDescendant();
+  }
+
+  updateActiveDescendant() {
+    if (!this.current) {
+      this.textarea?.removeAttribute('aria-activedescendant');
+      return;
+    }
+    const id = this.list.id + '-item-' + this.activeIndex;
+    this.textarea?.setAttribute('aria-activedescendant', id);
+    const active = this.list.querySelector('li.active');
+    if (active && active.scrollIntoView) {
+      active.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   renderDoc() {
@@ -111,6 +172,7 @@ export class SuggestionUI {
       this.itemDocBox.hidden = true;
       return;
     }
+
     const blockDoc = this.current.blockDoc || '';
     this.blockDocBox.textContent = blockDoc;
     this.blockDocBox.hidden = blockDoc === '';
@@ -122,43 +184,67 @@ export class SuggestionUI {
   }
 
   renderHint(text) {
+    this.list.hidden = true;
+    this.blockDocBox.hidden = true;
+    this.itemDocBox.hidden = true;
+
     if (!text) {
       this.hintBox.hidden = true;
       this.hintBox.textContent = '';
       return;
     }
+
     this.hintBox.textContent = text;
     this.hintBox.hidden = false;
-    this.list.hidden = true;
-    this.blockDocBox.hidden = true;
-    this.itemDocBox.hidden = true;
   }
 
   position() {
-    const offset = this.textarea.selectionStart;
-    const before = this.textarea.value.slice(0, offset);
-    const lines  = before.split('\n');
-    const col    = lines[lines.length - 1].length;
-    const row    = lines.length - 1;
+    const ta = this.textarea;
+    if (!ta) return;
 
-    const taRect = this.textarea.getBoundingClientRect();
-    const cRect  = this.container.getBoundingClientRect();
-    const style  = getComputedStyle(this.textarea);
+    const offset = ta.selectionStart;
+    const before = ta.value.slice(0, offset);
+    const lineStart = before.lastIndexOf('\n') + 1;
+    const lineText = before.slice(lineStart);
+    const row = (before.match(/\n/g) || []).length;
+
+    const taRect = ta.getBoundingClientRect();
+    const cRect = this.container.getBoundingClientRect();
+    const style = getComputedStyle(ta);
 
     const paddingLeft = parseFloat(style.paddingLeft) || 0;
-    const paddingTop  = parseFloat(style.paddingTop) || 0;
-    const fontSize    = parseFloat(style.fontSize) || 12;
-    const lineHeight  = parseFloat(style.lineHeight) || fontSize * 1.5;
-    const charWidth   = measureCharWidth(style, fontSize * 0.6);
+    const paddingRight = parseFloat(style.paddingRight) || 0;
+    const paddingTop = parseFloat(style.paddingTop) || 0;
+    const fontSize = parseFloat(style.fontSize) || 12;
+    const lineHeight = parseFloat(style.lineHeight) || fontSize * 1.5;
+    const charWidth = measureCharWidth(style, fontSize * 0.6);
+    const tabSize = parseInt(style.tabSize, 10) || 2;
+
+    let col = 0;
+    for (const ch of lineText) {
+      col += ch === '\t' ? tabSize - (col % tabSize) : 1;
+    }
 
     const baseLeft = taRect.left - cRect.left;
-    const baseTop  = taRect.top  - cRect.top;
+    const baseTop = taRect.top - cRect.top;
 
-    const x = baseLeft + paddingLeft + col * charWidth - this.textarea.scrollLeft;
-    const y = baseTop  + paddingTop + (row + 1) * lineHeight - this.textarea.scrollTop;
+    let x = baseLeft + paddingLeft + col * charWidth - ta.scrollLeft;
+    let y = baseTop + paddingTop + (row + 1) * lineHeight - ta.scrollTop;
 
-    this.root.style.left = `${x}px`;
-    this.root.style.top  = `${y}px`;
+    const popupWidth = this.root.offsetWidth || 0;
+    const popupHeight = this.root.offsetHeight || 0;
+
+    const maxLeft = Math.max(0, cRect.width - paddingRight - popupWidth);
+    x = Math.min(Math.max(0, x), maxLeft);
+
+    // У нижней границы окна меню переворачивается вверх — как в IDE.
+    const bottom = y + popupHeight;
+    if (bottom > cRect.height && y - lineHeight - popupHeight >= 0) {
+      y = y - lineHeight - popupHeight;
+    }
+
+    this.root.style.left = `${Math.round(x)}px`;
+    this.root.style.top = `${Math.round(y)}px`;
   }
 
   moveUp() {
@@ -182,34 +268,146 @@ export class SuggestionUI {
     if (!s) return;
 
     const ta = this.textarea;
-    const end = ta.selectionStart;
+    const selectionStart = ta.selectionStart;
+    const selectionEnd = ta.selectionEnd;
 
     let start;
-    if (this.current.replace === false) {
-      start = end;
+    let end;
+
+    if (selectionStart !== selectionEnd) {
+      // Выделение заменяем целиком — не «половину» до каретки.
+      start = selectionStart;
+      end = selectionEnd;
+    } else if (this.current.replace === false) {
+      start = selectionStart;
+      end = selectionEnd;
     } else {
-      start = this.current.replaceFrom ?? end;
-      if (start > end) start = end;
+      start = this.current.replaceFrom ?? selectionStart;
+      if (start > selectionStart) start = selectionStart;
+      end = selectionStart;
     }
 
-    ta.setRangeText(s.insert, start, end, 'end');
-    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    start = Math.max(0, Math.min(start, ta.value.length));
+    end = Math.max(start, Math.min(end, ta.value.length));
+
+    const prepared = this.prepareInsert(s.insert ?? s.label ?? '', s, start);
+    start = prepared.start;
+    const finish = start + prepared.text.length;
 
     this.hide();
+    ta.setRangeText(prepared.text, start, end, 'end');
+
+    if (prepared.cursor != null) {
+      const cursor = start + prepared.cursor;
+      ta.setSelectionRange(cursor, cursor);
+    } else if (finish !== ta.selectionStart) {
+      ta.setSelectionRange(finish, finish);
+    }
+
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
   }
+
+  /**
+   * Контракт вставки: `$0` — место каретки, переводы строк получают отступ
+   * текущей строки. Шаблоны в словарях описывают только относительный
+   * отступ, поэтому вложенность не зависит от того, где стоит ключ.
+   */
+  prepareInsert(raw, variant = null, start = null) {
+    const ta = this.textarea;
+    const offset = start == null ? ta.selectionStart : start;
+    const lineStart = ta.value.lastIndexOf('\n', offset - 1) + 1;
+
+    let lineIndent = 0;
+    while (lineStart + lineIndent < ta.value.length) {
+      const ch = ta.value[lineStart + lineIndent];
+      if (ch !== ' ' && ch !== '\t') break;
+      lineIndent++;
+    }
+
+    // Соседняя строка на уровень выше: убираем лишние пробелы не только
+    // у следующих строк шаблона, но и перед самим курсором. Иначе `:` так и
+    // останется в отступе свойств, а не строки.
+    let dedentChars = 0;
+    if (variant?.dedent) {
+      const cursorCol = Math.max(0, offset - lineStart);
+      dedentChars = Math.min(variant.dedent * 2, cursorCol);
+      for (let i = offset - dedentChars; i < offset; i++) {
+        if (ta.value[i] !== ' ' && ta.value[i] !== '\t') {
+          dedentChars = 0;
+          break;
+        }
+      }
+    }
+
+    const adjustedStart = Math.max(lineStart, offset - dedentChars);
+    const baseIndent = ta.value.slice(
+      lineStart, lineStart + Math.max(0, lineIndent - dedentChars));
+
+    const lines = String(raw).split('\n');
+    let text = '';
+    let cursor = null;
+
+    lines.forEach((line, index) => {
+      if (index > 0) text += '\n' + baseIndent;
+
+      const marker = line.indexOf('$0');
+      if (marker >= 0) {
+        cursor = text.length + marker;
+        line = line.slice(0, marker) + line.slice(marker + 2);
+      }
+
+      text += line;
+    });
+
+    return { text, cursor, start: adjustedStart };
+  }
+
 
   handleKey(e) {
     if (!this.isOpen()) return false;
-    if (this.isHintMode) {
-      if (e.key === 'Escape') { e.preventDefault(); this.hide(); return true; }
+
+    // Alt/Ctrl/Cmd — это шорткаты редактора (Alt, Ctrl+Space и т.п.).
+    if (e.ctrlKey || e.metaKey || e.altKey) return false;
+
+    if (this.state === 'hint') {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.hide();
+        return true;
+      }
       return false;
     }
-    switch (e.key) {
-      case 'ArrowUp':   e.preventDefault(); this.moveUp();   return true;
-      case 'ArrowDown': e.preventDefault(); this.moveDown(); return true;
-      case 'Tab':       e.preventDefault(); this.apply();    return true;
-      case 'Escape':    e.preventDefault(); this.hide();     return true;
+
+    if (e.key === 'Tab') {
+      if (e.shiftKey) {
+        this.hide();
+        return false;
+      }
+      if (this.textarea.selectionStart !== this.textarea.selectionEnd) {
+        this.hide();
+        return false;
+      }
+      e.preventDefault();
+      this.apply();
+      return true;
     }
+
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault();
+        this.moveUp();
+        return true;
+      case 'ArrowDown':
+        e.preventDefault();
+        this.moveDown();
+        return true;
+      case 'Escape':
+        e.preventDefault();
+        this.hide();
+        return true;
+    }
+
     return false;
   }
 }
+

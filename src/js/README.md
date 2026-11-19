@@ -16,12 +16,13 @@ utils/
   Ticker.js            отложенный запуск (кулдаун)
 
 suggestions/
-  SuggestionProvider.js  выбор подсказок по контексту
-  SuggestionUI.js        DOM-меню подсказок
-  commonDirectives.js    общие директивы
+  SuggestionProvider.js  выбор подсказок по контексту и фильтрация по префиксу
+  SuggestionUI.js        DOM-меню: Idle/Hint/List, Tab/Alt/Escape, вставка с $0
+  contextResolver.js     контекст AST: parentKey, анонимные объекты, valueStart
+  commonDirectives.js    общие директивы и стартовый список документа
   xpmSuggestions.js      словарь XPM
   bpmnSuggestions.js     словарь BPMN
-  flexFormsSuggestions.js словарь «форма-ТСД»
+  flexFormsSuggestions.js словарь «форма-ТСД» (+ containers для строк ':')
 
 classes/
   YarbpFlavor.js         реестр «директива → конвертер/рендерер»

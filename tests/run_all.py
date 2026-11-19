@@ -28,6 +28,7 @@ SUITES = [
     ('security', 'security'),
     ('files', 'files'),
     ('features', 'features'),
+    ('autocomplete', 'autocomplete'),
     ('converters', 'converters'),
     ('flexforms', 'flexforms'),
     ('openapi2yarbp', 'openapi2yarbp'),

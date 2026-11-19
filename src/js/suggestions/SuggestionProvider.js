@@ -1,8 +1,8 @@
 import { TokenTypes } from '../core/YarbpLexer.js';
-import { COMMON_DIRECTIVES } from './commonDirectives.js';
+import { COMMON_DIRECTIVES, DOCUMENT_DIRECTIVES } from './commonDirectives.js';
 import { resolveContext } from './contextResolver.js';
 
-const HINT = '▼ Alt';
+const HINT = 'Alt — подсказки · Tab — отступ';
 
 export class SuggestionProvider {
   constructor() {
@@ -16,16 +16,29 @@ export class SuggestionProvider {
 
   update({ tokens, ast, cursorOffset, text, flavor, force = false }) {
     if (!tokens || !tokens.length) return null;
+
+    const source = text ?? '';
     if (this.isInsideCodeBlock(tokens, cursorOffset)) return null;
 
-    const directive = this.findDirectiveAt(tokens, cursorOffset);
-    if (directive) return this.resolveDirectiveContext(directive, cursorOffset, text, force);
-
-    if (flavor?.flavorData?.suggestions && ast) {
-      return this.resolveFlavorContext(ast, cursorOffset, text, flavor.flavorData.suggestions, force);
+    const directive = this.findDirectiveAt(tokens, cursorOffset, source);
+    if (directive) {
+      return this.resolveDirectiveContext(directive, cursorOffset, source);
     }
 
-    return null;
+    // Строка начинается с `!`, но директива ещё не собрана лексером.
+    // В этом состоянии нужны директивы, а не свойства текущего флейвора.
+    const lineStart = source.lastIndexOf('\n', cursorOffset - 1) + 1;
+    const lineBefore = source.slice(lineStart, cursorOffset);
+    if (/^\s*!/.test(lineBefore)) {
+      return this.resolveDocumentContext(cursorOffset, source, force);
+    }
+
+    const config = flavor?.flavorData?.suggestions;
+    if (config && ast) {
+      return this.resolveFlavorContext(ast, cursorOffset, source, config, force);
+    }
+
+    return this.resolveDocumentContext(cursorOffset, source, force);
   }
 
   /**
@@ -47,66 +60,106 @@ export class SuggestionProvider {
     return false;
   }
 
-  findDirectiveAt(tokens, cursorOffset) {
+  /**
+   * Директива на текущей строке.
+   *
+   * `DIRECTIVE` лексера покрывает не всю строку (например, `! ` — это токен
+   * с пустым значением), поэтому проверяем не только интервал токена, но и
+   * то, что курсор остался на его строке.
+   */
+  findDirectiveAt(tokens, cursorOffset, text) {
+    const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
+    const newline = text.indexOf('\n', cursorOffset);
+    const lineEnd = newline === -1 ? text.length : newline;
+
     for (const t of tokens) {
       if (t.type !== TokenTypes.DIRECTIVE) continue;
-      const isEmpty = t.start === t.end;
-      const inInterval = t.start < cursorOffset && cursorOffset <= t.end;
-      if (inInterval || (isEmpty && cursorOffset === t.start + 2)) return t;
+      if (t.start < cursorOffset && t.start >= lineStart &&
+          cursorOffset <= lineEnd) {
+        return t;
+      }
     }
+
     return null;
   }
 
-  offsetInValue(token, cursorOffset) {
-    return Math.max(0, Math.min(token.value.length, cursorOffset - token.start - 1));
+  /** Где в тексте начинается значение директивы (после `!` и пробелов). */
+  directiveValueStart(token, text) {
+    let i = token.start;
+    while (i < text.length &&
+           (text[i] === '!' || text[i] === ' ' || text[i] === '\t')) {
+      i++;
+    }
+    return i;
   }
 
-  resolveDirectiveContext(token, cursorOffset, text, force) {
-    const valueUpToCursor = token.value.slice(0, this.offsetInValue(token, cursorOffset));
+  resolveDirectiveContext(token, cursorOffset, text) {
+    const valueStart = this.directiveValueStart(token, text);
+    const valueUpToCursor = text.slice(valueStart, cursorOffset);
     const parts = valueUpToCursor.split(' ').filter(Boolean);
 
-    const charBefore = text && cursorOffset > 0 ? text[cursorOffset - 1] : '';
+    const charBefore = cursorOffset > 0 ? text[cursorOffset - 1] : '';
     const endsWithSpace = charBefore === ' ' || charBefore === '\n' || charBefore === '\t';
 
-    const { from, word } = this.currentWord(text, cursorOffset);
+    const { from } = this.currentWord(text, cursorOffset);
 
     if (parts.length === 0 || (parts.length === 1 && !endsWithSpace)) {
       const prefix = parts[0] ?? '';
-      const sorted = this.sortByPrefix(COMMON_DIRECTIVES.names, prefix);
-      if (!sorted.length) return null;
-      if (!force && sorted.some(v => v.label === prefix)) return null;
-      return { suggestions: sorted, blockDoc: 'Доступные директивы', replaceFrom: from, replace: true, prefix: word };
+      const variants = this.matchVariants(COMMON_DIRECTIVES.names, prefix);
+      if (!variants.length) return null;
+
+      // Пользователь мог набрать `!к` без пробела. Заменяем директиву
+      // целиком (вместе с `!`) и вставляем канонический `! имя ` — иначе
+      // `!` остаётся склеенным с именем.
+      return {
+        suggestions: variants.map(variant => ({
+          ...variant,
+          insert: '! ' + variant.insert,
+        })),
+        blockDoc: 'Доступные директивы',
+        replaceFrom: token.start,
+        replace: true,
+        prefix,
+        mode: 'list',
+      };
     }
 
     const directiveName = parts[0];
     if (directiveName.toLowerCase() === 'импорт') {
-      return this.resolveImportDirectiveContext(token, cursorOffset, text, force);
+      return this.resolveImportDirectiveContext(token, cursorOffset, text);
     }
 
     const entry = COMMON_DIRECTIVES.values[directiveName];
     if (!entry) return null;
 
-    const prefix = parts.length > 1 ? parts[parts.length - 1] : '';
-    if (!force && prefix && entry.variants.some(v => v.label === prefix)) return null;
+    const prefix = endsWithSpace ? '' : (parts[parts.length - 1] ?? '');
+    const variants = this.matchVariants(entry.variants, prefix);
+    if (!variants.length) return null;
 
-    const sorted = this.sortByPrefix(entry.variants, prefix);
-    if (!sorted.length) return null;
-    return { suggestions: sorted, blockDoc: entry.blockDoc || '', replaceFrom: from, replace: true, prefix: word };
+    return {
+      suggestions: variants,
+      blockDoc: entry.blockDoc || '',
+      replaceFrom: from,
+      replace: true,
+      prefix,
+      mode: 'list',
+    };
   }
 
   /**
    * `! импорт <объект> из <файл>`: после `из ` подсказываем имена файлов
    * проекта. Файлы с пробелами вставляются в кавычках — как требует парсер.
    */
-  resolveImportDirectiveContext(token, cursorOffset, text, force) {
-    const valueUpToCursor = token.value.slice(0, this.offsetInValue(token, cursorOffset));
+  resolveImportDirectiveContext(token, cursorOffset, text) {
+    const valueStart = this.directiveValueStart(token, text);
+    const valueUpToCursor = text.slice(valueStart, cursorOffset);
     const match = valueUpToCursor.match(/\sиз\s+([\s\S]*)$/iu);
     if (!match) return null;
 
     const after = match[1];
     const prefix = after.trim().replace(/^"/, '').replace(/"$/, '');
     const fileStartInValue = valueUpToCursor.length - after.length;
-    const replaceFrom = token.start + 1 + fileStartInValue;
+    const replaceFrom = valueStart + fileStartInValue;
     const files = this.fileCatalog ? this.fileCatalog() : [];
 
     if (!files.length) return null;
@@ -121,108 +174,192 @@ export class SuggestionProvider {
       };
     });
 
-    const sorted = this.sortByPrefix(variants, prefix);
-    if (!sorted.length) return null;
-    if (!force && prefix && sorted.some(v => v.label === prefix)) return null;
+    const filtered = this.matchVariants(variants, prefix);
+    if (!filtered.length) return null;
 
     return {
-      suggestions: sorted,
+      suggestions: filtered,
       blockDoc: 'Файлы проекта для импорта',
       replaceFrom,
       replace: true,
       prefix,
+      mode: 'list',
     };
   }
+
+  /** Подсказки до выбора конвертера: с чего начать документ. */
+  resolveDocumentContext(cursorOffset, text, force) {
+    const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
+    const lineBefore = text.slice(lineStart, cursorOffset);
+    const isLineStart = !lineBefore.trim();
+
+    if (!force && isLineStart) {
+      return {
+        suggestions: [],
+        hint: HINT,
+        blockDoc: '',
+        replaceFrom: cursorOffset,
+        replace: true,
+        prefix: '',
+        mode: 'hint',
+      };
+    }
+
+    if (!force && !/^\s*!/.test(lineBefore)) return null;
+
+    const { from, word } = this.currentWord(text, cursorOffset);
+    const variants = this.matchVariants(DOCUMENT_DIRECTIVES.variants, word);
+    if (!variants.length) return null;
+
+    return {
+      suggestions: variants,
+      blockDoc: DOCUMENT_DIRECTIVES.blockDoc,
+      replaceFrom: from,
+      replace: true,
+      prefix: word,
+      mode: 'list',
+    };
+  }
+
 
   resolveFlavorContext(ast, cursorOffset, text, config, force) {
     const ctx = resolveContext(ast, cursorOffset, text);
     if (!ctx) return null;
 
-    const { from: replaceFrom, word: prefix } = this.currentWord(text, cursorOffset);
+    const { from, word } = this.currentWord(text, cursorOffset);
 
     const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
     const lineBeforeCursor = text.slice(lineStart, cursorOffset);
     const isLineStart = !lineBeforeCursor.trim();
 
     if (!force && isLineStart) {
-      return { suggestions: [], hint: HINT, blockDoc: '', replaceFrom, replace: true };
+      return {
+        suggestions: [],
+        hint: HINT,
+        blockDoc: '',
+        replaceFrom: from,
+        replace: true,
+        prefix: '',
+        mode: 'hint',
+      };
     }
 
-    let node = ctx.parentKey !== null ? config.nodes?.[ctx.parentKey] : null;
-    if (!node && ctx.outerKey) {
-      node = config.nodes?.[ctx.outerKey];
-    }
+    const node = this.contextNode(config, ctx);
 
     // 1. value-ветка (приоритет)
     if (ctx.slot === 'value' && ctx.childKey) {
       const childNode = config.nodes?.[ctx.childKey];
       if (childNode) {
-        const filtered = this.sortByPrefix(childNode.variants ?? [], prefix);
+        const wholeValue = childNode.replace !== false && !childNode.quantifier;
+        const prefix = wholeValue ? this.valuePrefix(ctx, text, cursorOffset) : word;
+        const replaceFrom = wholeValue ? (ctx.valueStart ?? from) : from;
+        const filtered = this.matchVariants(childNode.variants ?? [], prefix);
         if (!filtered.length) return null;
-        if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
         return {
           suggestions: filtered,
           blockDoc: childNode.blockDoc || '',
           replaceFrom,
-          replace: childNode.replace ?? true,
+          replace: childNode.replace !== false,
           prefix,
+          mode: 'list',
         };
       }
 
-      if (node) {
-        const valueEntry = node.values?.[ctx.childKey];
-        if (valueEntry) {
-          if (valueEntry.quantifier) {
-            const raw = ctx.rawValue || '';
-            const alreadyTyped = raw.split(valueEntry.quantifier.separator).filter(Boolean);
-            if (alreadyTyped.length >= valueEntry.quantifier.max) return null;
-          }
-          const filtered = this.sortByPrefix(valueEntry.variants, prefix);
-          if (!filtered.length) return null;
-          if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
-          return {
-            suggestions: filtered,
-            blockDoc: valueEntry.blockDoc || '',
-            replaceFrom,
-            replace: valueEntry.replace ?? true,
-            prefix,
-          };
+      const valueEntry = node?.values?.[ctx.childKey] ||
+        config.values?.[ctx.childKey];
+      if (valueEntry) {
+        const raw = this.valuePrefix(ctx, text, cursorOffset);
+
+        if (valueEntry.quantifier) {
+          const alreadyTyped = raw.split(valueEntry.quantifier.separator).filter(Boolean);
+          if (alreadyTyped.length >= valueEntry.quantifier.max) return null;
         }
+
+        const wholeValue = valueEntry.replace !== false && !valueEntry.quantifier;
+        const prefix = wholeValue ? raw : word;
+        const replaceFrom = wholeValue ? (ctx.valueStart ?? from) : from;
+        const filtered = this.matchVariants(valueEntry.variants ?? [], prefix);
+        if (!filtered.length) return null;
+
+        return {
+          suggestions: filtered,
+          blockDoc: valueEntry.blockDoc || '',
+          replaceFrom,
+          replace: valueEntry.replace !== false,
+          prefix,
+          mode: 'list',
+        };
       }
 
       return null;
     }
 
-    // 2. root-ветка
-    if (ctx.parentKey === null && !node && ctx.slot === 'key') {
-      const filtered = this.sortByPrefix(config.root?.variants ?? [], prefix);
+    // 2. key-ветка внутри именованного объекта или анонимного контейнера
+    if (ctx.slot === 'key' && node) {
+      const filtered = this.matchVariants(node.variants ?? [], word);
       if (!filtered.length) return null;
-      if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
+
+      // Внутри строки-объекта (`:`) новый `:` — это соседняя строка, а не
+      // вложенная. Выравниваем её на уровень владельца только тогда, когда
+      // курсор уже стоит глубже уровня самой строки (в её свойствах).
+      const canDedent = ctx.ownerIndent != null &&
+        this.lineIndentAt(text, cursorOffset) > ctx.ownerIndent + 2;
+
+      const variants = filtered.map(variant =>
+        ctx.anonymous && variant.label === ':' && canDedent &&
+        variant.dedent === undefined
+          ? { ...variant, dedent: 1 }
+          : variant);
+
       return {
-        suggestions: filtered,
-        blockDoc: config.root?.blockDoc ?? '',
-        replaceFrom,
-        replace: config.root?.replace ?? true,
-        prefix,
+        suggestions: variants,
+        blockDoc: node.blockDoc || '',
+        replaceFrom: from,
+        replace: node.replace !== false,
+        prefix: word,
+        mode: 'list',
       };
     }
 
-    // 3. key-ветка
-    if (ctx.slot === 'key') {
-      if (!node) return null;
-      const filtered = this.sortByPrefix(node.variants ?? [], prefix);
+    // 3. root-ветка: курсор в корне документа перед первым ключом
+    if (ctx.slot === 'key' && !ctx.anonymous && ctx.parentKey === null &&
+        config.root) {
+      const filtered = this.matchVariants(config.root.variants ?? [], word);
       if (!filtered.length) return null;
-      if (!force && prefix && filtered.some(v => v.label === prefix)) return null;
       return {
         suggestions: filtered,
-        blockDoc: node.blockDoc || '',
-        replaceFrom,
-        replace: node.replace ?? true,
-        prefix,
+        blockDoc: config.root.blockDoc ?? '',
+        replaceFrom: from,
+        replace: config.root.replace !== false,
+        prefix: word,
+        mode: 'list',
       };
     }
 
     return null;
+  }
+
+  /**
+   * Словарь для текущего контейнера.
+   *
+   * У анонимного объекта (`:`) свойства лежат в `containers` его владельца:
+   * колонка таблицы, строка обработчика, опция выпадающего списка. Иначе
+   * берётся обычный `nodes[parentKey]`.
+   */
+  contextNode(config, ctx) {
+    if (ctx.anonymous) {
+      return config.containers?.[ctx.ownerKey] || null;
+    }
+    if (ctx.parentKey !== null) {
+      return config.nodes?.[ctx.parentKey] || null;
+    }
+    return null;
+  }
+
+  /** Набранное значение целиком (для многословных значений и замены `= `). */
+  valuePrefix(ctx, text, cursorOffset) {
+    if (ctx.valueStart == null) return '';
+    return text.slice(ctx.valueStart, cursorOffset);
   }
 
   currentWord(text, cursorOffset) {
@@ -236,13 +373,45 @@ export class SuggestionProvider {
     return { word: text.slice(start, cursorOffset), from: start };
   }
 
-  sortByPrefix(variants, prefix) {
+  lineIndentAt(text, cursorOffset) {
+    const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
+    let i = lineStart;
+    while (i < text.length && (text[i] === ' ' || text[i] === '\t')) i++;
+    return i - lineStart;
+  }
+
+  /**
+   * Фильтр вариантов по набранному префиксу.
+   *
+   * Раньше варианты только сортировались: при вводе `ф` в списке оставались
+   * все конвертеры, а нужный просто поднимался наверх. IDE так не ведёт себя:
+   * список должен сокращаться. Совпадение ищется по метке и по `aliases`.
+   */
+  matchVariants(variants, prefix) {
     if (!prefix) return variants;
-    const p = prefix.toLowerCase();
-    return [...variants].sort((a, b) => {
-      const aMatch = a.label.toLowerCase().startsWith(p) ? 0 : 1;
-      const bMatch = b.label.toLowerCase().startsWith(p) ? 0 : 1;
-      return aMatch - bMatch;
+
+    const p = this.normalize(prefix);
+    const scored = [];
+
+    variants.forEach((variant, index) => {
+      const label = this.normalize(variant.label);
+      const aliases = (variant.aliases || []).map(alias => this.normalize(alias));
+
+      let score = -1;
+      if (label === p) score = 0;
+      else if (label.startsWith(p)) score = 1;
+      else if (aliases.some(alias => alias === p)) score = 2;
+      else if (aliases.some(alias => alias.startsWith(p))) score = 3;
+
+      if (score >= 0) scored.push({ variant, score, index });
     });
+
+    scored.sort((a, b) => a.score - b.score || a.index - b.index);
+    return scored.map(item => item.variant);
+  }
+
+  normalize(value) {
+    return String(value ?? '').toLowerCase().replaceAll('ё', 'е');
   }
 }
+
