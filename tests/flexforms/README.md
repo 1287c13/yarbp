@@ -14,7 +14,7 @@ python yarbp/tests/flexforms/run_tests.py --help
 | `run_tests.py` | раннер: компактный пример «Форма ТСД» в `FileManager` и браузерный дым |
 | `smoke.html` | страница дымового теста: настоящие модули редактора + настоящий пример из «Примеров» |
 | `builtin-ir.json` | ожидаемый IR компактного примера; сверяется с IR, собранным из `FileManager` в браузере |
-| `../../tools/flexforms_mock_server.py` | Python-мок сервера для кнопки «мок-сервер»: хук, отправка, health; только стандартная библиотека |
+| `../../src/js/converters/flexforms/tools/flexforms_mock_server.py` | Python-мок сервера для кнопки «мок-сервер»: хук, отправка, health; только стандартная библиотека |
 
 IR-эталон `builtin-ir.json` собран JS-конвертером редактора
 (`FlexFormsConvertor._applyDefaults`). После осознанной правки умолчаний его
@@ -51,4 +51,4 @@ IR-эталон `builtin-ir.json` собран JS-конвертером ред�
 | `.tbl-head` и `.empty` у пустой таблицы; `.row-add` и правка ячейки | потерянная шапка/счётчик, кнопка «нарисуй строку в DOM», значение, живущее только в DOM |
 
 Описание флейвора и осознанных отличий от легаси — в
-`yarbp/src/js/classes/renderers/flexforms/README.md`.
+`yarbp/src/js/converters/flexforms/README.md`.

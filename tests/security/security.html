@@ -25,12 +25,12 @@
   import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
   import { YarbpParser } from '../../src/js/core/YarbpParser.js';
   import { YarbpHighlighter } from '../../src/js/classes/highlighters/YarbpHighlighter.js';
-  import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
+  import { YarbpFlavor } from '../../src/js/converters/registry.js';
   import { FileManager } from '../../src/js/modules/FileManager.js';
-  import { UIRuntime } from '../../src/js/classes/ui/UIRuntime.js';
-  import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
-  import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
-  import { FLEX_FORMS_RUNTIME } from '../../src/js/classes/renderers/flexforms/FlexFormsRuntime.js';
+  import { UIRuntime } from '../../src/js/converters/ui/runtime.js';
+  import { HTMLExporter } from '../../src/js/converters/ui/exporter.js';
+  import { buildFormPage } from '../../src/js/converters/flexforms/page.js';
+  import { FLEX_FORMS_RUNTIME } from '../../src/js/converters/flexforms/runtime.js';
 
   const resultBox = document.getElementById('result');
   const lines = [];

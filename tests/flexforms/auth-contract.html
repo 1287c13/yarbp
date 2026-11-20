@@ -24,8 +24,8 @@
 <script type="module">
 import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
 import { YarbpParser } from '../../src/js/core/YarbpParser.js';
-import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
-import { buildFormPage } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
+import { YarbpFlexFormsConverter } from '../../src/js/converters/flexforms/converter.js';
+import { buildFormPage } from '../../src/js/converters/flexforms/page.js';
 import { FileManager } from '../../src/js/modules/FileManager.js';
 
 const BASE = new URLSearchParams(location.search).get('base') || '';

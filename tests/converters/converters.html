@@ -33,19 +33,19 @@
    */
   import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
   import { YarbpParser } from '../../src/js/core/YarbpParser.js';
-  import { YarbpJSONConverter } from '../../src/js/classes/ast-converters/JSONConvertor.js';
-  import { YarbpXMLConverter } from '../../src/js/classes/ast-converters/XMLConvertor.js';
-  import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
-  import { YarbpBPMNConverter, getLayoutStats, resetLayoutStats } from '../../src/js/classes/ast-converters/bpmn/YarbpBPMNConverter.js';
-  import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
-  import { YarbpOpenAPIConverter } from '../../src/js/classes/ast-converters/OpenAPIConvertor.js';
-  import { YarbpJsonSchemaConverter } from '../../src/js/classes/ast-converters/JsonSchemaConvertor.js';
-  import { YarbpMermaidConverter } from '../../src/js/classes/ast-converters/MermaidConvertor.js';
-  import { YarbpXPMConverter } from '../../src/js/classes/ast-converters/XPMConverter.js';
-  import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
-  import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
-  import { BPMNRenderer } from '../../src/js/classes/renderers/BPMNRenderer.js';
-  import { XMLHighlighter } from '../../src/js/classes/highlighters/XMLHighlighter.js';
+  import { YarbpJSONConverter } from '../../src/js/converters/json/converter.js';
+  import { YarbpXMLConverter } from '../../src/js/converters/xml/converter.js';
+  import { YarbpProtoConverter } from '../../src/js/converters/protobuf/converter.js';
+  import { YarbpBPMNConverter, getLayoutStats, resetLayoutStats } from '../../src/js/converters/bpmn/converter.js';
+  import { YarbpFlexFormsConverter } from '../../src/js/converters/flexforms/converter.js';
+  import { YarbpOpenAPIConverter } from '../../src/js/converters/openapi/converter.js';
+  import { YarbpJsonSchemaConverter } from '../../src/js/converters/json-schema/converter.js';
+  import { YarbpMermaidConverter } from '../../src/js/converters/mermaid/converter.js';
+  import { YarbpXPMConverter } from '../../src/js/converters/xpm/converter.js';
+  import { UIGenerator } from '../../src/js/converters/ui/generator.js';
+  import { YarbpFlavor } from '../../src/js/converters/registry.js';
+  import { BPMNRenderer } from '../../src/js/converters/bpmn/renderer.js';
+  import { XMLHighlighter } from '../../src/js/converters/shared/XMLHighlighter.js';
   import { FileManager } from '../../src/js/modules/FileManager.js';
 
   const resultBox = document.getElementById('result');

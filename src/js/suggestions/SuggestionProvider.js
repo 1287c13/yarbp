@@ -23,32 +23,43 @@ export class SuggestionProvider {
     const source = text ?? '';
     if (this.isInsideCodeBlock(tokens, cursorOffset)) return null;
 
+    // Уже распознанная директива: подсказки по директивам работают при любом
+    // конвертере, в том числе без собственного словаря.
     const directive = this.findDirectiveAt(tokens, cursorOffset, source);
     if (directive) {
       return this.resolveDirectiveContext(directive, cursorOffset, source);
     }
 
-    // Строка начинается с `!`, но директива ещё не собрана лексером.
-    // В этом состоянии нужны директивы, а не свойства текущего флейвора.
+    const config = flavor?.flavorData?.suggestions;
+
+    // Набран `!` — директива уже начата, даже если лексер ещё не собрал
+    // `DIRECTIVE` (без пробела после `!` есть только `PREFIX`). В этом
+    // состоянии нужны директивы, а не свойства текущего флейвора.
     const lineStart = source.lastIndexOf('\n', cursorOffset - 1) + 1;
     const lineBefore = source.slice(lineStart, cursorOffset);
     if (/^\s*!/.test(lineBefore)) {
       return this.resolveDocumentContext(cursorOffset, source, force);
     }
 
-    const config = flavor?.flavorData?.suggestions;
-    if (config && ast) {
+    /* У конвертера нет словаря контекстных подсказок (`json`, `xml`, `ast`,
+       `openapi`, `мермейд`, …). Меню ему не нужно вовсе: раньше здесь
+       срабатывала ветка «с чего начать документ», и список директив всплывал
+       над готовым текстом — там, где подсказывать нечего, в том числе по Alt.
+       Единственное исключение — начало пустого файла, где без подсказки не
+       узнать про `! как`. Внутри `! …` подсказки выданы выше при любом
+       конвертере. */
+    if (!config) {
+      if (!this.isAtEmptyFileStart(source, cursorOffset)) return null;
+      return this.resolveDocumentContext(cursorOffset, source, force);
+    }
+
+    if (ast) {
       return this.resolveFlavorContext(ast, cursorOffset, source, config, force);
     }
 
-    /* У конвертера нет словаря подсказок (`json`, `xml`, `ast`, `openapi`,
-       `мермейд`, …). Меню ему не нужно вовсе: раньше здесь срабатывала
-       ветка «с чего начать документ», и список директив всплывал над готовым
-       текстом — там, где подсказывать нечего, в том числе по Alt. Исключение
-       одно: пустой документ, где без подсказки не узнать про `! как`. Строку
-       директивы эта ветка не обслуживает: внутри `! …` подсказки выданы выше
-       при любом конвертере. */
-    if (!this.isDocumentEmpty(source)) return null;
+    // AST не собрался — контекст недоступен. Ведём себя как конвертер без
+    // словаря: подсказки только в начале пустого файла.
+    if (!this.isAtEmptyFileStart(source, cursorOffset)) return null;
 
     return this.resolveDocumentContext(cursorOffset, source, force);
   }
@@ -56,11 +67,27 @@ export class SuggestionProvider {
   /**
    * В документе нет ничего, кроме пробельных символов.
    *
-   * Только в этом состоянии подсказки «с чего начать» уместны без словаря
-   * конвертера: иначе директивы предлагались бы посреди любого документа.
+   * Само по себе это ещё не разрешает подсказки конвертеру без словаря:
+   * нужен ещё курсор в начале файла (см. `isAtEmptyFileStart`). Иначе
+   * директивы предлагались бы в любой пустой строке посреди документа.
    */
   isDocumentEmpty(text) {
     return !String(text ?? '').trim();
+  }
+
+  /**
+   * Курсор в начале пустого файла.
+   *
+   * «Пустой» — документ без значимых символов (только пробелы и переводы
+   * строк). «В начале» — каретка стоит в нулевой позиции, до набранных
+   * пробелов: в пустых строках ниже списка директив быть не должно.
+   *
+   * Только в этом состоянии конвертер без словаря контекстных подсказок
+   * предлагает директивы. Второе исключение — уже начатая директива: её
+   * обслуживают `findDirectiveAt` и проверка строки с `!` до этой ветки.
+   */
+  isAtEmptyFileStart(text, cursorOffset) {
+    return cursorOffset === 0 && this.isDocumentEmpty(text);
   }
 
   /**

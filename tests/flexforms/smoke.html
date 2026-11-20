@@ -25,14 +25,14 @@
    Результат печатается в #result, по нему и по <title> run_tests.py понимает,
    прошёл тест или нет. В #ir лежит IR, собранный из текста примера, — его
    run_tests.py сравнивает с builtin-ir.json побайтово. */
-import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
-import { FlexFormsRenderer } from '../../src/js/classes/renderers/FlexFormsRenderer.js';
-import { buildFormPage, formConfigError, formConfigWarnings } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
+import { YarbpFlavor } from '../../src/js/converters/registry.js';
+import { FlexFormsRenderer } from '../../src/js/converters/flexforms/renderer.js';
+import { buildFormPage, formConfigError, formConfigWarnings } from '../../src/js/converters/flexforms/page.js';
 import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
 import { YarbpParser } from '../../src/js/core/YarbpParser.js';
-import { flexFormsSuggestions } from '../../src/js/suggestions/flexFormsSuggestions.js';
+import { flexFormsSuggestions } from '../../src/js/converters/flexforms/suggestions.js';
 import { FileManager } from '../../src/js/modules/FileManager.js';
-import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
+import { YarbpFlexFormsConverter } from '../../src/js/converters/flexforms/converter.js';
 
 /* Разметка берётся из самого редактора — предопределённый пример «Форма ТСД»
    (FileManager, id = builtin-9). Так дым проверяет не копию разметки, а тот

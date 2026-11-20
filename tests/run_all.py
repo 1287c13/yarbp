@@ -33,6 +33,7 @@ SUITES = [
     ('flexforms', 'flexforms'),
     ('openapi2yarbp', 'openapi2yarbp'),
     ('schema2yarbp', 'schema2yarbp'),
+    ('structure', 'structure'),
 ]
 
 

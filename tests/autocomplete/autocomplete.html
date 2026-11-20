@@ -41,8 +41,8 @@
 <script type="module">
 import { YarbpLexer, TokenTypes } from '../../src/js/core/YarbpLexer.js';
 import { YarbpParser } from '../../src/js/core/YarbpParser.js';
-import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
-import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
+import { YarbpFlexFormsConverter } from '../../src/js/converters/flexforms/converter.js';
+import { YarbpFlavor } from '../../src/js/converters/registry.js';
 import { SuggestionProvider } from '../../src/js/suggestions/SuggestionProvider.js';
 import { SuggestionUI } from '../../src/js/suggestions/SuggestionUI.js';
 import { Ticker } from '../../src/js/utils/Ticker.js';
@@ -504,8 +504,8 @@ await press('Escape', {}, 160);
 stage('scenario: no suggestions');
 /* ------------------------------------------------------------------ */
 /* 1c. Конвертер без словаря подсказок (`мермейд`, `json`, `openapi`): */
-/*     меню не всплывает вовсе. Исключения — пустой документ (проверен  */
-/*     выше) и строка директивы.                                       */
+/*     меню не всплывает вовсе. Исключения — начало пустого файла       */
+/*     (проверено выше) и уже начатая директива.                        */
 /* ------------------------------------------------------------------ */
 editor.value = '! как мермейд\nпроцесс\n  .имя';
 editor.setSelectionRange(editor.value.length, editor.value.length);
@@ -532,6 +532,19 @@ const directiveOpened = await waitState('list');
 items = labels();
 check('без словаря: внутри директивы меню директив работает',
   directiveOpened && items.includes('как'), menuState() + ': ' + items.join(' | '));
+
+/* Файл без значимых символов, но каретка уже не в начале: это не «начало
+   пустого файла», меню (и даже чип) не появляется. */
+editor.value = '\n\n';
+editor.setSelectionRange(2, 2);
+fireInput();
+await wait(300);
+check('без словаря: пустой файл не в начале — меню не открывается',
+  !menuOpen(), menuState());
+
+await press('Alt', { altKey: true }, 250);
+check('без словаря: Alt в пустом файле не в начале меню не открывает',
+  !menuOpen(), menuState());
 
 /* Дальше сценарий снова работает с пустым документом. */
 editor.value = '';

@@ -15,9 +15,9 @@
 <script type="module">
   import { YarbpLexer, TokenTypes } from '../../src/js/core/YarbpLexer.js';
   import { YarbpParser } from '../../src/js/core/YarbpParser.js';
-  import { YarbpJSONConverter } from '../../src/js/classes/ast-converters/JSONConvertor.js';
-  import { YarbpXMLConverter } from '../../src/js/classes/ast-converters/XMLConvertor.js';
-  import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
+  import { YarbpJSONConverter } from '../../src/js/converters/json/converter.js';
+  import { YarbpXMLConverter } from '../../src/js/converters/xml/converter.js';
+  import { YarbpProtoConverter } from '../../src/js/converters/protobuf/converter.js';
 
   const UPDATE = new URLSearchParams(location.search).has('update');
   const resultBox = document.getElementById('result');

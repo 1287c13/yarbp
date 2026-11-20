@@ -1,4 +1,4 @@
-import { YarbpFlavor, prefetchFlavors } from './classes/YarbpFlavor.js';
+import { YarbpFlavor, prefetchFlavors } from './converters/registry.js';
 import { YarbpLexer, TokenTypes } from './core/YarbpLexer.js';
 import { YarbpParser } from './core/YarbpParser.js';
 import { YarbpHighlighter } from './classes/highlighters/YarbpHighlighter.js';

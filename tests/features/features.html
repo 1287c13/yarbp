@@ -24,9 +24,9 @@
 <script type="module">
   import { YarbpLexer, TokenTypes } from '../../src/js/core/YarbpLexer.js';
   import { YarbpParser, valueTypes } from '../../src/js/core/YarbpParser.js';
-  import { YarbpJSONConverter } from '../../src/js/classes/ast-converters/JSONConvertor.js';
-  import { YarbpXMLConverter } from '../../src/js/classes/ast-converters/XMLConvertor.js';
-  import { YarbpProtoConverter } from '../../src/js/classes/ast-converters/ProtobufConvertor.js';
+  import { YarbpJSONConverter } from '../../src/js/converters/json/converter.js';
+  import { YarbpXMLConverter } from '../../src/js/converters/xml/converter.js';
+  import { YarbpProtoConverter } from '../../src/js/converters/protobuf/converter.js';
   import { YarbpHighlighter } from '../../src/js/classes/highlighters/YarbpHighlighter.js';
   import { CodeBlockHighlighter } from '../../src/js/classes/highlighters/CodeBlockHighlighter.js';
   import { SuggestionProvider } from '../../src/js/suggestions/SuggestionProvider.js';
@@ -34,11 +34,11 @@
     CodeBlockHighlightPass,
     CODE_BLOCK_HIGHLIGHT_DELAY_MS
   } from '../../src/js/classes/highlighters/CodeBlockHighlightPass.js';
-  import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
-import { UIRuntime } from '../../src/js/classes/ui/UIRuntime.js';
-import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
+  import { UIGenerator } from '../../src/js/converters/ui/generator.js';
+import { UIRuntime } from '../../src/js/converters/ui/runtime.js';
+import { HTMLExporter } from '../../src/js/converters/ui/exporter.js';
 import { FileManager } from '../../src/js/modules/FileManager.js';
-import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
+import { YarbpFlavor } from '../../src/js/converters/registry.js';
 import { unionOutlines, framePath } from '../../src/js/classes/highlighters/FlavorFrames.js';
 
   const resultBox = document.getElementById('result');
@@ -808,6 +808,92 @@ import { unionOutlines, framePath } from '../../src/js/classes/highlighters/Flav
       text: CODE_UNCLOSED,
       flavor: null
     }) === null);
+
+  /* ------------------------------------------------------------------ */
+  /* 5c. Конвертер без словаря подсказок: меню — только по директивам,   */
+  /*     и только в начале пустого файла либо внутри директивы.          */
+  /* ------------------------------------------------------------------ */
+  const noDictFlavor = new YarbpFlavor('как мермейд');
+  const noDictProvider = new SuggestionProvider();
+
+  const emptyDoc = build('');
+  const emptyAtStart = noDictProvider.update({
+    tokens: emptyDoc.tokens,
+    ast: emptyDoc.ast,
+    cursorOffset: 0,
+    text: '',
+    flavor: noDictFlavor,
+  });
+  check('подсказки без словаря: начало пустого файла — подсказка директив',
+    !!emptyAtStart && emptyAtStart.mode === 'hint',
+    emptyAtStart ? JSON.stringify(emptyAtStart).slice(0, 120) : 'null');
+
+  // Пробелы и пустые строки — уже не «начало файла»: меню там не всплывает.
+  const blankDoc = build('\n\n');
+  const blankNotAtStart = noDictProvider.update({
+    tokens: blankDoc.tokens,
+    ast: blankDoc.ast,
+    cursorOffset: 2,
+    text: '\n\n',
+    flavor: noDictFlavor,
+  });
+  check('подсказки без словаря: пустой файл не в начале — меню нет',
+    blankNotAtStart === null,
+    blankNotAtStart ? JSON.stringify(blankNotAtStart).slice(0, 120) : '');
+
+  const blankForced = noDictProvider.update({
+    tokens: blankDoc.tokens,
+    ast: blankDoc.ast,
+    cursorOffset: 2,
+    text: '\n\n',
+    flavor: noDictFlavor,
+    force: true,
+  });
+  check('подсказки без словаря: Alt не обходит правило вне начала файла',
+    blankForced === null,
+    blankForced ? JSON.stringify(blankForced).slice(0, 120) : '');
+
+  const noDictDoc = build(join('! как мермейд', 'процесс', '  .имя'));
+  const insideDirective = noDictProvider.update({
+    tokens: noDictDoc.tokens,
+    ast: noDictDoc.ast,
+    cursorOffset: 6, // сразу после `! как `
+    text: noDictDoc.code,
+    flavor: noDictFlavor,
+  });
+  check('подсказки без словаря: внутри директивы — список директив',
+    !!insideDirective && insideDirective.mode === 'list' &&
+    insideDirective.suggestions.some(item => item.label === 'мермейд'),
+    insideDirective
+      ? JSON.stringify(insideDirective.suggestions.map(item => item.label))
+      : 'null');
+
+  const outsideDirective = noDictProvider.update({
+    tokens: noDictDoc.tokens,
+    ast: noDictDoc.ast,
+    cursorOffset: noDictDoc.code.length,
+    text: noDictDoc.code,
+    flavor: noDictFlavor,
+  });
+  check('подсказки без словаря: вне директивы — меню нет',
+    outsideDirective === null,
+    outsideDirective ? JSON.stringify(outsideDirective).slice(0, 120) : '');
+
+  // Конвертер со словарём по-прежнему подсказывает контекст вне директив.
+  const contextDoc = build(join('! как бпмн', 'процесс', '  задача', '    .тип п'));
+  const contextResult = noDictProvider.update({
+    tokens: contextDoc.tokens,
+    ast: contextDoc.ast,
+    cursorOffset: contextDoc.code.length,
+    text: contextDoc.code,
+    flavor: new YarbpFlavor('как бпмн'),
+  });
+  check('подсказки со словарём: контекст работает вне директив',
+    !!contextResult && contextResult.mode === 'list' &&
+    contextResult.suggestions.some(item => item.label === 'пользователь'),
+    contextResult
+      ? JSON.stringify(contextResult.suggestions.map(item => item.label))
+      : 'null');
 
   /* ------------------------------------------------------------------ */
   /* 6. Редактор: курсор и выделение не сбиваются отложенным проходом    */
@@ -1608,14 +1694,36 @@ import { unionOutlines, framePath } from '../../src/js/classes/highlighters/Flav
     String(codeView && codeView.__codeLoadRan));
   codeFrame.remove();
 
-  /* Редактируемая таблица: строки, колонки и постфикс. */
+  /* Многострочное поле: это textarea, а не обычный input. */
+  const textareaParsed = build(join(
+    '! как форма',
+    'форма',
+    '  поле#коммент:многострочный = Комментарий'
+  ));
+  const textareaHost = document.createElement('div');
+  textareaHost.innerHTML = new UIGenerator(false).generateHTML(textareaParsed.ast);
+  const textareaField = textareaHost.querySelector('textarea');
+  check('UI: поле:многострочный рисует textarea',
+    !!textareaField && textareaField.id === 'коммент' &&
+    textareaField.getAttribute('data-field') === 'коммент' &&
+    !textareaHost.querySelector('input[data-field="коммент"]'),
+    textareaField ? textareaField.outerHTML.slice(0, 160) : 'нет textarea');
+  textareaHost.remove();
+
+  /* Редактируемая таблица: пустое состояние, колонки, добавление/удаление. */
   const tableCode = join(
     '! как форма',
     '! разбор-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    '! разбор-сахара(опция) представление / значение',
     'форма',
-    '  группа:таблица',
+    '  группа:таблица = Строки заказа',
     '    поле#номер:строка = Номер',
-    '    поле#количество:целое = Количество / / / шт.'
+    '    поле#количество:целое = Количество / / / шт.',
+    '    поле#статус:выбор = Статус',
+    '      опция = Новый / new',
+    '      опция = Готов / done',
+    '    поле#срочно:флаг = Срочно',
+    '    поле#коммент:многострочный = Комментарий'
   );
   const tableParsed = build(tableCode);
   const tableGenerator = new UIGenerator(false);
@@ -1627,44 +1735,162 @@ import { unionOutlines, framePath } from '../../src/js/classes/highlighters/Flav
 
   const uiTable = tableHost.querySelector('[data-ui-table]');
   const tableAdd = tableHost.querySelector('.add-table-row');
-  check('UI: таблица-соответствий рисует колонки и постфикс',
-    !!uiTable && uiTable.querySelectorAll('thead th').length === 3 &&
+  const tableBody = uiTable ? uiTable.querySelector('tbody') : null;
+  const tableEmpty = uiTable ? uiTable.querySelector('.ui-table-empty') : null;
+  const tableCount = uiTable ? uiTable.querySelector('.ui-table-count') : null;
+
+  check('UI: таблица стартует пустой и показывает подсказку',
+    !!uiTable && !!tableBody && tableBody.querySelectorAll('tr').length === 0 &&
+    !!tableEmpty && tableEmpty.hidden === false &&
+    !!tableCount && tableCount.textContent === '0 записей' &&
+    uiTable.classList.contains('is-empty'),
+    uiTable
+      ? 'rows=' + tableBody.querySelectorAll('tr').length +
+        ', count=' + (tableCount ? tableCount.textContent : '—')
+      : 'нет таблицы');
+
+  check('UI: шапка таблицы — номер, колонки, постфикс и действия',
+    !!uiTable && uiTable.querySelectorAll('thead th').length === 7 &&
+    uiTable.querySelector('thead th').textContent.trim() === '№' &&
     !!uiTable.querySelector('.field-postfix') &&
-    uiTable.querySelector('.field-postfix').textContent === 'шт.' &&
-    uiTable.querySelector('tbody input').value === '',
+    uiTable.querySelector('.field-postfix').textContent === 'шт.',
     uiTable ? String(uiTable.querySelectorAll('thead th').length) : 'нет таблицы');
 
-  const tableInput = uiTable ? uiTable.querySelector('tbody input') : null;
-  if (tableInput) {
-    tableInput.value = '7';
-    tableInput.dispatchEvent(new Event('input', { bubbles: true }));
-  }
   if (tableAdd) tableAdd.click();
-  check('UI: таблица добавляет строку и обновляет view-model',
-    !!uiTable && uiTable.querySelectorAll('tbody tr').length === 2 &&
-    (tableRuntime.viewModel.snapshot().tables['corr-1'] || []).length === 2,
-    uiTable ? String(uiTable.querySelectorAll('tbody tr').length) : 'нет таблицы');
+  const firstRow = tableBody ? tableBody.querySelector('tr') : null;
+  check('UI: «Добавить запись» создаёт строку, счётчик и скрывает пустое состояние',
+    !!firstRow && tableBody.querySelectorAll('tr').length === 1 &&
+    tableEmpty.hidden === true && tableCount.textContent === '1 запись' &&
+    !uiTable.classList.contains('is-empty') &&
+    firstRow.querySelector('td.ui-table-index').textContent === '1',
+    'rows=' + (tableBody ? tableBody.querySelectorAll('tr').length : '—') +
+      ', count=' + (tableCount ? tableCount.textContent : '—'));
 
+  check('UI: колонки таблицы рисуют select, checkbox и textarea, а не текст',
+    !!firstRow && !!firstRow.querySelector('select[data-field="статус"]') &&
+    !!firstRow.querySelector('input[type="checkbox"][data-field="срочно"]') &&
+    !!firstRow.querySelector('textarea[data-field="коммент"]') &&
+    !!firstRow.querySelector('button.remove-table-row') &&
+    firstRow.querySelector('.remove-table-row').getAttribute('aria-label') ===
+      'Удалить запись',
+    firstRow ? firstRow.innerHTML.slice(0, 220) : 'нет строки');
+
+  // Заполняем первую запись всеми видами колонок.
+  const firstNumber = firstRow.querySelector('input[data-field="номер"]');
+  const firstQty = firstRow.querySelector('input[data-field="количество"]');
+  const firstStatus = firstRow.querySelector('select[data-field="статус"]');
+  const firstUrgent = firstRow.querySelector('input[data-field="срочно"]');
+  firstNumber.value = 'A-1';
+  firstNumber.dispatchEvent(new Event('input', { bubbles: true }));
+  firstQty.value = '7';
+  firstQty.dispatchEvent(new Event('input', { bubbles: true }));
+  firstStatus.value = 'done';
+  firstStatus.dispatchEvent(new Event('change', { bubbles: true }));
+  firstUrgent.checked = true;
+  firstUrgent.dispatchEvent(new Event('change', { bubbles: true }));
+
+  const tableId = uiTable.dataset.uiTable;
+  let tableRows = tableRuntime.viewModel.snapshot().tables[tableId] || [];
+  check('UI: значения строки (текст, число, select, флаг) попадают в view-model',
+    tableRows.length === 1 &&
+    tableRows[0].номер === 'A-1' && tableRows[0].количество === '7' &&
+    tableRows[0].статус === 'done' && tableRows[0].срочно === 'да',
+    JSON.stringify(tableRows));
+
+  // Enter в последней строке — новая запись и фокус в той же колонке.
+  firstNumber.focus();
+  firstNumber.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'Enter', code: 'Enter', bubbles: true, cancelable: true,
+  }));
+  const rowsAfterEnter = tableBody.querySelectorAll('tr');
+  check('UI: Enter в последней строке добавляет запись и ведёт в ту же колонку',
+    rowsAfterEnter.length === 2 &&
+    document.activeElement ===
+      rowsAfterEnter[1].querySelector('input[data-field="номер"]') &&
+    tableCount.textContent === '2 записи',
+    'rows=' + rowsAfterEnter.length + ', focus=' +
+      (document.activeElement && document.activeElement.dataset
+        ? document.activeElement.dataset.field
+        : '—'));
+
+  const secondNumber = rowsAfterEnter[1].querySelector('input[data-field="номер"]');
+  firstNumber.focus();
+  firstNumber.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'Enter', code: 'Enter', bubbles: true, cancelable: true,
+  }));
+  check('UI: Enter в не последней строке ведёт вниз, не добавляя запись',
+    tableBody.querySelectorAll('tr').length === 2 &&
+    document.activeElement === secondNumber,
+    'rows=' + tableBody.querySelectorAll('tr').length + ', focus=' +
+      (document.activeElement && document.activeElement.dataset
+        ? document.activeElement.dataset.field
+        : '—'));
+
+  secondNumber.value = 'B-2';
+  secondNumber.dispatchEvent(new Event('input', { bubbles: true }));
   const tableState = tableRuntime.getState();
-  if (tableInput) {
-    tableInput.value = '99';
-    tableInput.dispatchEvent(new Event('input', { bubbles: true }));
-  }
+  firstNumber.value = 'BROKEN';
+  firstNumber.dispatchEvent(new Event('input', { bubbles: true }));
   tableRuntime.restore(tableState);
-  const restoredTableInput = uiTable ? uiTable.querySelector('tbody input') : null;
-  check('UI: состояние таблицы восстанавливается из снимка',
-    !!restoredTableInput && restoredTableInput.value === '7' &&
-    (tableRuntime.getState().tables['corr-1'] || [])[0].номер === '7',
-    restoredTableInput ? 'значение=' + restoredTableInput.value : 'нет поля');
 
-  const tableRemove = uiTable ? uiTable.querySelector('.remove-table-row') : null;
-  if (tableRemove) tableRemove.click();
-  check('UI: таблица удаляет строку',
-    !!uiTable && uiTable.querySelectorAll('tbody tr').length === 1 &&
-    (tableRuntime.viewModel.snapshot().tables['corr-1'] || []).length === 1,
-    uiTable ? String(uiTable.querySelectorAll('tbody tr').length) : 'нет таблицы');
+  const restoredFirst = tableBody.querySelector('tr input[data-field="номер"]');
+  const restoredRows = tableRuntime.getState().tables[tableId] || [];
+  check('UI: состояние таблицы восстанавливает строки, select и флаг',
+    !!restoredFirst && restoredFirst.value === 'A-1' &&
+    restoredRows.length === 2 && restoredRows[0].статус === 'done' &&
+    restoredRows[0].срочно === 'да' && restoredRows[1].номер === 'B-2',
+    JSON.stringify(restoredRows));
+
+  tableBody.querySelectorAll('.remove-table-row')[0].click();
+  check('UI: удаление строки перенумеровывает оставшиеся',
+    tableBody.querySelectorAll('tr').length === 1 &&
+    tableBody.querySelector('td.ui-table-index').textContent === '1' &&
+    tableCount.textContent === '1 запись',
+    'rows=' + tableBody.querySelectorAll('tr').length +
+      ', count=' + tableCount.textContent);
+
+  tableBody.querySelectorAll('.remove-table-row')[0].click();
+  check('UI: после удаления последней записи возвращается пустое состояние',
+    tableBody.querySelectorAll('tr').length === 0 &&
+    tableEmpty.hidden === false && tableCount.textContent === '0 записей' &&
+    (tableRuntime.viewModel.snapshot().tables[tableId] || []).length === 0,
+    'rows=' + tableBody.querySelectorAll('tr').length +
+      ', count=' + tableCount.textContent);
+
   tableRuntime.destroy();
   tableHost.remove();
+
+  // Таблица в самостоятельной выгрузке: тот же runtime, те же кнопки.
+  const tableExported = await new HTMLExporter(tableParsed.ast, false).generateFullHTML();
+  const tableFrame = document.createElement('iframe');
+  tableFrame.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:0';
+  tableFrame.srcdoc = tableExported;
+  const tableFrameLoaded = waitForLoad(tableFrame);
+  document.body.appendChild(tableFrame);
+  await tableFrameLoaded;
+
+  const tableFrameDoc = tableFrame.contentDocument;
+  const frameTable = tableFrameDoc
+    ? tableFrameDoc.querySelector('[data-ui-table]')
+    : null;
+  const frameAdd = frameTable ? frameTable.querySelector('.add-table-row') : null;
+  if (frameAdd) frameAdd.click();
+  const frameRows = frameTable ? frameTable.querySelectorAll('tbody tr') : [];
+  check('выгрузка: таблица добавляет и удаляет запись тем же runtime',
+    frameRows.length === 1 &&
+    frameTable.querySelector('.ui-table-count').textContent === '1 запись',
+    frameTable ? 'rows=' + frameRows.length : 'нет таблицы');
+
+  const frameRemove = frameTable
+    ? frameTable.querySelector('.remove-table-row')
+    : null;
+  if (frameRemove) frameRemove.click();
+  check('выгрузка: пустое состояние таблицы возвращается после удаления',
+    !!frameTable && frameTable.querySelectorAll('tbody tr').length === 0 &&
+    frameTable.querySelector('.ui-table-empty').hidden === false,
+    frameTable ? 'rows=' + frameTable.querySelectorAll('tbody tr').length : 'нет таблицы');
+  tableFrame.remove();
+
 
   /* ------------------------------------------------------------------ */
   /* 14. L-2: разбор сахара — AST, свойства, ошибки                   */

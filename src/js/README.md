@@ -18,36 +18,47 @@ utils/
   Ticker.js            отложенный запуск (кулдаун)
 
 suggestions/
-  SuggestionProvider.js  выбор подсказок по контексту и ранжирование по префиксу
+  SuggestionProvider.js  подсказки по контексту и ранжирование по префиксу;
+                         без словаря — только директивы в начале пустого
+                         файла и внутри уже распознанной директивы
   SuggestionUI.js        DOM-меню: Idle/Hint/List, шапка-контекст и описание
                          варианта, Tab/Alt/Escape, вставка с $0
   contextResolver.js     контекст AST: parentKey, анонимные объекты, valueStart
   commonDirectives.js    общие директивы и стартовый список документа
-  xpmSuggestions.js      словарь XPM
-  bpmnSuggestions.js     словарь BPMN
-  flexFormsSuggestions.js словарь «форма-ТСД» (+ containers для строк ':')
-  uiFormSuggestions.js   словарь генератора форм: `группа:<вид>`, `поле:<вид>`,
-                         сахар и действия кнопок
+
+converters/
+  README.md              контракт типового конвертера и чек-лист
+  contract.js            defineConverter(): паспорт конвертера
+  registry.js            реестр «директива → конвертер», YarbpFlavor,
+                         prefetchFlavors
+  shared/                код, общий для 2+ конвертеров:
+                         renderer.js, DiagnosticsStatusRenderer.js,
+                         JsonDocumentRenderer.js, XMLHighlighter.js,
+                         schemaFields.js, bpmnModel/
+  lexer/ ast/            отладочные виды (токены, AST)
+  json/ xml/ protobuf/   лёгкие конвертеры: converter.js + renderer.js
+  ui/                    UI-макет формы: converter.js (AST → IR),
+                         markup.js (IR → HTML), styles.js, runtime.js,
+                         generator.js, exporter.js, renderer.js, suggestions.js
+  xpm/ bpmn/ openapi/    конвертеры со словарями/раскладкой
+  json-schema/ mermaid/
+  flexforms/             форма ТСД: converter.js, renderer.js, page.js,
+                         markup.js, runtime.js, styles.js, suggestions.js
 
 classes/
-  YarbpFlavor.js         реестр «директива → конвертер/рендерер»
-  YarbpBasicRenderer.js  базовый рендерер
-  UIGenerator.js         генератор UI-макета из AST (обёртка: IR → HTML → стили)
-  ui/UIFormConvertor.js  AST → IR: формы, колонки, поля, кнопки, диагностика
-  ui/UIFormMarkup.js     IR → HTML (классы как в notes/design/target.html)
-  ui/UIFormStyles.js     стили формы: один источник для предпросмотра и выгрузки
-  ui/UIRuntime.js        view-model и действия UI-макета
-  HTMLExporter.js        выгрузка HTML
-  ast-converters/        AST → JSON/XML/Protobuf/BPMN/OpenAPI/…
-  highlighters/          подсветка ЯРБП, XML и фрагментов кода
-  renderers/             рендереры флейворов (BPMN, ТСД, Mermaid, …)
+  highlighters/          подсветка ЯРБП, XML-помощник вынесен в
+                         converters/shared/XMLHighlighter.js
 
 modules/
   FileManager.js         файлы, примеры, localStorage, импорт/экспорт
   CommentToggler.js      Ctrl+/ — комментирование строк
 ```
 
-Направление зависимостей: `app.js` → `classes` / `suggestions` / `modules`;
-`classes` и `suggestions` → `core`; все могут использовать `utils`.
-`core` не зависит от `classes` и DOM. Архитектура UI-генератора и действий
-формы описана в [гайде](../../readme.md#ui-generator-guide).
+Направление зависимостей: `app.js` → `converters/registry.js` /
+`suggestions` / `modules`; конвертер → `converters/shared` и `core`;
+все могут использовать `utils`. `core` не зависит от конвертеров и DOM.
+Конвертер не импортирует чужой каталог `converters/<id>/`; общий код
+поднимается в `converters/shared/`. Контракт и порядок добавления нового
+конвертера — в [`converters/README.md`](converters/README.md).
+Архитектура UI-генератора и действий формы описана в
+[гайде](../../readme.md#ui-generator-guide).

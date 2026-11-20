@@ -39,13 +39,13 @@ from html import unescape as html_unescape
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))            # .../yarbp
 REPO = os.path.dirname(ROOT)                            # корень репозитория
-FLEXFORMS = os.path.join(ROOT, 'src', 'js', 'classes', 'renderers', 'flexforms')
+FLEXFORMS = os.path.join(ROOT, 'src', 'js', 'converters', 'flexforms')
 
 FILE_MANAGER = os.path.join(ROOT, 'src', 'js', 'modules', 'FileManager.js')
 BUILTIN_ID = 'builtin-9'                                # пример «Форма ТСД»
 BUILTIN_IR = os.path.join(HERE, 'builtin-ir.json')      # компактный пример → IR
-MOCK_PY = os.path.join(ROOT, 'tools', 'flexforms_mock_server.py')
-MOCK_JS = os.path.join(FLEXFORMS, 'FlexFormsMockServer.js')
+MOCK_PY = os.path.join(FLEXFORMS, 'tools', 'flexforms_mock_server.py')
+MOCK_JS = os.path.join(FLEXFORMS, 'mock-server.js')
 
 BROWSERS = [
     r'C:\Program Files\Google\Chrome\Application\chrome.exe',
@@ -156,7 +156,7 @@ def test_builtin_example():
 # --------------------------------------------------------------------------
 
 def test_mock_server_source():
-    """`FlexFormsMockServer.js` — дословная строка из tools/flexforms_mock_server.py."""
+    """`mock-server.js` — дословная строка из converters/flexforms/tools/flexforms_mock_server.py."""
     print('2. мок-сервер: Python-источник == строка для выгрузки')
 
     js = read_text(MOCK_JS)

@@ -8,7 +8,9 @@
 | `openapi2yarbp.py` | OpenAPI JSON → разметка `! как openapi` |
 | `schema2yarbp.py` | JSON Schema → разметка `! как схема` |
 | `yarbp_text.py` | общие правила записи значений для двух импортёров выше |
-| `flexforms_mock_server.py` | локальный мок `/link`, `/processing`, `/health` для формы ТСД |
+
+Мок формы ТСД переехал вместе с конвертером:
+`src/js/converters/flexforms/tools/flexforms_mock_server.py`.
 
 Оба импортёра поддерживают `--check <файл>`: сравнить результат с уже
 закоммиченным кейсом, не перезаписывая его.

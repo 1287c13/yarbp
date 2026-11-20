@@ -24,13 +24,13 @@
   import { FileManager } from '../../src/js/modules/FileManager.js';
   import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
   import { YarbpParser } from '../../src/js/core/YarbpParser.js';
-  import { YarbpFlexFormsConverter } from '../../src/js/classes/ast-converters/FlexFormsConvertor.js';
+  import { YarbpFlexFormsConverter } from '../../src/js/converters/flexforms/converter.js';
   import {
     buildFormPage,
     PREVIEW_STATE_SCRIPT,
     PREVIEW_AUTOFOCUS_SCRIPT,
     STANDALONE_STATE_SCRIPT,
-  } from '../../src/js/classes/renderers/flexforms/FlexFormsPage.js';
+  } from '../../src/js/converters/flexforms/page.js';
 
   const resultBox = document.getElementById('result');
   const lines = [];
