@@ -22,9 +22,11 @@
  *
  * Линия отступает от текста на 2px влево и вправо (подложка начинается ровно с
  * текста, и линия по её краю прилипала к буквам), углы скругляются дугами того
- * же радиуса, что был у прежнего `border-radius`, а толщина обводки тоньше
- * прежней рамки: контур в `<path>` центрируется на линии, и 1px выглядел толще
- * `border`'а.
+ * же радиуса, что был у прежнего `border-radius`, а толщина обводки 0.5px:
+ * контур в `<path>` центрируется на линии, поэтому 1px выглядел толще `border`'а,
+ * а 0.75px на экране с двойной плотностью — это полтора физических пикселя, то
+ * есть снова жирная линия. Дуги выпуклых углов идут наружу, вогнутых — внутрь:
+ * у ступеньки директивы из строк разной длины иначе получался бугор в пустоту.
  *
  * Цена: один `querySelectorAll` и по одному замеру на фрагмент подсветки
  * (обычно 0–4 фрагмента на директиву) за перерисовку слоя. Документ без
@@ -247,6 +249,13 @@ function length(first, second) {
  * ступеньки с крошечным шагом дуги налезли бы друг на друга и контур пошёл бы
  * петлёй. Скругление повторяет прежний `border-radius: 5px` — прямые углы на
  * ступеньке выглядят грубее и спорят со скруглениями остальных элементов.
+ *
+ * Направление дуги зависит от угла, и это не украшение. Контур обходится по
+ * часовой стрелке (внутренность справа), поэтому у выпуклого угла дуга идёт по
+ * часовой стрелке (`sweep-flag 1`) и срезает внешнюю вершину, а у вогнутого —
+ * против (`sweep-flag 0`). С одним и тем же флагом дуга вогнутого угла
+ * выпирает наружу, в пустоту: на ступеньке директивы из строк разной длины
+ * получался бугор вместо плавного перехода.
  */
 function roundedContour(points) {
   const round = value => Math.round(value * 100) / 100;
@@ -256,7 +265,7 @@ function roundedContour(points) {
     const toPrevious = length(previous, point);
     const toNext = length(point, next);
     const radius = Math.min(CORNER_RADIUS, toPrevious / 2, toNext / 2);
-    if (!(radius > EPSILON)) return { entry: point, exit: point, radius: 0 };
+    if (!(radius > EPSILON)) return { entry: point, exit: point, radius: 0, sweep: 1 };
 
     /* Точки входа и выхода стоят на рёбрах по обе стороны угла: radius > 0
        гарантирует, что оба ребра не вырождены. */
@@ -268,15 +277,19 @@ function roundedContour(points) {
       point[0] + (next[0] - point[0]) / toNext * radius,
       point[1] + (next[1] - point[1]) / toNext * radius,
     ];
-    return { entry, exit, radius };
+    /* Поворот направо (выпуклый угол) — `cross > 0`: ось `y` смотрит вниз, и
+       векторное произведение рёбер меняет знак ровно на вогнутом угле. */
+    const cross = (point[0] - previous[0]) * (next[1] - point[1]) -
+      (point[1] - previous[1]) * (next[0] - point[0]);
+    return { entry, exit, radius, sweep: cross > 0 ? 1 : 0 };
   });
 
   const commands = [`M${round(corners[0].exit[0])} ${round(corners[0].exit[1])}`];
   const turn = index => {
-    const { entry, exit, radius } = corners[index];
+    const { entry, exit, radius, sweep } = corners[index];
     commands.push(`L${round(entry[0])} ${round(entry[1])}`);
     if (radius > EPSILON) {
-      commands.push(`A${round(radius)} ${round(radius)} 0 0 1 ` +
+      commands.push(`A${round(radius)} ${round(radius)} 0 0 ${sweep} ` +
         `${round(exit[0])} ${round(exit[1])}`);
     } else {
       commands.push(`L${round(exit[0])} ${round(exit[1])}`);
@@ -289,8 +302,11 @@ function roundedContour(points) {
   return commands.join(' ');
 }
 
-/** `d` для `<path>`: контуры идут отдельными подпутями одного элемента. */
-function pathData(outlines) {
+/**
+ * `d` для `<path>`: контуры идут отдельными подпутями одного элемента.
+ * Экспортируется для стенда: направление дуг на ступеньке иначе не проверить.
+ */
+export function framePath(outlines) {
   return outlines.map(roundedContour).join(' ');
 }
 
@@ -370,7 +386,7 @@ export function drawFlavorFrames(layer) {
   for (const outlines of frames) {
     const frame = doc.createElementNS(SVG_NS, 'path');
     frame.setAttribute('class', FRAME_CLASS);
-    frame.setAttribute('d', pathData(outlines));
+    frame.setAttribute('d', framePath(outlines));
     fragment.appendChild(frame);
   }
   svg.appendChild(fragment);

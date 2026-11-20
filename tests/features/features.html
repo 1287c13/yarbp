@@ -39,7 +39,7 @@ import { UIRuntime } from '../../src/js/classes/ui/UIRuntime.js';
 import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
 import { FileManager } from '../../src/js/modules/FileManager.js';
 import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
-import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js';
+import { unionOutlines, framePath } from '../../src/js/classes/highlighters/FlavorFrames.js';
 
   const resultBox = document.getElementById('result');
   const lines = [];
@@ -730,10 +730,14 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
       /\.flavor-frame\s*\{[^}]*stroke:\s*#408055/i.test(cssText) &&
       /body\.dark \.flavor-frame\s*\{[^}]*stroke:\s*#39bd5f/i.test(cssText),
       'нет цвета контура .flavor-frame в editor.css');
+    /* 0.5px: на экране с двойной плотностью это ровно один физический пиксель,
+       а 0.75px — полтора, то есть снова жирная линия. */
+    const frameRule = cssText.match(/^\.flavor-frame\s*\{([^}]*)\}/im);
+    const frameStroke = frameRule && frameRule[1].match(/stroke-width:\s*([\d.]+)/i);
     check('рамки директив: линия тоньше прежней рамки',
-      /\.flavor-frame\s*\{[^}]*stroke-width:\s*0?\.75\b/i.test(cssText) &&
+      !!frameStroke && Number(frameStroke[1]) === 0.5 &&
       !/body\.dark \.flavor-frame\s*\{[^}]*stroke-width/i.test(cssText),
-      'ожидается stroke-width: 0.75 только в общем правиле .flavor-frame');
+      'ожидается stroke-width: 0.5 только в общем правиле .flavor-frame');
   } catch (error) {
     check('ссылки: CSS-цвета светлой и тёмной темы', false, String(error));
   }
@@ -1010,6 +1014,35 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
         box.radii.every(radius => radius > 0 && radius <= 5)) &&
       frameBoxes[0].radii.includes(5),
       JSON.stringify(frameBoxes.map(box => box.radii)));
+
+    /* Направление дуг: у выпуклого угла `sweep-flag 1` (дуга срезает вершину
+       наружу), у вогнутого — 0 (дуга уходит внутрь, к материалу). С одним и тем
+       же флагом дуга вогнутого угла выпирает в пустоту, и ступенька директивы
+       выглядит бугром. На ступеньке из двух строк разной длины вогнутый угол
+       один — как раз на повороте. */
+    const sweepsOf = data => (data.match(/A[\d.]+ [\d.]+ 0 0 (\d)(?= )/g) || [])
+      .map(item => item.slice(-1));
+    /* Ступенька из двух прямоугольников со сдвигом по правому краю: шесть
+       углов, вогнутый — один (на повороте). */
+    const stepSweeps = sweepsOf(framePath([[
+      [0, 0], [40, 0], [40, 18], [60, 18], [60, 36], [0, 36],
+    ]]));
+    check('рамки директив: выпуклые углы скруглены наружу, вогнутый — внутрь',
+      stepSweeps.length === 6 && stepSweeps.filter(sweep => sweep === '0').length === 1,
+      JSON.stringify(stepSweeps));
+    const rectangleSweeps = sweepsOf(framePath([[
+      [0, 0], [40, 0], [40, 18], [0, 18],
+    ]]));
+    check('рамки директив: у прямоугольника все четыре угла выпуклые',
+      rectangleSweeps.length === 4 && rectangleSweeps.every(sweep => sweep === '1'),
+      JSON.stringify(rectangleSweeps));
+    /* В рамке документа (две строки директивы разной длины) вогнутый угол тоже
+       один — на повороте ступеньки. */
+    const documentSweeps = frames.length ? sweepsOf(frames[0].getAttribute('d')) : [];
+    check('рамки директив: в рамке документа вогнутый угол один',
+      documentSweeps.length > 4 &&
+      documentSweeps.filter(sweep => sweep === '0').length === 1,
+      frames.length ? frames[0].getAttribute('d') : 'рамок нет');
     check('рамки директив: ступенька стоит на правых краях обеих строк',
       frameBoxes.length === 3 && (() => {
         /* Разбор `d` по командам: у скруглённой рамки вертикальная сторона —
@@ -1066,8 +1099,8 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
     check('рамки директив: рамка красится цветом директивы',
       frames.length > 0 && view.getComputedStyle(frames[0]).stroke === 'rgb(64, 128, 85)',
       frames.length ? view.getComputedStyle(frames[0]).stroke : 'нет рамки');
-    check('рамки директив: толщина линии — 0.75px',
-      frames.length > 0 && view.getComputedStyle(frames[0]).strokeWidth === '0.75px',
+    check('рамки директив: толщина линии — 0.5px',
+      frames.length > 0 && view.getComputedStyle(frames[0]).strokeWidth === '0.5px',
       frames.length ? view.getComputedStyle(frames[0]).strokeWidth : 'нет рамки');
 
     /* Алгоритм контура проверяется и на искусственных прямоугольниках: в
