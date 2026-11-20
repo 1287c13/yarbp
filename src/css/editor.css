@@ -359,6 +359,7 @@ body.dark .mermaid-status { color: #ffd79a; background: #3a3020; border-top-colo
   font-size: 12px;
   min-width: 180px;
   max-width: 360px;
+  overflow: hidden;
 }
 .suggestion-list {
   list-style: none;
@@ -375,18 +376,26 @@ body.dark .mermaid-status { color: #ffd79a; background: #3a3020; border-top-colo
 .suggestion-list li.active {
   background: #e6f0ff;
 }
+/* Шапка popup — контекст списка («Свойства формы»). Мелкая и приглушённая:
+   она отвечает на вопрос «что за список», а не конкурирует с вариантами. */
 .suggestion-block-doc {
-  border-top: 1px solid #eee;
-  padding: 4px 10px;
-  color: #444;
-  font-size: 11px;
-  font-style: italic;
+  border-bottom: 1px solid #eee;
+  padding: 3px 10px;
+  color: #888;
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: .03em;
+  background: #fafafa;
 }
+/* Описание активного варианта — под списком, за разделителем: позиция и фон
+   показывают, что это пояснение к выделенной строке, а не второй контекст. */
 .suggestion-item-doc {
   border-top: 1px solid #eee;
   padding: 4px 10px;
-  color: #666;
+  color: #555;
   font-size: 11px;
+  line-height: 1.45;
+  background: #fafafa;
 }
 .suggestion-block-doc[hidden],
 .suggestion-item-doc[hidden] {
@@ -406,19 +415,29 @@ body.dark .suggestion-list li.active {
   color: #ffffff;
 }
 body.dark .suggestion-block-doc {
-  border-top-color: #444;
-  color: #a0a0a0;
+  border-bottom-color: #444;
+  background: #333;
+  color: #9a9a9a;
 }
 body.dark .suggestion-item-doc {
   border-top-color: #444;
+  background: #333;
   color: #c0c0c0;
 }
+/* Чип hint-режима: пиктограмма раскрытия + клавиша. Компактно, чтобы не
+   конкурировать с кодом и не растягивать popup в «полоску». */
 .suggestion-hint {
-  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
   color: #666;
   font-size: 11px;
   font-family: 'JetBrains Mono', monospace;
+  line-height: 1.4;
+  letter-spacing: .02em;
   white-space: nowrap;
+  user-select: none;
 }
 .suggestion-hint[hidden] { display: none; }
 body.dark .suggestion-hint {
@@ -427,17 +446,6 @@ body.dark .suggestion-hint {
 .suggestion-popup.hint-mode {
   min-width: auto;
   max-width: none;
-}
-.suggestion-hint {
-  padding: 4px 10px;
-  color: #666;
-  font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
-  white-space: nowrap;
-}
-.suggestion-hint[hidden] { display: none; }
-body.dark .suggestion-hint {
-  color: #b0b0b0;
 }
 
 /* Направляющие отступов и номера строк */

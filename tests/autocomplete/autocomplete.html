@@ -86,6 +86,7 @@ const ui = new SuggestionUI(editor, pane);
 const popup = ui.root;
 
 let pendingUpdateFrame = 0;
+let lastAST = null;
 
 function currentFlavor() {
   const directive = lexer.tokens.find(token =>
@@ -119,6 +120,7 @@ function updateViews() {
   } catch (error) {
     console.error('[autocomplete-test] AST build failed:', error);
   }
+  lastAST = ast;
 
   scheduleSuggestions(currentFlavor(), ast);
 }
@@ -145,6 +147,17 @@ function fireInput() {
 }
 
 editor.addEventListener('input', scheduleUpdateViews);
+
+/* Тот же контракт, что в app.js: каретка, поставленная мышью, пересобирает
+   подсказки для новой позиции, а не оставляет меню на старом месте. */
+function resuggestForCaret() {
+  if (document.activeElement !== editor) return;
+  if (!ui.isOpen()) return;
+  scheduleSuggestions(currentFlavor(), lastAST);
+}
+
+editor.addEventListener('mouseup', resuggestForCaret);
+document.addEventListener('selectionchange', resuggestForCaret);
 
 editor.addEventListener('keydown', (e) => {
   if (ui.handleKey(e)) return;
@@ -262,15 +275,29 @@ function hintText() {
   return hint && !hint.hidden ? hint.textContent.trim() : '';
 }
 
+/**
+ * Виден ли список на самом деле. `popup.hidden === false` этого не доказывает:
+ * popup мог остаться пустой рамкой («тонкая полоска»), если список спрятали
+ * после отрисовки.
+ */
+function listVisible() {
+  if (!popup || popup.hidden) return false;
+  const list = popup.querySelector('.suggestion-list');
+  if (!list || list.hidden) return false;
+  return list.offsetHeight > 0 && popup.getBoundingClientRect().height > 0;
+}
+
 async function waitState(state, timeout = 1200) {
   // Счётчик попыток, а не Date.now(): в headless-режиме с
   // --virtual-time-budget часы могут стоять, пока таймеры «перематываются».
   const attempts = Math.max(1, Math.ceil(timeout / 40));
   for (let attempt = 0; attempt < attempts; attempt++) {
-    if (menuState() === state) return true;
+    // Для списка мало `hidden === false`: popup мог схлопнуться в пустую
+    // рамку. Ждём, пока список реально займёт высоту.
+    if (menuState() === state && (state !== 'list' || listVisible())) return true;
     await wait(40);
   }
-  return menuState() === state;
+  return menuState() === state && (state !== 'list' || listVisible());
 }
 
 async function waitLabels(expected, timeout = 900) {
@@ -330,11 +357,14 @@ async function expectHint(name) {
     fail(name + ': ожидалась подсказка, а не список (' +
       menuState() + ': ' + labels().join(' | ') + ')');
   }
-  if (!hintText().includes('Tab') || !hintText().includes('Alt')) {
-    fail(name + ': текст подсказки не объясняет Tab и Alt (' +
-      hintText() + ')');
+  const text = hintText();
+  if (!text.includes('▼') || !text.includes('Alt')) {
+    fail(name + ': подсказка должна быть «▼ Alt», получено «' + text + '»');
   }
-  check(name + ': показана подсказка, а не список', true);
+  if (text.includes('Tab')) {
+    fail(name + ': подсказка не должна объяснять Tab («' + text + '»)');
+  }
+  check(name + ': показана подсказка «▼ Alt», а не список', true);
 }
 
 function expectText(name, expected) {
@@ -360,6 +390,10 @@ fireInput();
 await wait(250);
 
 await expectHint('пустой документ');
+check('hint-режим: только чип, без списка и доков',
+  popup.querySelector('.suggestion-list').hidden &&
+  popup.querySelector('.suggestion-block-doc').hidden &&
+  popup.querySelector('.suggestion-item-doc').hidden, menuState());
 
 const beforeTab = editor.value;
 const tabEvent = await press('Tab', {}, 180);
@@ -378,6 +412,8 @@ await press('Alt', { altKey: true }, 250);
 let opened = await waitState('list');
 let items = labels();
 check('Alt открывает меню в пустом документе', opened, menuState());
+check('Alt: список раскрыт, а не пустая рамка', listVisible(),
+  'popup height=' + Math.round(popup.getBoundingClientRect().height));
 check('в пустом документе предлагаются директивы',
   items.includes('! как') && items.includes('! импорт') &&
   items.includes('! типизация-сахара'),
@@ -393,6 +429,47 @@ opened = await waitState('list');
 check('Ctrl+Space снова открывает меню', opened, menuState());
 await press('Escape', {}, 160);
 
+stage('scenario: caret');
+/* ------------------------------------------------------------------ */
+/* 2a. Каретка, поставленная мышью: меню переезжает к новой позиции и  */
+/*     пересобирает подсказки для неё, а не висит на старом месте.     */
+/* ------------------------------------------------------------------ */
+editor.value = '! как форма-тсд\nформа\n  .заголовокФормы\n  .з';
+editor.setSelectionRange(editor.value.length, editor.value.length);
+fireInput();
+opened = await waitState('list');
+check('каретка: список свойств формы открыт в конце документа',
+  opened && labels()[0] === '.заголовокФормы',
+  menuState() + ': ' + labels().slice(0, 3).join(' | '));
+
+const caretPosBefore = popup.style.left + ',' + popup.style.top;
+const directiveEnd = '! как форма-тсд'.length;
+editor.setSelectionRange(directiveEnd, directiveEnd);
+editor.dispatchEvent(new view.MouseEvent('mouseup', { bubbles: true }));
+await wait(320);
+
+const caretPosAfter = popup.style.left + ',' + popup.style.top;
+check('каретка: меню переехало к новой позиции',
+  caretPosBefore !== caretPosAfter,
+  caretPosBefore + ' → ' + caretPosAfter);
+check('каретка: подсказки пересчитаны под новую позицию',
+  menuState() === 'list' && labels()[0] === 'форма-тсд' &&
+  popup.querySelector('.suggestion-block-doc').textContent ===
+    'Здесь вы можете выбрать конвертер',
+  menuState() + ': ' + labels().slice(0, 3).join(' | '));
+
+await press('Escape', {}, 160);
+editor.setSelectionRange(editor.value.length, editor.value.length);
+editor.dispatchEvent(new view.MouseEvent('mouseup', { bubbles: true }));
+await wait(220);
+check('каретка: клик по тексту не открывает закрытое меню', !menuOpen(),
+  menuState());
+
+editor.value = '';
+editor.setSelectionRange(0, 0);
+fireInput();
+await wait(220);
+
 stage('scenario: directive');
 /* ------------------------------------------------------------------ */
 /* 2. Начало документа только подсказками: ! как форма-тсд            */
@@ -407,8 +484,8 @@ check('в списке после «!» четыре директивы', items.
 await type('к');
 await wait(300);
 items = labels();
-check('ввод буквы сокращает список до директивы «как»',
-  items.length === 1 && items[0] === 'как', items.join(' | '));
+check('ввод «к» поднимает директиву «как», не сужая список',
+  items.length === 4 && items[0] === 'как', items.join(' | '));
 
 await press('Tab', {}, 250);
 expectText('директива вставлена целиком', '! как ');
@@ -423,15 +500,15 @@ check('после «! как » предложены конвертеры',
 await type('ф');
 await wait(300);
 items = labels();
-check('буква «ф» оставляет формы и отсекает остальные конвертеры',
-  items.includes('форма-тсд') && items.includes('форма') &&
-  !items.includes('кпо') && !items.includes('джейсон'), items.join(' | '));
+check('буква «ф» поднимает формы наверх, остальные конвертеры остаются',
+  items[0] === 'форма-тсд' && items[1] === 'форма' &&
+  items.includes('кпо') && items.includes('джейсон'), items.join(' | '));
 
 await type('орма-т');
 await wait(300);
 items = labels();
-check('уточнение «орма-т» оставляет только «форма-тсд»',
-  items.length === 1 && items[0] === 'форма-тсд', items.join(' | '));
+check('уточнение «орма-т» ставит «форма-тсд» первым вариантом',
+  items[0] === 'форма-тсд', items.join(' | '));
 
 await press('Tab', {}, 250);
 expectText('конвертер вставлен с переводом строки',
@@ -454,6 +531,33 @@ expectText('корень «форма» вставлен шаблоном',
 
 await expectHint('внутри формы');
 
+stage('scenario: empty directive');
+/* ------------------------------------------------------------------ */
+/* 2b. «! » — директива без тела: восклицательный знак обязан входить  */
+/*     в неё, иначе замена начинается после `!` и Tab вставляет второй. */
+/* ------------------------------------------------------------------ */
+editor.value = '';
+editor.setSelectionRange(0, 0);
+fireInput();
+await wait(220);
+
+await type('! ');
+opened = await waitState('list');
+items = labels();
+check('после «! » открыт список директив', opened, menuState());
+check('после «! » четыре директивы, «как» первая',
+  items.length === 4 && items[0].replace(/^!\s*/, '') === 'как',
+  items.join(' | '));
+
+await press('Tab', {}, 250);
+expectText('вставка после «! » не дублирует восклицательный знак', '! как ');
+
+/* Стенд возвращается к состоянию сценария 3. */
+editor.value = '! как форма-тсд\nформа\n  ';
+editor.setSelectionRange(editor.value.length, editor.value.length);
+fireInput();
+await wait(220);
+
 stage('scenario: form header');
 /* ------------------------------------------------------------------ */
 /* 3. Свойства формы и обработчики                                    */
@@ -461,15 +565,38 @@ stage('scenario: form header');
 await type('.з');
 await wait(300);
 items = labels();
-check('свойства формы: «.з» даёт два варианта',
-  items.includes('.заголовокФормы') && items.includes('.заголовокПоляДействия'),
-  items.join(' | '));
+check('свойства формы: «.з» поднимает .заголовокФормы наверх',
+  items[0] === '.заголовокФормы' && items[1] === '.заголовокПоляДействия',
+  items.slice(0, 4).join(' | '));
+check('свойства формы: «.з» не сужает список — все 12 свойств на месте',
+  items.length === 12 && items.includes('.сервис') &&
+  items.includes(':обработчики'), items.join(' | '));
+
+const popupOrder = Array.from(popup.children).map(el => el.className);
+const blockDocBox = popup.querySelector('.suggestion-block-doc');
+const itemDocBox = popup.querySelector('.suggestion-item-doc');
+check('доки: контекст — шапка popup, описание — под списком',
+  popupOrder[0] === 'suggestion-block-doc' &&
+  popupOrder[1] === 'suggestion-list' &&
+  popupOrder[2] === 'suggestion-item-doc', popupOrder.join(' | '));
+
+check('доки: в шапке — контекст «Свойства формы»',
+  !blockDocBox.hidden && blockDocBox.textContent.trim() === 'Свойства формы',
+  blockDocBox.textContent);
+check('доки: под списком — описание активного варианта',
+  !itemDocBox.hidden && itemDocBox.textContent.trim() === 'Заголовок в шапке ТСД',
+  itemDocBox.textContent);
+
+await press('ArrowDown', {}, 140);
+check('доки: описание меняется вместе с активной строкой',
+  itemDocBox.textContent.trim() === 'Подпись выбора операции',
+  itemDocBox.textContent);
 
 await type('аголовокФ');
 await wait(300);
 items = labels();
-check('свойства формы: уточнение до «.заголовокФормы»',
-  items.length === 1 && items[0] === '.заголовокФормы', items.join(' | '));
+check('свойства формы: уточнение до «.заголовокФормы» ставит его первым',
+  items[0] === '.заголовокФормы', items.slice(0, 3).join(' | '));
 await press('Tab', {}, 220);
 stage('header: title key inserted');
 await type('Отправка данных в 1С');

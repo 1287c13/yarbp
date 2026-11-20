@@ -2,7 +2,10 @@ import { TokenTypes } from '../core/YarbpLexer.js';
 import { COMMON_DIRECTIVES, DOCUMENT_DIRECTIVES } from './commonDirectives.js';
 import { resolveContext } from './contextResolver.js';
 
-const HINT = 'Alt — подсказки · Tab — отступ';
+// Hint-режим: короткая пиктограмма раскрытия + клавиша. Длинная фраза
+// («Alt — подсказки · Tab — отступ») конкурировала с кодом и объясняла Tab,
+// который и так делает отступ.
+const HINT = '▼ Alt';
 
 export class SuggestionProvider {
   constructor() {
@@ -63,9 +66,10 @@ export class SuggestionProvider {
   /**
    * Директива на текущей строке.
    *
-   * `DIRECTIVE` лексера покрывает не всю строку (например, `! ` — это токен
-   * с пустым значением), поэтому проверяем не только интервал токена, но и
-   * то, что курсор остался на его строке.
+   * Директива с телом занимает строку целиком, а `! ` без тела — только сам
+   * `!` (токен с пустым значением). Курсор при этом стоит уже за концом
+   * токена, поэтому проверяем не только интервал токена, но и то, что курсор
+   * остался на его строке.
    */
   findDirectiveAt(tokens, cursorOffset, text) {
     const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
@@ -211,10 +215,16 @@ export class SuggestionProvider {
     const variants = this.matchVariants(DOCUMENT_DIRECTIVES.variants, word);
     if (!variants.length) return null;
 
+    // Варианты этой ветки включают `!` («! как»). Если на строке уже есть `!`,
+    // а слово ещё не набрано (`! ` — директиву только начали), заменять надо
+    // вместе с ним: иначе вставка добавит второй `!` и сломает разметку.
+    const bangOffset = word ? -1 : lineBefore.search(/!/);
+    const replaceFrom = bangOffset === -1 ? from : lineStart + bangOffset;
+
     return {
       suggestions: variants,
       blockDoc: DOCUMENT_DIRECTIVES.blockDoc,
-      replaceFrom: from,
+      replaceFrom,
       replace: true,
       prefix: word,
       mode: 'list',
@@ -381,29 +391,33 @@ export class SuggestionProvider {
   }
 
   /**
-   * Фильтр вариантов по набранному префиксу.
+   * Ранжирование вариантов по набранному префиксу (не фильтрация).
    *
-   * Раньше варианты только сортировались: при вводе `ф` в списке оставались
-   * все конвертеры, а нужный просто поднимался наверх. IDE так не ведёт себя:
-   * список должен сокращаться. Совпадение ищется по метке и по `aliases`.
+   * Фильтр оказался плохим UX: при вводе `з` в шапке формы оставались только
+   * `.заголовок*`, и посмотреть остальные свойства без стирания буквы было
+   * нельзя. Теперь список не сокращается — совпадения поднимаются наверх,
+   * остальные идут следом в исходном порядке словаря.
+   *
+   * Порядок: метка целиком → метка с префикса → алиас целиком → алиас с
+   * префикса → подстрока в метке → без совпадения. Совпадение ищется по
+   * метке и по `aliases`, регистр и `ё` нормализуются.
    */
   matchVariants(variants, prefix) {
     if (!prefix) return variants;
 
     const p = this.normalize(prefix);
-    const scored = [];
-
-    variants.forEach((variant, index) => {
+    const scored = variants.map((variant, index) => {
       const label = this.normalize(variant.label);
       const aliases = (variant.aliases || []).map(alias => this.normalize(alias));
 
-      let score = -1;
+      let score = 5;
       if (label === p) score = 0;
       else if (label.startsWith(p)) score = 1;
       else if (aliases.some(alias => alias === p)) score = 2;
       else if (aliases.some(alias => alias.startsWith(p))) score = 3;
+      else if (label.includes(p)) score = 4;
 
-      if (score >= 0) scored.push({ variant, score, index });
+      return { variant, score, index };
     });
 
     scored.sort((a, b) => a.score - b.score || a.index - b.index);

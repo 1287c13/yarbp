@@ -16,8 +16,9 @@ utils/
   Ticker.js            отложенный запуск (кулдаун)
 
 suggestions/
-  SuggestionProvider.js  выбор подсказок по контексту и фильтрация по префиксу
-  SuggestionUI.js        DOM-меню: Idle/Hint/List, Tab/Alt/Escape, вставка с $0
+  SuggestionProvider.js  выбор подсказок по контексту и ранжирование по префиксу
+  SuggestionUI.js        DOM-меню: Idle/Hint/List, шапка-контекст и описание
+                         варианта, Tab/Alt/Escape, вставка с $0
   contextResolver.js     контекст AST: parentKey, анонимные объекты, valueStart
   commonDirectives.js    общие директивы и стартовый список документа
   xpmSuggestions.js      словарь XPM

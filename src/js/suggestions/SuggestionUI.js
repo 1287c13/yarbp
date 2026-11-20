@@ -38,8 +38,12 @@ export class SuggestionUI {
     this.hintBox.hidden = true;
     this.hintBox.setAttribute('role', 'status');
 
-    this.root.appendChild(this.list);
+    // Порядок в popup: шапка-контекст («Свойства формы») → список → описание
+    // выбранного варианта → чип hint-режима. Раньше контекст и описание стояли
+    // подряд под списком одной серой массой, и было непонятно, что из них к
+    // чему относится.
     this.root.appendChild(this.blockDocBox);
+    this.root.appendChild(this.list);
     this.root.appendChild(this.itemDocBox);
     this.root.appendChild(this.hintBox);
     container.appendChild(this.root);
@@ -86,7 +90,9 @@ export class SuggestionUI {
 
       this.renderList();
       this.renderDoc();
-      this.renderHint(null);
+      // Только чип подсказки: renderHint() дополнительно прячет список и
+      // доки, а в режиме списка они только что отрисованы.
+      this.renderHintBox('');
       this.position();
       this.textarea?.setAttribute('aria-expanded', 'true');
       return;
@@ -187,15 +193,17 @@ export class SuggestionUI {
     this.list.hidden = true;
     this.blockDocBox.hidden = true;
     this.itemDocBox.hidden = true;
+    this.renderHintBox(text);
+  }
 
-    if (!text) {
-      this.hintBox.hidden = true;
-      this.hintBox.textContent = '';
-      return;
-    }
-
-    this.hintBox.textContent = text;
-    this.hintBox.hidden = false;
+  /**
+   * Чип-подсказка (например «▼ Alt») — без побочных эффектов для списка и
+   * доков. Отдельно от renderHint(), потому что в режиме списка список уже
+   * отрисован и прятать его нельзя (иначе popup схлопывается в полоску).
+   */
+  renderHintBox(text) {
+    this.hintBox.textContent = text || '';
+    this.hintBox.hidden = !text;
   }
 
   position() {

@@ -430,6 +430,18 @@ function scheduleSuggestions(flavor, ast) {
   });
 }
 
+/**
+ * Каретка перемещена без ввода (клик мышью или `selectionchange`): подсказки
+ * относятся к позиции каретки, поэтому меню нужно пересобрать для новой
+ * позиции. Иначе popup остаётся на старом месте и подсказывает чужой контекст.
+ * Закрытое меню клик по тексту не открывает — для этого есть Alt.
+ */
+function resuggestForCaret() {
+  if (document.activeElement !== textarea) return;
+  if (!YarbpAppGlobals.suggestionUI.isOpen()) return;
+  scheduleSuggestions(YarbpAppGlobals.flavor, lastAST);
+}
+
 function updateViews() {
   if (!textarea || !highlightDiv) return;
 
@@ -869,7 +881,15 @@ window.addEventListener('resize', () => {
 
 if (textarea && highlightDiv) {
   textarea.addEventListener('input', scheduleUpdateViews);
-  textarea.addEventListener('scroll', syncScroll);
+  textarea.addEventListener('scroll', () => {
+    syncScroll();
+    // Popup привязан к каретке — при прокрутке он едет вместе с ней.
+    YarbpAppGlobals.suggestionUI.refresh();
+  });
+  // Каретка, поставленная мышью, — это новый контекст: `input` не срабатывает,
+  // и без этих слушателей меню осталось бы на старом месте.
+  textarea.addEventListener('mouseup', resuggestForCaret);
+  document.addEventListener('selectionchange', resuggestForCaret);
   renderTextarea.addEventListener('scroll', syncRenderScroll);
   textarea.addEventListener('blur', () => YarbpAppGlobals.suggestionUI.hide());
 }
