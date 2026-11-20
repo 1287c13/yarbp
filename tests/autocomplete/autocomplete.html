@@ -159,6 +159,25 @@ function resuggestForCaret() {
 editor.addEventListener('mouseup', resuggestForCaret);
 document.addEventListener('selectionchange', resuggestForCaret);
 
+/* Та же арифметика, что в app.js: Tab выравнивает по границе отступа. */
+function tabSpaces(text, offset, width = 2) {
+  const lineStart = text.lastIndexOf('\n', offset - 1) + 1;
+  let col = 0;
+  for (let i = lineStart; i < offset; i++) {
+    col += text[i] === '\t' ? width - (col % width) : 1;
+  }
+  return width - (col % width);
+}
+
+/* Ctrl+Z в браузере — нативная отмена, а синтетическое событие клавиши
+   встроенное действие не запускает. Стенд вызывает ту же команду напрямую:
+   если правка не попала в историю отмены, значение не изменится. */
+function undoEdit() {
+  const ok = document.execCommand('undo');
+  fireInput();
+  return ok;
+}
+
 editor.addEventListener('keydown', (e) => {
   if (ui.handleKey(e)) return;
 
@@ -191,12 +210,14 @@ editor.addEventListener('keydown', (e) => {
     const end = editor.selectionEnd;
 
     if (start === end) {
+      const spaces = ' '.repeat(tabSpaces(editor.value, start));
       const before = editor.value;
-      document.execCommand('insertText', false, '  ');
+      document.execCommand('insertText', false, spaces);
       if (editor.value === before) {
-        editor.setRangeText('  ', start, start, 'end');
+        editor.setRangeText(spaces, start, start, 'end');
       }
-      editor.setSelectionRange(start + 2, start + 2);
+      const caret = start + spaces.length;
+      editor.setSelectionRange(caret, caret);
     }
 
     fireInput();
@@ -408,6 +429,38 @@ await press('Tab', { shiftKey: true }, 180);
 check('Shift+Tab убрал отступ',
   editor.value === beforeTab, JSON.stringify(editor.value));
 
+/* 1a. Tab выравнивает по границе отступа, а не докидывает два пробела */
+editor.value = 'x'.repeat(11);
+editor.setSelectionRange(11, 11);
+fireInput();
+await press('Tab', {}, 120);
+check('Tab на нечётном столбце дополнил отступ до чётного (один пробел)',
+  editor.value === 'x'.repeat(11) + ' ', JSON.stringify(editor.value.slice(11)));
+
+await press('Tab', {}, 120);
+check('второй Tab с чётного столбца дал два пробела',
+  editor.value === 'x'.repeat(11) + '   ', JSON.stringify(editor.value.slice(11)));
+
+editor.value = '  abc';
+editor.setSelectionRange(5, 5);
+fireInput();
+await press('Tab', {}, 120);
+check('Tab на нечётном столбце внутри строки дал один пробел',
+  editor.value === '  abc ', JSON.stringify(editor.value));
+
+editor.value = '  abcd';
+editor.setSelectionRange(6, 6);
+fireInput();
+await press('Tab', {}, 120);
+check('Tab на чётном столбце внутри строки дал два пробела',
+  editor.value === '  abcd  ', JSON.stringify(editor.value));
+
+/* Дальше сценарий снова работает с пустым документом. */
+editor.value = beforeTab;
+editor.setSelectionRange(0, 0);
+fireInput();
+await wait(200);
+
 await press('Alt', { altKey: true }, 250);
 let opened = await waitState('list');
 let items = labels();
@@ -428,6 +481,35 @@ await press(' ', { code: 'Space', ctrlKey: true }, 250);
 opened = await waitState('list');
 check('Ctrl+Space снова открывает меню', opened, menuState());
 await press('Escape', {}, 160);
+
+stage('scenario: undo');
+/* ------------------------------------------------------------------ */
+/* 1b. Ctrl+Z отменяет автоподстановку: вставка идёт нативной командой, */
+/*     поэтому попадает в историю отмены и возвращает набранный префикс */
+/* ------------------------------------------------------------------ */
+editor.value = '! как форма-тсд\nформа\n  .за';
+editor.setSelectionRange(editor.value.length, editor.value.length);
+fireInput();
+const undoOpened = await waitState('list');
+check('undo: список открыт для набранного префикса', undoOpened, menuState());
+check('undo: в списке есть «.заголовокФормы»',
+  await waitLabels('.заголовокФормы'), labels().slice(0, 5).join(' | '));
+
+const undoActive = activate('.заголовокФормы');
+check('undo: активен ожидаемый вариант', undoActive, activeLabel());
+
+const prefixText = editor.value;
+await press('Tab', {}, 220);
+check('undo: Tab подставил ключ',
+  editor.value !== prefixText && editor.value.includes('.заголовокФормы'),
+  JSON.stringify(editor.value.slice(-30)));
+
+undoEdit();
+await wait(200);
+check('undo: Ctrl+Z вернул набранный префикс',
+  editor.value === prefixText, JSON.stringify(editor.value.slice(-30)));
+check('undo: отмена не тронула остальной текст',
+  editor.value.startsWith('! как форма-тсд\nформа\n  .за'));
 
 stage('scenario: caret');
 /* ------------------------------------------------------------------ */

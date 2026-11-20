@@ -301,9 +301,29 @@ export class SuggestionUI {
     const prepared = this.prepareInsert(s.insert ?? s.label ?? '', s, start);
     start = prepared.start;
     const finish = start + prepared.text.length;
+    const replaced = ta.value.slice(start, end);
+    const before = ta.value;
 
     this.hide();
-    ta.setRangeText(prepared.text, start, end, 'end');
+
+    /* Вставка идёт через execCommand('insertText'), а не setRangeText: только
+       так правка попадает в нативную историю отмены, и Ctrl+Z возвращает
+       набранный префикс. setRangeText историю не пополняет (в Chrome ещё и
+       сбрасывает её), поэтому после принятия подсказки Ctrl+Z молчал. */
+    const doc = ta.ownerDocument || document;
+    if (doc.activeElement !== ta) ta.focus();
+    ta.setSelectionRange(start, end);
+    const accepted = typeof doc.execCommand === 'function'
+      ? doc.execCommand('insertText', false, prepared.text)
+      : false;
+
+    /* execCommand устарел и в некоторых окружениях (headless, чужой iframe)
+       молча ничего не делает — подстановка обязана появиться в любом случае.
+       Но при совпадении вставляемого текста с заменяемым значение не меняется
+       законно, поэтому «не изменилось» само по себе — не признак отказа. */
+    if (!accepted || (ta.value === before && replaced !== prepared.text)) {
+      ta.setRangeText(prepared.text, start, end, 'end');
+    }
 
     if (prepared.cursor != null) {
       const cursor = start + prepared.cursor;

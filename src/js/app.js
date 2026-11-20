@@ -622,6 +622,21 @@ if (textarea) {
     return positions;
   };
 
+  /* Отступ — два пробела, но Tab не «докидывает» их слепо: он выравнивает
+     строку по следующей границе отступа. На чётном столбце это два пробела,
+     на нечётном — один. Иначе после ручной правки отступы уезжают на 1 и
+     сетка вложенности ломается. */
+  const tabSpaces = (text, offset, width = 2) => {
+    const lineStart = text.lastIndexOf('\n', offset - 1) + 1;
+    let col = 0;
+
+    for (let i = lineStart; i < offset; i++) {
+      col += text[i] === '\t' ? width - (col % width) : 1;
+    }
+
+    return width - (col % width);
+  };
+
   const indentLines = (textarea, startPos, endPos) => {
     const value = textarea.value;
     let positions = getLinePositions(value);
@@ -760,14 +775,16 @@ if (textarea) {
         indentLines(textarea, start, end);
       }
       else {
+        const spaces = ' '.repeat(tabSpaces(textarea.value, start));
         const before = textarea.value;
-        document.execCommand('insertText', false, '  ');
+        document.execCommand('insertText', false, spaces);
         // execCommand устарел и в некоторых окружениях (в т.ч. headless)
         // молча ничего не делает. Отступ обязан появиться в любом случае.
         if (textarea.value === before) {
-          textarea.setRangeText('  ', start, start, 'end');
+          textarea.setRangeText(spaces, start, start, 'end');
         }
-        textarea.setSelectionRange(start + 2, start + 2);
+        const caret = start + spaces.length;
+        textarea.setSelectionRange(caret, caret);
       }
 
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
