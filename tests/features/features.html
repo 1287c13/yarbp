@@ -491,6 +491,106 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
     xssHost.querySelector('.ide-code-body').textContent.includes('<img'));
 
   /* ------------------------------------------------------------------ */
+  /* 5a-2. Ссылки и макросы: цветом только то, что реально сработало     */
+  /* ------------------------------------------------------------------ */
+  function highlightedHost(source) {
+    const parsed = build(source);
+    const host = document.createElement('div');
+    host.innerHTML = new YarbpHighlighter(source, parsed.tokens).highlight();
+    return host;
+  }
+
+  const linkText = (...nodes) => nodes.map(node => node.textContent);
+
+  const linkCode = join(
+    '! as ast',
+    'а .б (( с ))',
+    '.с д',
+    'ошибка .поле (( нет ))'
+  );
+  const linkHost = highlightedHost(linkCode);
+  const linkRefs = Array.from(linkHost.querySelectorAll('.ide-code-ref'));
+  const linkSources = Array.from(linkHost.querySelectorAll('.ide-code-ref-source'));
+
+  check('ссылки: (( имя )) с найденным ключом покрашено',
+    linkRefs.length === 1 && linkRefs[0].textContent === '(( с ))',
+    JSON.stringify(linkText(...linkRefs)));
+  check('ссылки: ключ-источник покрашен без префикса',
+    linkSources.length === 1 && linkSources[0].textContent === 'с',
+    JSON.stringify(linkText(...linkSources)));
+  check('ссылки: без ключа подстановка не красится',
+    linkHost.textContent.includes('(( нет ))') &&
+    linkRefs.every(node => !node.textContent.includes('нет')),
+    JSON.stringify(linkText(...linkRefs)));
+  check('ссылки: текст подсветки не изменился',
+    linkHost.textContent === linkCode);
+
+  const objectLinkCode = join(
+    '! as ast',
+    ':конфиг',
+    '  .а 1',
+    'пример',
+    '  .настройки (( конфиг ))'
+  );
+  const objectLinkHost = highlightedHost(objectLinkCode);
+  check('ссылки: объект-источник и его подстановка покрашены',
+    linkText(...objectLinkHost.querySelectorAll('.ide-code-ref'))
+      .includes('(( конфиг ))') &&
+    linkText(...objectLinkHost.querySelectorAll('.ide-code-ref-source'))
+      .includes('конфиг'),
+    objectLinkHost.textContent);
+
+  const macroLinkCode = join(
+    '! as ast',
+    '@макро = (( имя ))',
+    '  ..части',
+    '    (( первый ))',
+    '    (( лишний ))',
+    'вызов(макро)',
+    '  .имя имя-имя',
+    'второй(макро)',
+    '  .имя имя-имя',
+    '  .другое значение'
+  );
+  const macroLinkHost = highlightedHost(macroLinkCode);
+  const macroParams = linkText(...macroLinkHost.querySelectorAll('.ide-code-macro-param'));
+
+  check('макрос: объявление @имя-макроса покрашено',
+    linkText(...macroLinkHost.querySelectorAll('.ide-code-macro')).join(' ') === '@макро',
+    macroLinkHost.innerHTML.slice(0, 160));
+  check('макрос: параметр, переданный по имени, покрашен',
+    macroParams.includes('(( имя ))'), JSON.stringify(macroParams));
+  check('макрос: параметр, закрытый позиционно, покрашен',
+    macroParams.includes('(( первый ))'), JSON.stringify(macroParams));
+  check('макрос: непереданный параметр не красится',
+    !macroParams.includes('(( лишний ))'), JSON.stringify(macroParams));
+  check('макрос: текст подсветки не изменился',
+    macroLinkHost.textContent === macroLinkCode);
+
+  const unusedMacroHost = highlightedHost(join('! as ast', '@пустой', '  .поле 1'));
+  check('макрос: объявление красится и без вызовов',
+    linkText(...unusedMacroHost.querySelectorAll('.ide-code-macro')).join(' ') === '@пустой' &&
+    unusedMacroHost.querySelectorAll('.ide-code-macro-param').length === 0,
+    unusedMacroHost.innerHTML.slice(0, 160));
+
+  try {
+    const cssText = await (await fetch('../../src/css/editor.css')).text();
+    check('ссылки: CSS-цвета светлой и тёмной темы',
+      /\.ide-code-ref[^{]*\{[^}]*color:\s*#c05621/i.test(cssText) &&
+      /body\.dark \.ide-code-ref[^{]*\{[^}]*color:\s*#f0c674/i.test(cssText),
+      'нет цвета ссылок в editor.css');
+    check('фрагмент кода: на тёмной теме нет подложки',
+      !/body\.dark \.ide-code-codeblock[^{]*\{[^}]*background/i.test(cssText),
+      'подложка .ide-code-codeblock в тёмной теме осталась');
+    check('скроллбар: в тёмной теме ползунок тёмный',
+      /body\.dark \.code-input::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*#3d3d3d/i.test(cssText) &&
+      /body\.dark\s*\{[^}]*scrollbar-color:\s*#3d3d3d/i.test(cssText),
+      'нет тёмного ползунка скролла в editor.css');
+  } catch (error) {
+    check('ссылки: CSS-цвета светлой и тёмной темы', false, String(error));
+  }
+
+  /* ------------------------------------------------------------------ */
   /* 5b. Подсказки внутри фрагмента кода не вызываются                   */
   /* ------------------------------------------------------------------ */
   const suggestionsCode = join(

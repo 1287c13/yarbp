@@ -1,5 +1,6 @@
 import { TokenTypes } from '../../core/YarbpLexer.js';
 import { escText, escAttr } from '../../utils/escape.js';
+import { collectLinkRanges } from './linkRanges.js';
 
 export class YarbpHighlighter {
 
@@ -65,24 +66,22 @@ export class YarbpHighlighter {
   /**
    * Код → HTML подсветки. Текст экранируется: символ `<` в документе остаётся
    * символом, а не началом тега (слой подсветки вставляется через innerHTML).
+   *
+   * Ссылки и макросы (`(( имя ))`, `@макрос`, их параметры) идут отдельным
+   * слоем диапазонов: они вложены в обычные токены, поэтому HTML не
+   * вкладывается, а режется по их границам — у куска остаются оба класса.
    */
   highlight() {
     const code = this.code ?? '';
+    const ranges = this.collectRanges();
+    const buckets = this.groupLinks(ranges, this.collectLinks());
 
     let cursor = 0;
     let result = '';
 
-    for (const { token, className } of this.collectRanges()) {
+    for (const { token, className } of ranges) {
       result += escText(code.slice(cursor, token.start));
-
-      if (token.type === TokenTypes.CODE_BLOCK) {
-        result += this.renderCodeBlock(code, token, className);
-      } else {
-        result += `<span class="${className}">`
-          + escText(code.slice(token.start, token.end))
-          + '</span>';
-      }
-
+      result += this.renderRange(code, token, className, buckets.get(token) || []);
       cursor = token.end;
     }
 
@@ -90,6 +89,83 @@ export class YarbpHighlighter {
     this.code = result;
     return this.code;
   };
+
+  /**
+   * Диапазоны ссылок и макросов из токенов и исходного текста (см.
+   * `linkRanges.js`). Без токенов подсветка остаётся прежней.
+   */
+  collectLinks() {
+    return collectLinkRanges(this.tokens, this.code ?? '');
+  }
+
+  /**
+   * Ссылки, разложенные по токенам. И токены, и ссылки отсортированы, поэтому
+   * хватает одного прохода; ссылка всегда лежит внутри одного токена.
+   */
+  groupLinks(ranges, links) {
+    const buckets = new Map();
+    let index = 0;
+
+    for (const range of ranges) {
+      const bucket = [];
+
+      while (index < links.length && links[index].start < range.token.end) {
+        const link = links[index];
+        index++;
+        if (link.end > range.token.start) bucket.push(link);
+      }
+
+      if (bucket.length) buckets.set(range.token, bucket);
+    }
+
+    return buckets;
+  }
+
+  /**
+   * Один диапазон токена: либо обычный `<span>`, либо нарезка по вложенным
+   * ссылкам. Классы не вкладываются (внешний токен уже накрыл символы), а
+   * суммируются: `ide-code-val ide-code-ref`.
+   */
+  renderRange(code, token, className, links) {
+    if (token.type === TokenTypes.CODE_BLOCK) {
+      return this.renderCodeBlock(code, token, className);
+    }
+
+    const inside = [];
+    let previousEnd = token.start;
+    for (const link of links) {
+      if (link.start < token.start || link.end > token.end) continue;
+      if (link.start < previousEnd) continue;
+      inside.push(link);
+      previousEnd = link.end;
+    }
+
+    if (inside.length === 0) {
+      return YarbpHighlighter.span(className, code.slice(token.start, token.end));
+    }
+
+    let result = '';
+    let position = token.start;
+
+    for (const link of inside) {
+      if (link.start > position) {
+        result += YarbpHighlighter.span(className, code.slice(position, link.start));
+      }
+      result += YarbpHighlighter.span(
+        className + ' ' + link.className, code.slice(link.start, link.end));
+      position = link.end;
+    }
+
+    if (position < token.end) {
+      result += YarbpHighlighter.span(className, code.slice(position, token.end));
+    }
+
+    return result;
+  }
+
+  static span(className, text) {
+    return `<span class="${className}">${escText(text)}</span>`;
+  }
 
   /**
    * Фрагмент кода: границы и язык рисует основной проход, содержимое —
