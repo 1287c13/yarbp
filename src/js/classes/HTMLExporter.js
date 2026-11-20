@@ -1,4 +1,5 @@
 import { UIGenerator } from "./UIGenerator.js";
+import { formPageCss } from "./ui/UIFormStyles.js";
 
 /**
  * Nonce для inline-runtime выгруженной страницы. CSP с nonce запрещает
@@ -12,6 +13,29 @@ function createNonce() {
   } catch (e) {
     return 'yarbp-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
   }
+}
+
+/**
+ * Обработчики `.код` в выгрузке — обычный inline-скрипт с nonce: ни blob,
+ * ни eval не нужны, политика страницы остаётся строгой. Функции кладутся в
+ * общий реестр `window.__yarbpUIHandlers`, который читает UIRuntime; скрипт
+ * стоит ДО монтирования, поэтому реестр уже заполнен.
+ */
+function handlersBlockMarkup(handlers, nonce) {
+  const rows = (handlers || [])
+    .filter(handler => handler && handler.id && String(handler.code || '').trim())
+    .map(handler =>
+      'window.__yarbpUIHandlers = window.__yarbpUIHandlers || {};\n' +
+      'window.__yarbpUIHandlers[' + JSON.stringify(handler.id) + '] = ' +
+      'function (event, runtime, form) {\n' + escapeInlineCode(handler.code) + '\n};');
+  if (!rows.length) return '';
+  return '<script nonce="' + nonce + '">\n' + rows.join('\n') + '\n</script>';
+}
+
+/** Текст обработчика внутри `<script>`: закрывающий тег не должен сработать. */
+function escapeInlineCode(code) {
+  return String(code === undefined || code === null ? '' : code)
+    .replace(/<\/(script)/gi, '<\\/$1');
 }
 
 export class HTMLExporter {
@@ -50,8 +74,9 @@ export class HTMLExporter {
     const formHTML = this.generator.generateHTML(this.ast);
     const runtimeJS = await this.loadRuntimeSource();
 
-    const bgColor = this.isDark ? '#1a1a1a' : '#f3f4f6';
     const nonce = createNonce();
+    const handlers = (this.generator.lastIR && this.generator.lastIR.handlers) || [];
+    const handlersBlock = handlersBlockMarkup(handlers, nonce);
 
     return `<!DOCTYPE html>
 <html lang="ru">
@@ -61,28 +86,14 @@ export class HTMLExporter {
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'">
   <title>ЯРБП Форма</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: ${bgColor};
-      min-height: 100vh;
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
-      padding: 2rem 1rem;
-    }
-    .yarbp-form-container {
-      max-width: 1280px;
-      width: 100%;
-    }
-    .required-star::after { content: " *"; color: #ef4444; }
-    input:focus, select:focus, button:focus { outline: 2px solid #3b82f6; outline-offset: 2px; }
+    ${formPageCss(this.isDark)}
   </style>
 </head>
 <body>
   <div class="yarbp-form-container">
     ${formHTML}
   </div>
+  ${handlersBlock}
   <script type="module" nonce="${nonce}">${runtimeJS}
 new UIRuntime(document).mount();
   </script>

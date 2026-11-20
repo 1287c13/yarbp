@@ -132,6 +132,7 @@ def run_page(port, browser, page_path, prefix='yarbp-test',
         '--disable-gpu',
         '--no-first-run',
         '--no-default-browser-check',
+        '--window-size=1280,900',
         '--virtual-time-budget=%d' % virtual_time_budget,
         '--user-data-dir=' + profile,
         '--dump-dom',
@@ -197,9 +198,14 @@ def run_browser_suite(page_path, pass_title, fail_title, intro,
     for line in lines:
         print('  ' + line)
 
-    if pass_title not in output:
-        if fail_title not in output:
-            print('  FAIL страница не выполнилась (нет итогового title)')
+    # Сверяем title целиком, а не подстрокой: строка `AUTOCOMPLETE PASS`
+    # встречается и в исходнике inline-скрипта, поэтому подстрочный поиск
+    # «зеленел» даже когда страница не досчитала (бюджет виртуального времени
+    # закончился и DOM снят на середине).
+    title = extract_title(output)
+    if title != pass_title:
+        if title != fail_title:
+            print('  FAIL страница не выполнилась до конца (title: %s)' % title)
             print(output[-800:])
         else:
             print('  FAIL есть проваленные проверки')

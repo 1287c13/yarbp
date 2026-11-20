@@ -210,7 +210,13 @@ export class YarbpLexer {
   }
 
   setInitialState(text) {
-    this.text = text.at(-1) !== '\n'? text + '\n' : text;
+    /* Переводы строк приводим к `\n`: файл с CRLF (Windows) иначе приносит
+       `\r` вне грамматики — лексер помечал такие строки как UNPARSED, и
+       документ терял структуру (форма рендерилась пустой). В `<textarea>`
+       браузер тоже отдаёт только `\n`, поэтому позиции токенов остаются
+       согласованными с редактором. */
+    const source = String(text ?? '').replace(/\r\n?/g, '\n');
+    this.text = source.at(-1) !== '\n' ? source + '\n' : source;
     this.state = YarbpLexer.states.WAITING;
     this.tokens = [];
     this.currentToken = '';

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>UI PARITY RUNNING</title>
+  <style>
+    body { margin: 0; padding: 16px; font: 12px/1.5 'JetBrains Mono', Consolas, monospace; }
+    #result { margin: 0; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<pre id="result">running...</pre>
+
+<script>
+  window.addEventListener('error', (event) => {
+    const box = document.getElementById('result');
+    if (box) {
+      box.textContent = 'LOAD ERROR: ' + (event.message || '') +
+        ' @ ' + (event.filename || '') + ':' + (event.lineno || '');
+    }
+  });
+</script>
+
+<script type="module">
+  import { YarbpLexer } from '../../src/js/core/YarbpLexer.js';
+  import { YarbpParser } from '../../src/js/core/YarbpParser.js';
+  import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
+  import { UIRuntime } from '../../src/js/classes/ui/UIRuntime.js';
+  import { FileManager } from '../../src/js/modules/FileManager.js';
+
+  const resultBox = document.getElementById('result');
+  const lines = [];
+  let failed = 0;
+
+  function check(name, ok, detail = '') {
+    if (!ok) failed++;
+    lines.push((ok ? 'ok   ' : 'FAIL ') + name + (ok || !detail ? '' : ' — ' + detail));
+  }
+
+  function build(code) {
+    const lexer = new YarbpLexer();
+    lexer.setInitialState(code);
+    lexer.tokenize();
+    const parser = new YarbpParser(lexer);
+    return parser.getAST();
+  }
+
+  /* Сравнение DOM: пробелы, порядок классов и служебные атрибуты не в счёт. */
+  const KEEP = new Set(['class', 'placeholder', 'value', 'required', 'checked',
+    'selected', 'type']);
+
+  function norm(node) {
+    if (node.nodeType === 3) {
+      const text = String(node.nodeValue || '').replace(/\s+/g, ' ').trim();
+      return text || null;
+    }
+    if (node.nodeType !== 1) return null;
+    if (node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return null;
+
+    const attrs = {};
+    Array.from(node.attributes || []).forEach(attr => {
+      if (!KEEP.has(attr.name)) return;
+      attrs[attr.name] = attr.name === 'class'
+        ? attr.value.split(/\s+/).filter(Boolean).sort().join(' ')
+        : attr.value;
+    });
+
+    const items = [];
+    Array.from(node.childNodes).forEach(child => {
+      const item = norm(child);
+      if (item) items.push(item);
+    });
+    return { tag: node.tagName.toLowerCase(), attrs, items };
+  }
+
+  function diff(expected, actual, path = '', out = []) {
+    if (out.length >= 20) return out;
+    if (typeof expected === 'string' || typeof actual === 'string') {
+      if (expected !== actual) {
+        out.push(path + ': текст ' + JSON.stringify(expected) + ' != ' +
+          JSON.stringify(actual));
+      }
+      return out;
+    }
+    if (expected.tag !== actual.tag) {
+      out.push(path + ': тег <' + expected.tag + '> != <' + actual.tag + '>');
+      return out;
+    }
+    const expectedAttrs = JSON.stringify(expected.attrs);
+    const actualAttrs = JSON.stringify(actual.attrs);
+    if (expectedAttrs !== actualAttrs) {
+      out.push(path + '<' + expected.tag + '>: атрибуты ' + expectedAttrs +
+        ' != ' + actualAttrs);
+    }
+    const size = Math.max(expected.items.length, actual.items.length);
+    for (let index = 0; index < size; index += 1) {
+      if (out.length >= 20) break;
+      const next = path + '/<' + expected.tag + '>[' + index + ']';
+      if (index >= expected.items.length) {
+        out.push(next + ': в эталоне нет ' + JSON.stringify(actual.items[index]));
+        continue;
+      }
+      if (index >= actual.items.length) {
+        out.push(next + ': в генераторе нет ' + JSON.stringify(expected.items[index]));
+        continue;
+      }
+      diff(expected.items[index], actual.items[index], next, out);
+    }
+    return out;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 1. Пример из «Примеров» совпадает с notes/design/target.html          */
+  /* ------------------------------------------------------------------ */
+  const manager = new FileManager('yarbp_parity');
+  const example = manager._getDefaultData().files
+    .find(file => file.slug === 'ui-order-form');
+  check('пример ui-order-form есть в стартовых файлах', !!example,
+    example ? example.name : 'нет файла');
+
+  const ast = build(example ? example.content : '');
+  const generator = new UIGenerator(false);
+  const html = generator.generateHTML(ast);
+  const ir = generator.lastIR;
+
+  check('пример разбирается без замечаний',
+    !!ir && ir.diagnostics.length === 0,
+    ir ? ir.diagnostics.map(item => item.code + ': ' + item.text).join('; ') : 'нет IR');
+
+  const targetText = await (await fetch('../../notes/design/target.html?t=' +
+    Date.now())).text();
+  const targetDoc = new DOMParser().parseFromString(targetText, 'text/html');
+  const expectedRoot = targetDoc.querySelector('.form-container');
+
+  const host = document.createElement('div');
+  host.innerHTML = html;
+  document.body.appendChild(host);
+  const actualRoot = host.querySelector('.form-container');
+
+  check('эталон notes/design/target.html прочитан', !!expectedRoot && !!actualRoot);
+  if (expectedRoot && actualRoot) {
+    const problems = diff(norm(expectedRoot), norm(actualRoot));
+    check('форма совпадает с эталоном буква-в-букву', problems.length === 0,
+      problems.slice(0, 4).join(' | '));
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 2. Стили эталона: сетка, карточки и адаптив                          */
+  /* ------------------------------------------------------------------ */
+  const runtime = new UIRuntime(host);
+  runtime.mount();
+
+  const style = element => window.getComputedStyle(element);
+
+  /** Кто шире доступной ширины: `класс=ширина` — для диагностики адаптива. */
+  const widestDescendants = (root, limit) => Array.from(root.querySelectorAll('*'))
+    .map(node => ({ node, rect: node.getBoundingClientRect() }))
+    .filter(item => item.rect.width > limit + 1)
+    .sort((a, b) => b.rect.width - a.rect.width)
+    .slice(0, 4)
+    .map(item => {
+      const name = item.node.className && typeof item.node.className === 'string'
+        ? item.node.className.split(' ')[0]
+        : item.node.tagName.toLowerCase();
+      return name + '=' + Math.round(item.rect.width);
+    });
+  const container = style(actualRoot);
+  check('контейнер: скругление 24px и отступ 2rem',
+    container.borderRadius === '24px' && container.padding === '32px',
+    container.borderRadius + ' / ' + container.padding);
+
+  const cardStyle = style(host.querySelector('.fieldset-card'));
+  check('карточка: светлый фон #f9fafb и рамка 1px',
+    cardStyle.backgroundColor === 'rgb(249, 250, 251)' &&
+    cardStyle.borderTopWidth === '1px',
+    cardStyle.backgroundColor + ' / ' + cardStyle.borderTopWidth);
+
+  const column = style(host.querySelector('.left-column'));
+  check('колонки формы: flex и зазор 2rem',
+    column.display === 'flex' && column.rowGap === '32px',
+    column.display + ' / ' + column.rowGap);
+
+  const grid = style(host.querySelector('.form-grid'));
+  check('колонки: flex-поток с переносом (число колонок не фиксировано)',
+    grid.display === 'flex' && grid.flexWrap === 'wrap',
+    grid.display + ' / ' + grid.flexWrap);
+
+  const wideLeft = host.querySelector('.left-column').getBoundingClientRect();
+  const wideRight = host.querySelector('.right-column').getBoundingClientRect();
+  check('широкая версия: колонки стоят в один ряд',
+    Math.abs(wideLeft.top - wideRight.top) < 1 && wideRight.left > wideLeft.right - 1,
+    Math.round(wideLeft.left) + ',' + Math.round(wideLeft.top) + ' / ' +
+    Math.round(wideRight.left) + ',' + Math.round(wideRight.top));
+
+  // Узкий контейнер: перенос — поведение потока, а не медиазапрос по окну.
+  const narrowHolder = document.createElement('div');
+  narrowHolder.style.width = '360px';
+  narrowHolder.innerHTML = html;
+  document.body.appendChild(narrowHolder);
+  const narrowRoot = narrowHolder.querySelector('.form-container');
+  const narrowLeft = narrowHolder.querySelector('.left-column').getBoundingClientRect();
+  const narrowRight = narrowHolder.querySelector('.right-column').getBoundingClientRect();
+  check('узкая версия: правая колонка встаёт под левую',
+    narrowRight.top >= narrowLeft.bottom - 1 &&
+    Math.abs(narrowRight.left - narrowLeft.left) < 1,
+    'left.bottom=' + Math.round(narrowLeft.bottom) +
+    ', right.top=' + Math.round(narrowRight.top));
+  check('узкая версия: нет горизонтального переполнения',
+    narrowHolder.scrollWidth <= narrowHolder.clientWidth + 1 &&
+    narrowRoot.getBoundingClientRect().width <= 360,
+    narrowHolder.scrollWidth + ' / ' + narrowHolder.clientWidth + ' · ' +
+    widestDescendants(narrowRoot, 360 - 32 * 2).join(', '));
+  narrowHolder.remove();
+
+  const media = Array.from(document.styleSheets).some(sheet => {
+    try {
+      return Array.from(sheet.cssRules).some(rule =>
+        rule.type === CSSRule.MEDIA_RULE && /768px/.test(rule.conditionText || ''));
+    } catch (error) {
+      return false;
+    }
+  });
+  check('адаптив: медиазапрос 768px объявлен', media);
+
+  /* ------------------------------------------------------------------ */
+  /* 3. Поведение примера: представления, копия записи, условные блоки    */
+  /* ------------------------------------------------------------------ */
+  const showButton = host.querySelector('.show-form-btn');
+  if (showButton) showButton.click();
+  const formView = host.querySelector('.form-view');
+  check('«Добавить операцию» открывает форму добавления',
+    !!formView && formView.style.display === 'block',
+    formView ? formView.style.display : 'нет формы');
+
+  const copyButton = host.querySelector('.add-copy');
+  const copyCard = copyButton ? copyButton.closest('.fieldset-card') : null;
+  if (copyButton) copyButton.click();
+  const copies = copyCard ? copyCard.querySelectorAll('.repeatable-item') : [];
+  check('«Добавить ещё» клонирует запись и нумерует её',
+    copies.length === 2 &&
+    copies[1].querySelector('.repeatable-header span').textContent === 'Операция 2',
+    String(copies.length));
+
+  const backButton = host.querySelector('.back-to-list');
+  if (backButton) backButton.click();
+  check('«Назад к списку» возвращает список',
+    !!formView && formView.style.display === 'none',
+    formView ? formView.style.display : 'нет формы');
+
+  const radios = host.querySelectorAll('input[type="radio"]');
+  if (radios.length > 1) {
+    radios[1].checked = true;
+    radios[1].dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  const draftBlock = host.querySelector('.conditional-draft');
+  const accountingBlock = host.querySelector('.conditional-accounting');
+  check('условный блок следует за переключателем',
+    !!draftBlock && draftBlock.classList.contains('is-visible') &&
+    !!accountingBlock && !accountingBlock.classList.contains('is-visible'),
+    draftBlock ? draftBlock.className : 'нет блока');
+
+  const barcode = host.querySelector('input[data-mask="barcode"]');
+  if (barcode) {
+    barcode.value = 'ПЗ-2025-042!';
+    barcode.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  check('штрихкод чистится маской ввода',
+    !!barcode && barcode.value === 'ПЗ-2025-042',
+    barcode ? barcode.value : 'нет поля');
+
+  runtime.destroy();
+  host.remove();
+
+  resultBox.textContent = lines.join('\n') + '\n';
+  document.title = failed ? 'UI PARITY FAIL' : 'UI PARITY PASS';
+</script>
+</body>
+</html>

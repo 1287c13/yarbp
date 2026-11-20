@@ -7,6 +7,7 @@ import { YarbpProtoConverter } from './ast-converters/ProtobufConvertor.js'
 import { xpmSuggestions } from '../suggestions/xpmSuggestions.js';
 import { bpmnSuggestions } from '../suggestions/bpmnSuggestions.js';
 import { flexFormsSuggestions } from '../suggestions/flexFormsSuggestions.js';
+import { uiFormSuggestions } from '../suggestions/uiFormSuggestions.js';
 
 /* renderers */
 import { YarbpBasicRenderer } from './YarbpBasicRenderer.js'
@@ -110,7 +111,8 @@ const KnownFlavors = Object.freeze({
   UI_MOCKUP: {
     names: ['ui', 'форма'],
     textExample: [],
-    renderer: HTMLUIRenderer
+    renderer: HTMLUIRenderer,
+    suggestions: uiFormSuggestions
   },
   XPM: {
     names: ['кпо', 'xpm'],

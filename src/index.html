@@ -18,13 +18,18 @@
     `'unsafe-inline'`. Инлайн-стилей в самой разметке уже нет (A-8).
 
     `blob:` в default-src нужен выгрузкам: кнопки «JSON/HTML/мок-сервер» и BPMN
-    отдают файл через blob-URL. На script-src это не влияет.
+    отдают файл через blob-URL. Отдельно `blob:` разрешён и в `script-src` —
+    только для обработчиков `.код` UI-формы: код из разметки компилируется в
+    blob-модуль (UIRuntime.loadHandlers), потому что `new Function` и inline-
+    скрипты здесь запрещены. Другого пути исполнить пользовательский JS без
+    `'unsafe-eval'` нет; выгрузка формы обходится без blob — там код идёт
+    inline с nonce.
 
     Предпросмотр формы живёт в отдельной странице (preview/host.html): iframe со
     `srcdoc` наследует эту политику, а страница формы собрана из встроенных
     <script>/<style>, то есть под строгой политикой не запустилась бы.
   -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; frame-src 'self'; connect-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; frame-src 'self'; connect-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>ЯРБП конвертер</title>
   <meta name="description" content="Онлайн конвертер ЯРБП (языка разметки для быстрого прототипирования)">
   <link rel="stylesheet" href="css/editor.css">

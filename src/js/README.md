@@ -24,11 +24,16 @@ suggestions/
   xpmSuggestions.js      словарь XPM
   bpmnSuggestions.js     словарь BPMN
   flexFormsSuggestions.js словарь «форма-ТСД» (+ containers для строк ':')
+  uiFormSuggestions.js   словарь генератора форм: `группа:<вид>`, `поле:<вид>`,
+                         сахар и действия кнопок
 
 classes/
   YarbpFlavor.js         реестр «директива → конвертер/рендерер»
   YarbpBasicRenderer.js  базовый рендерер
-  UIGenerator.js         генератор UI-макета из AST (только разметка)
+  UIGenerator.js         генератор UI-макета из AST (обёртка: IR → HTML → стили)
+  ui/UIFormConvertor.js  AST → IR: формы, колонки, поля, кнопки, диагностика
+  ui/UIFormMarkup.js     IR → HTML (классы как в notes/design/target.html)
+  ui/UIFormStyles.js     стили формы: один источник для предпросмотра и выгрузки
   ui/UIRuntime.js        view-model и действия UI-макета
   HTMLExporter.js        выгрузка HTML
   ast-converters/        AST → JSON/XML/Protobuf/BPMN/OpenAPI/…

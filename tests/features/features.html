@@ -37,6 +37,7 @@
   import { UIGenerator } from '../../src/js/classes/UIGenerator.js';
 import { UIRuntime } from '../../src/js/classes/ui/UIRuntime.js';
 import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
+import { FileManager } from '../../src/js/modules/FileManager.js';
 import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
 
   const resultBox = document.getElementById('result');
@@ -592,7 +593,7 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   try {
     const cssText = await (await fetch('../../src/css/editor.css')).text();
     check('ссылки: CSS-цвета светлой и тёмной темы',
-      /\.ide-code-ref[^{]*\{[^}]*color:\s*#e35301/i.test(cssText) &&
+      /\.ide-code-ref[^{]*\{[^}]*color:\s*#98542b/i.test(cssText) &&
       /body\.dark \.ide-code-ref[^{]*\{[^}]*color:\s*#f0c674/i.test(cssText),
       'нет цвета ссылок в editor.css');
     check('ссылки: класса для параметров макроса в CSS больше нет',
@@ -866,17 +867,28 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   /* ------------------------------------------------------------------ */
   const uiCode = join(
     '! как форма',
+    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
     'форма',
-    '  группа:плитка',
-    '    .направление горизонтально',
-    '    табы .ид ops',
+    '  группа#ops:плитка = Операции',
+    '    табы#ops',
     '      таб#список',
-    '        группа:набор-соответствий',
+    '        группа:наборСоответствий',
+    '          поле#вид .значение Раскрой',
+    '        кнопка = + Добавить операцию',
+    '          .навигация #ops.добавить',
     '      таб#добавить',
-    '        группа',
-    '          поле = Количество / / да',
-    '            .доп-функционал очистить',
-    '            .тип-данных Число'
+    '        группа:плитка',
+    '          ..доп-функционал очистить',
+    '          надпись = Операция',
+    '          группа',
+    '            поле#количество:число = Количество / / да',
+    '              ..доп-функционал очистить',
+    '              .ширина полностью',
+    '        кнопка = + Добавить ещё',
+    '          ..источник #добавить',
+    '          ..приемник #ops',
+    '        кнопка = ← Назад к списку',
+    '          .навигация #ops.список'
   );
   const uiParsed = build(uiCode);
   const uiGenerator = new UIGenerator(false);
@@ -887,79 +899,250 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   const uiRuntime = new UIRuntime(uiHostEl);
   uiRuntime.mount();
 
-  const uiTabs = uiHostEl.querySelectorAll('.tab-btn');
-  check('UI: табы отрисованы', uiTabs.length === 2, String(uiTabs.length));
-  check('UI: .направление горизонтально применяется',
-    !!uiHostEl.querySelector('.group-content.direction-horizontal'));
-  if (uiTabs.length === 2) {
-    uiTabs[1].click();
-    check('UI: переключение на второй таб',
-      uiHostEl.querySelector('.form-view').classList.contains('active'));
-    uiTabs[0].click();
-    check('UI: переключение на первый таб',
-      uiHostEl.querySelector('.list-view').classList.contains('active'));
-  }
+  const uiViews = uiHostEl.querySelectorAll('.list-view, .form-view');
+  check('UI: два представления отрисованы', uiViews.length === 2, String(uiViews.length));
 
   const uiShow = uiHostEl.querySelector('.show-form-btn');
   if (uiShow) uiShow.click();
+  const uiFormView = uiHostEl.querySelector('.form-view');
+  check('UI: .навигация открывает форму добавления',
+    !!uiFormView && uiFormView.style.display === 'block',
+    uiFormView ? uiFormView.style.display : 'нет формы');
 
   const uiInput = uiHostEl.querySelector('.form-view input');
-  const uiClear = uiHostEl.querySelector('.field-clear');
-  const uiSubmit = uiHostEl.querySelector('.submit-item');
+  const uiClear = uiHostEl.querySelector('[data-clear]');
   const uiList = uiHostEl.querySelector('.items-list');
+  check('UI: поле, очистка и список отрисованы',
+    !!uiInput && !!uiClear && !!uiList);
+  check('UI: тип поля стал маской ввода',
+    !!uiInput && uiInput.getAttribute('data-mask') === 'number' &&
+    uiInput.hasAttribute('required'),
+    uiInput ? String(uiInput.getAttribute('data-mask')) : 'нет поля');
 
-  check('UI: форма, поле и очистка отрисованы',
-    !!uiInput && !!uiClear && !!uiSubmit && !!uiList);
-  check('UI: .тип-данных сохранён в data-type',
-    !!uiInput && uiInput.getAttribute('data-type') === 'Число',
-    uiInput ? String(uiInput.getAttribute('data-type')) : 'нет поля');
-
-  if (uiInput && uiClear && uiSubmit && uiList) {
+  if (uiInput && uiClear) {
     uiInput.value = '5';
     uiClear.click();
     check('UI: очистка поля работает', uiInput.value === '');
-
-    uiSubmit.click();
-    check('UI: required не пускает пустое значение',
-      uiList.querySelectorAll('.list-item').length === 0,
-      String(uiList.querySelectorAll('.list-item').length));
-
-    uiInput.value = '5';
-    uiSubmit.click();
-    check('UI: строка добавлена после заполнения',
-      uiList.querySelectorAll('.list-item').length === 1 &&
-      uiList.textContent.includes('5'),
-      uiList.textContent.slice(0, 80));
   }
 
-  const uiRemove = uiHostEl.querySelector('.remove-item');
+  const uiCopy = uiHostEl.querySelector('.add-copy');
+  if (uiCopy) uiCopy.click();
+  const uiItems = uiHostEl.querySelectorAll('.repeatable-item');
+  const uiHeader = uiHostEl.querySelectorAll('.repeatable-header span');
+  check('UI: add-copy добавляет запись и нумерует её',
+    uiItems.length === 2 && uiHeader.length === 2 &&
+    uiHeader[1].textContent === 'Операция 2',
+    Array.from(uiHeader).map(item => item.textContent).join('|'));
+
+  const uiRemove = uiHostEl.querySelector('.form-view .remove-item');
   if (uiRemove) uiRemove.click();
-  check('UI: remove-item удаляет строку формы',
-    uiHostEl.querySelector('.repeatable-item') === null);
+  check('UI: remove-item удаляет запись формы',
+    uiHostEl.querySelectorAll('.repeatable-item').length === 1);
+
+  const uiBack = uiHostEl.querySelector('.back-to-list');
+  if (uiBack) uiBack.click();
+  const uiListView = uiHostEl.querySelector('.list-view');
+  check('UI: .навигация возвращает список',
+    !!uiListView && uiListView.style.display === 'block' &&
+    uiFormView.style.display === 'none',
+    uiListView ? uiListView.style.display : 'нет списка');
 
   uiRuntime.destroy();
   uiHostEl.remove();
+
+  /* ------------------------------------------------------------------ */
+  /* UI-рантайм: маски ввода, проверка обязательных полей при отправке    */
+  /* ------------------------------------------------------------------ */
+  const maskCode = join(
+    '! как форма',
+    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    'форма#contact',
+    '  .метод post',
+    '  поле#телефон:телефон = Телефон / +7 (999) 123 45 67 / да',
+    '  поле#почта:почта = Почта / foo@bar.com / да',
+    '  кнопка = Отправить',
+    '    .отправить да'
+  );
+  const maskParsed = build(maskCode);
+  const maskHost = document.createElement('div');
+  maskHost.innerHTML = new UIGenerator(false).generateHTML(maskParsed.ast);
+  document.body.appendChild(maskHost);
+  const maskRuntime = new UIRuntime(maskHost);
+  maskRuntime.mount();
+
+  const phone = maskHost.querySelector('input[data-mask="tel"]');
+  const mail = maskHost.querySelector('input[data-mask="email"]');
+  check('UI: телефон и почта получили маски',
+    !!phone && !!mail && phone.type === 'tel' && mail.type === 'email',
+    phone ? phone.type : 'нет телефона');
+
+  if (phone) {
+    phone.value = '89991234567';
+    phone.dispatchEvent(new Event('input', { bubbles: true }));
+    check('UI: телефон форматируется по мере ввода',
+      phone.value === '+7 (999) 123-45-67',
+      phone.value);
+  }
+
+  const maskForm = maskHost.querySelector('form');
+  function submitMaskHost() {
+    const event = new Event('submit', { bubbles: true, cancelable: true });
+    if (maskForm) maskForm.dispatchEvent(event);
+    return document.querySelector('.ui-dialog');
+  }
+
+  if (phone) {
+    phone.value = '';
+    phone.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  let maskDialog = submitMaskHost();
+  check('UI: пустая отправка не проходит и подсвечивает поля',
+    !!maskDialog && maskHost.querySelectorAll('.field-invalid').length === 2,
+    String(maskHost.querySelectorAll('.field-invalid').length));
+  if (maskDialog) maskDialog.querySelector('button').click();
+
+  if (phone) {
+    phone.value = '8 999 123 45 67';
+    phone.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  if (mail) {
+    mail.value = 'not-a-mail';
+    mail.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  maskDialog = submitMaskHost();
+  check('UI: неверная почта не проходит проверку',
+    !!maskDialog && /Почта/.test(maskDialog.textContent) &&
+    maskHost.querySelectorAll('.field-invalid').length === 1,
+    maskDialog ? maskDialog.textContent.trim() : 'нет диалога');
+  if (maskDialog) maskDialog.querySelector('button').click();
+
+  if (mail) {
+    mail.value = 'master@yarbp.ru';
+    mail.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  maskDialog = submitMaskHost();
+  check('UI: корректные данные отправляются',
+    !!maskDialog && /Данные отправлены/.test(maskDialog.textContent) &&
+    maskHost.querySelectorAll('.field-invalid').length === 0,
+    maskDialog ? maskDialog.textContent.trim() : 'нет диалога');
+  if (maskDialog) maskDialog.querySelector('button').click();
+
+  maskRuntime.destroy();
+  maskHost.remove();
+
+  /* ------------------------------------------------------------------ */
+  /* Комментарии внутри блока не должны становиться содержимым формы      */
+  /* ------------------------------------------------------------------ */
+  const commentCode = join(
+    '! как форма',
+    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    'форма',
+    '  группа#card:плитка = Карточка',
+    '    -- служебный комментарий',
+    '    поле#имя = Имя .значение Тест'
+  );
+  const commentHost = document.createElement('div');
+  commentHost.innerHTML = new UIGenerator(false).generateHTML(build(commentCode).ast);
+  const commentText = commentHost.textContent;
+  check('UI: комментарий в блоке не попадает в форму',
+    !/служебный/.test(commentText) && !!commentHost.querySelector('input'),
+    commentText.slice(0, 80));
+
+  const columnCode = join(
+    '! как форма',
+    'форма',
+    '  группа#left:плитка = Слева -- левая колонка',
+    '    поле#имя = Имя',
+    '  группа#right:плитка = Справа -- правая колонка',
+    '    поле#фамилия = Фамилия'
+  );
+  const columnHost = document.createElement('div');
+  columnHost.innerHTML = new UIGenerator(false).generateHTML(build(columnCode).ast);
+  const legends = Array.from(columnHost.querySelectorAll('legend'))
+    .map(node => node.textContent);
+  const leftColumn = columnHost.querySelector('.left-column');
+  const rightColumn = columnHost.querySelector('.right-column');
+  check('UI: «-- колонка» задаёт сторону и не попадает в заголовок',
+    legends.length === 2 && legends[0] === 'Слева' && legends[1] === 'Справа' &&
+    !!leftColumn && leftColumn.querySelectorAll('.fieldset-card').length === 1 &&
+    !!rightColumn && rightColumn.querySelectorAll('.fieldset-card').length === 1,
+    legends.join('|'));
+
+  const columnContainer = join(
+    '! как форма',
+    'форма',
+    '  группа -- левая колонка',
+    '    группа:плитка = Слева',
+    '      поле#имя = Имя',
+    '  группа -- правая колонка',
+    '    группа:плитка = Справа',
+    '      поле#фамилия = Фамилия'
+  );
+  const containerHost = document.createElement('div');
+  containerHost.innerHTML = new UIGenerator(false)
+    .generateHTML(build(columnContainer).ast);
+  check('UI: группа-колонка («группа -- левая колонка») раскладывает карточки',
+    !!containerHost.querySelector('.left-column .fieldset-card') &&
+    !!containerHost.querySelector('.right-column .fieldset-card') &&
+    containerHost.querySelector('legend').textContent === 'Слева',
+    String(containerHost.querySelectorAll('.fieldset-card').length));
+
+  const manyColumns = join(
+    '! как форма',
+    'форма',
+    '  группа:плитка = Первая',
+    '    .колонка первая',
+    '    поле#a1 = A1',
+    '  группа:плитка = Вторая',
+    '    .колонка вторая',
+    '    поле#b1 = B1',
+    '  группа:плитка = Материалы',
+    '    .колонка материалы',
+    '    поле#c1 = C1',
+    '  группа:плитка = Сводка',
+    '    .колонка сводка',
+    '    .доля 2',
+    '    поле#d1 = D1'
+  );
+  const manyHost = document.createElement('div');
+  manyHost.innerHTML = new UIGenerator(false).generateHTML(build(manyColumns).ast);
+  const manyGrid = manyHost.querySelector('.form-grid');
+  const manyColumnsNodes = manyGrid ? Array.from(manyGrid.children) : [];
+  const columnNames = manyColumnsNodes.map(node => node.dataset.column || '');
+  check('UI: колонки задаются именами, число не ограничено',
+    manyColumnsNodes.length === 4 &&
+    columnNames.join('|') === 'первая|вторая|материалы|сводка',
+    manyColumnsNodes.length + ': ' + columnNames.join('|'));
+  check('UI: доля ширины колонки (`.доля 2`) попадает в разметку',
+    manyColumnsNodes.length === 4 && manyColumnsNodes[3].dataset.share === '2',
+    manyColumnsNodes.length ? String(manyColumnsNodes[3].dataset.share) : 'нет колонок');
 
   /* ------------------------------------------------------------------ */
   /* UI-рантайм: .источник/.приемник, .навигация, .проверить, .диалог    */
   /* ------------------------------------------------------------------ */
   const actionCode = join(
     '! как форма',
+    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
     'форма',
-    '  табы .ид ops',
-    '    таб#список',
-    '      группа:набор-соответствий',
-    '    таб#добавить',
-    '      поле#количество:число = Количество',
-    '      кнопка = Добавить',
-    '        .источник #добавить',
-    '        .приемник #список',
-    '      кнопка = Назад',
-    '        .навигация #ops.список',
-    '        .проверить #добавить.количество',
-    '        .тип_проверки пусто',
-    '        .цель_проверки запретить',
-    '        .диалог Заполните количество / Ок'
+    '  группа#ops:плитка = Операции',
+    '    табы#ops',
+    '      таб#список',
+    '        группа:наборСоответствий',
+    '          поле#вид .значение Раскрой',
+    '        кнопка = + Добавить операцию',
+    '          .навигация #ops.добавить',
+    '      таб#добавить',
+    '        поле#количество:число = Количество / / да',
+    '        кнопка = + Добавить ещё',
+    '          ..источник #добавить',
+    '          ..приемник #ops',
+    '        кнопка = Назад',
+    '          .навигация #ops.список',
+    '          .проверить #добавить.количество',
+    '          .тип_проверки пусто',
+    '          .цель_проверки запретить',
+    '          .диалог Заполните количество / Ок'
   );
   const actionParsed = build(actionCode);
   const actionGenerator = new UIGenerator(false);
@@ -970,36 +1153,37 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   const actionRuntime = new UIRuntime(actionHost);
   actionRuntime.mount();
 
-  const actionTabs = actionHost.querySelectorAll('.tab-btn');
-  const actionButtons = actionHost.querySelectorAll('.ui-action');
-  check('UI: кнопки с действиями отрисованы',
-    actionTabs.length === 2 && actionButtons.length === 2,
-    'tabs=' + actionTabs.length + ', actions=' + actionButtons.length);
+  const actionButtons = actionHost.querySelectorAll('.show-form-btn, .add-copy, .back-to-list');
+  check('UI: кнопки представлений отрисованы', actionButtons.length === 3,
+    String(actionButtons.length));
 
   const backButton = Array.from(actionButtons).find(btn => btn.textContent.includes('Назад'));
-  const addButton = Array.from(actionButtons).find(btn => btn.textContent.includes('Добавить'));
-  if (actionTabs.length === 2) actionTabs[1].click();
+  const addButton = Array.from(actionButtons).find(btn => btn.textContent.includes('Добавить ещё'));
+  const showButton = actionHost.querySelector('.show-form-btn');
+  if (showButton) showButton.click();
+  const actionForm = actionHost.querySelector('.form-view');
   if (backButton) backButton.click();
   const dialog = document.querySelector('.ui-dialog');
-  const formPanel = actionHost.querySelector('[data-tab-id="добавить"]');
-  check('UI: диалог показывает причину и не пускает назад',
+  check('UI: .проверить/.диалог не пускает назад',
     !!dialog && /Заполните количество/.test(dialog.textContent) &&
-    !!formPanel && formPanel.classList.contains('active'),
+    !!actionForm && actionForm.style.display === 'block',
     dialog ? dialog.textContent.trim() : 'нет диалога');
   if (dialog) dialog.querySelector('button').click();
 
-  const actionInput = actionHost.querySelector('[data-tab-id="добавить"] input');
-  const actionList = actionHost.querySelector('[data-tab-id="список"] .items-list');
+  const actionInput = actionHost.querySelector('.form-view input');
   if (actionInput) actionInput.value = '5';
   if (addButton) addButton.click();
-  check('UI: .источник/.приемник переносит строку и чистит источник',
-    !!actionList && actionList.querySelectorAll('.list-item').length === 1 &&
-    actionList.textContent.includes('5') && !!actionInput && actionInput.value === '',
-    actionList ? actionList.textContent.slice(0, 80) : 'нет списка');
-  check('UI: view-model получил строку приёмника',
-    !!actionRuntime.viewModel &&
-    (actionRuntime.viewModel.snapshot().lists['список'] || []).length === 1,
-    JSON.stringify(actionRuntime.viewModel ? actionRuntime.viewModel.snapshot() : null));
+  const actionCopies = actionHost.querySelectorAll('.repeatable-item');
+  check('UI: .источник/.приемник добавляет запись формы',
+    actionCopies.length === 2,
+    String(actionCopies.length));
+  check('UI: add-copy даёт пустую запись с новым индексом',
+    actionCopies.length === 2 &&
+    !!actionCopies[1].querySelector('input') &&
+    actionCopies[1].querySelector('input').value === '' &&
+    /\[1\]/.test(actionCopies[1].querySelector('input').name),
+    actionCopies.length > 1 && actionCopies[1].querySelector('input')
+      ? actionCopies[1].querySelector('input').name : 'нет копии');
 
   actionRuntime.destroy();
   actionHost.remove();
@@ -1013,21 +1197,141 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   document.body.appendChild(exportedFrame);
   const exportedOk = await exportedLoaded;
   const exportedDoc = exportedFrame.contentDocument;
-  const exportedTabs = exportedDoc ? exportedDoc.querySelectorAll('.tab-btn') : [];
-  if (exportedTabs.length === 2) exportedTabs[1].click();
+  const exportedViews = exportedDoc ? exportedDoc.querySelectorAll('.list-view, .form-view') : [];
+  const exportedShow = exportedDoc ? exportedDoc.querySelector('.show-form-btn') : null;
+  if (exportedShow) exportedShow.click();
+  const exportedForm = exportedDoc ? exportedDoc.querySelector('.form-view') : null;
   check('выгрузка: форма из разметки и UIRuntime работают',
-    exportedOk && exportedTabs.length === 2 &&
-    exportedDoc.querySelector('[data-tab-id="добавить"]').classList.contains('active'),
-    exportedDoc ? 'tabs=' + exportedTabs.length : 'нет документа');
+    exportedOk && exportedViews.length === 2 &&
+    !!exportedForm && exportedForm.style.display === 'block',
+    exportedDoc ? 'views=' + exportedViews.length : 'нет документа');
   exportedFrame.remove();
 
-  /* Редактируемая таблица-соответствий: строки, колонки и постфикс. */
-  const tableCode = join(
+  /* JS-обработчики `.код`: IR, разметка, исполнение и выгрузка. */
+  const codeHandlers = join(
     '! как форма',
     'форма',
-    '  группа:таблица-соответствий',
-    '    поле:строка = Номер',
-    '    поле:целое = Количество / / / шт.'
+    '  поле#кол:число = Количество',
+    '  кнопка = Умножить',
+    '    .код ```js',
+    "    runtime.setValue('сумма', Number(runtime.value('кол')) * 2);",
+    '    ```',
+    '  поле#сумма:число = Сумма',
+    '  кнопка = Отметить',
+    '    .событие загрузка',
+    '    .код ```js',
+    '    window.__codeLoadRan = true;',
+    '    ```'
+  );
+  const codeParsed = build(codeHandlers);
+  const codeGenerator = new UIGenerator(false);
+  const codeHtml = codeGenerator.generateHTML(codeParsed.ast);
+  const codeIR = codeGenerator.lastIR;
+
+  check('UI: .код даёт обработчик с событием по умолчанию',
+    codeIR.handlers.length === 2 &&
+    codeIR.handlers[0].event === 'click' &&
+    codeIR.handlers[1].event === 'load' &&
+    /runtime\.setValue/.test(codeIR.handlers[0].code),
+    JSON.stringify(codeIR.handlers.map(item => ({ id: item.id, event: item.event }))));
+
+  check('UI: разметка несёт data-handler и инертный JSON, без onclick',
+    /data-handler="[^"]+"/.test(codeHtml) &&
+    /data-handler-event="click"/.test(codeHtml) &&
+    codeHtml.includes('<script type="application/json" class="yarbp-handlers">') &&
+    !/onclick=/i.test(codeHtml),
+    codeHtml.slice(0, 120));
+
+  const codeHost = document.createElement('div');
+  codeHost.innerHTML = codeHtml;
+  document.body.appendChild(codeHost);
+  const codeRuntime = new UIRuntime(codeHost);
+  codeRuntime.mount();
+
+  const codeQty = codeHost.querySelector('input[data-field="кол"]');
+  if (codeQty) {
+    codeQty.value = '5';
+    codeQty.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  // Код приходит blob-скриптом: даём ему загрузиться до нажатия.
+  await new Promise(resolve => setTimeout(resolve, 60));
+
+  const codeMultiply = Array.from(codeHost.querySelectorAll('[data-handler]'))
+    .find(button => button.textContent.includes('Умножить'));
+  if (codeMultiply) codeMultiply.click();
+  const codeSum = codeHost.querySelector('input[data-field="сумма"]');
+  check('UI: .код исполняется, помощник runtime.setValue работает',
+    !!codeSum && codeSum.value === '10',
+    codeSum ? codeSum.value : 'нет поля');
+
+  check('UI: .событие загрузка срабатывает после монтирования',
+    window.__codeLoadRan === true, String(window.__codeLoadRan));
+  delete window.__codeLoadRan;
+
+  codeRuntime.destroy();
+  codeHost.remove();
+
+  const bslCode = join(
+    '! как форма',
+    'форма',
+    '  кнопка = Тест',
+    '    .код ```bsl',
+    '    Процедура Тест()',
+    '    КонецПроцедуры',
+    '    ```'
+  );
+  const bslGenerator = new UIGenerator(false);
+  bslGenerator.generateHTML(build(bslCode).ast);
+  const bslDiagnostics = bslGenerator.diagnostics()
+    .filter(item => item.code === 'code-language');
+  check('UI: фрагмент .код не на JS даёт диагностику code-language',
+    bslDiagnostics.length === 1 && bslGenerator.lastIR.handlers.length === 0,
+    JSON.stringify(bslGenerator.diagnostics()));
+
+  const codeExported = await new HTMLExporter(codeParsed.ast, false).generateFullHTML();
+  const handlersAt = codeExported.indexOf('window.__yarbpUIHandlers[');
+  const mountAt = codeExported.indexOf('new UIRuntime(document).mount()');
+  check('выгрузка: код .код встроен inline-скриптом с nonce до монтирования',
+    handlersAt > 0 && mountAt > handlersAt &&
+    /<script nonce="[^"]+">\n[\s\S]*?window\.__yarbpUIHandlers\[/.test(codeExported),
+    'handlers@' + handlersAt + ', mount@' + mountAt);
+
+  const codeFrame = document.createElement('iframe');
+  codeFrame.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:0';
+  codeFrame.srcdoc = codeExported;
+  const codeLoaded = waitForLoad(codeFrame);
+  document.body.appendChild(codeFrame);
+  await codeLoaded;
+
+  const codeDoc = codeFrame.contentDocument;
+  const codeView = codeDoc && codeDoc.defaultView ? codeDoc.defaultView : window;
+  const frameQty = codeDoc ? codeDoc.querySelector('input[data-field="кол"]') : null;
+  if (frameQty) {
+    frameQty.value = '7';
+    frameQty.dispatchEvent(new codeView.Event('input', { bubbles: true }));
+  }
+  const frameMultiply = codeDoc
+    ? Array.from(codeDoc.querySelectorAll('[data-handler]'))
+      .find(button => button.textContent.includes('Умножить'))
+    : null;
+  if (frameMultiply) frameMultiply.click();
+  const frameSum = codeDoc ? codeDoc.querySelector('input[data-field="сумма"]') : null;
+  check('выгрузка: обработчик .код работает в скачанной странице',
+    !!frameSum && frameSum.value === '14',
+    frameSum ? frameSum.value : 'нет поля');
+  check('выгрузка: .событие загрузка срабатывает в скачанной странице',
+    !!(codeView && codeView.__codeLoadRan === true),
+    String(codeView && codeView.__codeLoadRan));
+  codeFrame.remove();
+
+  /* Редактируемая таблица: строки, колонки и постфикс. */
+  const tableCode = join(
+    '! как форма',
+    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    'форма',
+    '  группа:таблица',
+    '    поле#номер:строка = Номер',
+    '    поле#количество:целое = Количество / / / шт.'
   );
   const tableParsed = build(tableCode);
   const tableGenerator = new UIGenerator(false);
@@ -1066,7 +1370,7 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   const restoredTableInput = uiTable ? uiTable.querySelector('tbody input') : null;
   check('UI: состояние таблицы восстанавливается из снимка',
     !!restoredTableInput && restoredTableInput.value === '7' &&
-    (tableRuntime.getState().tables['corr-1'] || [])[0].Номер === '7',
+    (tableRuntime.getState().tables['corr-1'] || [])[0].номер === '7',
     restoredTableInput ? 'значение=' + restoredTableInput.value : 'нет поля');
 
   const tableRemove = uiTable ? uiTable.querySelector('.remove-table-row') : null;
@@ -1508,6 +1812,90 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   check('L-1: объект вставлен в позицию директивы',
     afterKeys.indexOf('первый') < afterKeys.indexOf('форма'),
     JSON.stringify(afterKeys));
+
+  /* ------------------------------------------------------------------ */
+  /* Предопределённый пример UI-формы: стартовый файл и папка «Примеры»  */
+  /* ------------------------------------------------------------------ */
+  const exampleData = new FileManager('yarbp_features_examples')._getDefaultData();
+  const orderExample = exampleData.files.find(file => file.slug === 'ui-order-form');
+  check('UI: пример формы заказа есть в «Примерах»',
+    !!orderExample && !!orderExample.isBuiltin,
+    orderExample ? orderExample.name : 'нет примера');
+  check('UI: пример формы заказа открывается сразу',
+    !!orderExample && exampleData.activeFileId === orderExample.id,
+    String(exampleData.activeFileId));
+
+  const exampleManager = new FileManager('yarbp_features_examples_link');
+  const linkedExample = exampleManager._findBuiltinByKey('ui-order-form');
+  check('UI: ссылка «?example=ui-order-form» ведёт на пример',
+    !!linkedExample && linkedExample.id === 'builtin-10',
+    linkedExample ? linkedExample.id : 'пример не найден по slug');
+
+  const exampleGenerator = new UIGenerator(false);
+  let exampleIr = null;
+  let exampleHtml = '';
+  let exampleError = '';
+  try {
+    const exampleParsed = build(orderExample ? orderExample.content : '');
+    exampleIr = exampleGenerator.convert(exampleParsed.ast);
+    exampleHtml = exampleGenerator.generateHTML(exampleParsed.ast);
+  } catch (error) {
+    exampleError = String(error && error.stack || error);
+  }
+
+  const exampleDiagnostics = exampleIr ? exampleIr.diagnostics : [];
+  check('UI: пример формы заказа разбирается без замечаний',
+    !!exampleIr && exampleDiagnostics.length === 0,
+    exampleError || exampleDiagnostics
+      .map(item => item.code + ': ' + item.text).join('; '));
+
+  check('UI: в примере нет .код — разметка остаётся чистой', 
+    !!exampleIr && exampleIr.handlers.length === 0 &&
+    !exampleHtml.includes('data-handler='),
+    exampleIr ? String(exampleIr.handlers.length) : 'нет IR');
+
+  const exampleHost = document.createElement('div');
+  exampleHost.innerHTML = exampleHtml;
+  document.body.appendChild(exampleHost);
+  const exampleRuntime = new UIRuntime(exampleHost);
+  exampleRuntime.mount();
+
+  const exampleCards = exampleHost.querySelectorAll('.fieldset-card');
+  const examplePlateRows = exampleHost.querySelectorAll('.order-card .info-row');
+  const exampleTotal = exampleHost.querySelectorAll('.order-card .total-row');
+  const exampleListItems = exampleHost.querySelectorAll('.items-list .list-item');
+  const exampleViews = exampleHost.querySelectorAll('.list-view, .form-view');
+  const exampleSubmit = exampleHost.querySelector('button[type="submit"]');
+
+  check('UI: в примере пять карточек и две плашки', 
+    exampleCards.length === 5 && exampleHost.querySelectorAll('.order-card').length === 2 &&
+    examplePlateRows.length === 7,
+    'cards=' + exampleCards.length + ', rows=' + examplePlateRows.length);
+  check('UI: строка «Статус» в примере — итоговая', 
+    exampleTotal.length === 1 && exampleTotal[0].textContent.includes('Заполняется'),
+    String(exampleTotal.length));
+  check('UI: в примере шесть строк списков', 
+    exampleListItems.length === 6, String(exampleListItems.length));
+  check('UI: в примере три пары представлений', 
+    exampleHost.querySelectorAll('.list-view').length === 3 &&
+    exampleHost.querySelectorAll('.form-view').length === 3 &&
+    exampleViews.length === 6,
+    String(exampleViews.length));
+  check('UI: в примере кнопка отправки', 
+    !!exampleSubmit && exampleSubmit.textContent.includes('Отправить отчёт о выработке'),
+    exampleSubmit ? exampleSubmit.textContent.trim() : 'нет кнопки');
+  check('UI: в примере очистка штрихкода и постфикс в подписи', 
+    exampleHost.querySelectorAll('[data-clear]').length === 1 &&
+    Array.from(exampleHost.querySelectorAll('.input-group label'))
+      .some(node => node.textContent.includes('(шт.)')),
+    'clears=' + exampleHost.querySelectorAll('[data-clear]').length);
+  check('UI: переключатель показывает условный блок', 
+    exampleHost.querySelectorAll('.dynamic-block.is-visible').length === 1 &&
+    exampleHost.querySelectorAll('.dynamic-block').length === 3,
+    'visible=' + exampleHost.querySelectorAll('.dynamic-block.is-visible').length);
+
+  exampleRuntime.destroy();
+  exampleHost.remove();
 
   // Результат уже записан до UI-блока — обновляем, чтобы новые проверки
   // попали в отчёт, а не только в title.

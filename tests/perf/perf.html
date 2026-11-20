@@ -58,7 +58,18 @@
 
   function nextFrame(win) {
     return new Promise(resolve => {
-      win.requestAnimationFrame(() => win.requestAnimationFrame(resolve));
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      try {
+        win.requestAnimationFrame(() => win.requestAnimationFrame(done));
+      } catch (error) {
+        // offscreen-iframe в headless может не рисовать: ниже страховка таймером
+      }
+      setTimeout(done, 300);
     });
   }
 

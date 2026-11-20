@@ -1038,6 +1038,88 @@ check('IR: таблица собрана поколоночно',
     типы: table['типы'],
   }) : 'нет таблицы');
 
+stage('scenario: ui form');
+/* ------------------------------------------------------------------ */
+/* 8. Подсказки генератора форм (`! как форма`): виды групп и полей,   */
+/*    значения свойств и пара «подпись — значение» плашки              */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Подсказки пересчитываются асинхронно: сразу после смены текста в меню
+ * ещё лежат варианты прошлого контекста. Ждём появления ожидаемого
+ * варианта (`waitLabels`), как это делает `complete()`.
+ */
+async function uiFormSuggest(code, expected) {
+  editor.value = code;
+  editor.setSelectionRange(code.length, code.length);
+  fireInput();
+  await waitLabels(expected);
+  return labels();
+}
+
+items = await uiFormSuggest('! как форма\nформа\n  гр', 'группа:плитка');
+check('форма: «гр» предлагает виды групп',
+  items.includes('группа:плитка') &&
+  items.includes('группа:таблицаСоответствий') &&
+  items.includes('группа:наборСоответствий') &&
+  items.includes('группа:таблица'),
+  items.slice(0, 8).join(' | '));
+check('форма: «гр» не сужает список — поля и кнопки на месте',
+  items.includes('поле:флаг') && items.includes('поле:выбор') &&
+  items.includes('кнопка ='), items.join(' | '));
+
+items = await uiFormSuggest('! как форма\nформа\n  группа\n    .напр',
+  '.направление');
+check('форма: у группы предложено «.направление»',
+  items.includes('.направление'), items.slice(0, 6).join(' | '));
+
+items = await uiFormSuggest('! как форма\nформа\n  группа\n    .направление в',
+  'вертикально');
+check('форма: у «.направление» предложено «вертикально»',
+  items.includes('вертикально'), items.slice(0, 4).join(' | '));
+
+items = await uiFormSuggest('! как форма\nформа\n  группа\n    поле = Имя\n      .обяз',
+  '.обязательный');
+check('форма: у поля предложено «.обязательный»',
+  items.includes('.обязательный'), items.slice(0, 6).join(' | '));
+
+items = await uiFormSuggest(
+  '! как форма\nформа\n  группа\n    поле = Имя\n      ..доп-функционал о',
+  'очистить');
+check('форма: у «..доп-функционал» предложено «очистить»',
+  items.includes('очистить'), items.slice(0, 4).join(' | '));
+
+items = await uiFormSuggest(
+  '! как форма\nформа\n  группа:таблицаСоответствий\n    поле = Сумма\n      .зн',
+  '.значение');
+check('форма: у строки плашки предложено «.значение»',
+  items.includes('.значение'), items.slice(0, 6).join(' | '));
+
+items = await uiFormSuggest('! как форма\nформа\n  кнопка = Оформить\n    .нав',
+  '.навигация');
+check('форма: у кнопки предложено «.навигация»',
+  items.includes('.навигация'), items.slice(0, 6).join(' | '));
+
+items = await uiFormSuggest('! как форма\nформа\n  табы .ид товары\n    таб',
+  'таб#id');
+check('форма: внутри «табы» предложен «таб#id»',
+  items.includes('таб#id'), items.slice(0, 4).join(' | '));
+
+items = await uiFormSuggest(
+  '! как форма\nформа\n  кнопка = Оформить\n    .ко', '.код');
+check('форма: у кнопки предложен «.код»',
+  items.includes('.код'), items.slice(0, 6).join(' | '));
+
+items = await uiFormSuggest(
+  '! как форма\nформа\n  кнопка = Оформить\n    .соб', '.событие');
+check('форма: у кнопки предложено «.событие»',
+  items.includes('.событие'), items.slice(0, 6).join(' | '));
+
+items = await uiFormSuggest(
+  '! как форма\nформа\n  кнопка = Оформить\n    .событие з', 'загрузка');
+check('форма: у «.событие» предложено «загрузка»',
+  items.includes('загрузка'), items.slice(0, 5).join(' | '));
+
 } catch (error) {
   check('сценарий: исключение', false,
     String(error && (error.stack || error.message) || error));
