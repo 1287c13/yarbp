@@ -42,10 +42,7 @@ function findLineIndex(lines, offset) {
   return Math.max(0, Math.min(low, lines.length - 1));
 }
 
-/**
- * Строки, которые затрагивает выделение. Если выделение заканчивается ровно
- * на начале следующей строки, эта следующая строка не включается.
- */
+// Строки, которые затрагивает выделение.
 function getAffectedRange(lines, start, end) {
   const first = findLineIndex(lines, start);
   let last = findLineIndex(lines, end);
@@ -55,17 +52,7 @@ function getAffectedRange(lines, start, end) {
   return { first, last };
 }
 
-/**
- * Массовое комментирование/раскомментирование строк маркером "--/".
- *
- * Маркер ставится после ведущих пробелов, поэтому отступы строки сохраняются.
- * Если все непустые строки диапазона уже закомментированы — маркер снимается.
- * Иначе маркер добавляется только к незакомментированным строкам.
- *
- * @param {HTMLTextAreaElement} textarea - редактируемое поле
- * @param {string} prefix - маркер комментария
- * @returns {boolean} true, если текст был изменён
- */
+// Массовое комментирование/раскомментирование строк маркером "--/".
 export function toggleLineComments(textarea, prefix = COMMENT_PREFIX) {
   if (!textarea) return false;
 

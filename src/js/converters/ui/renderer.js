@@ -4,7 +4,6 @@ import { HTMLExporter } from "./exporter.js";
 import { UIRuntime } from "./runtime.js";
 import { Ticker } from "../../utils/Ticker.js";
 
-/** Пауза перед перерисовкой UI-макета: значения полей не должны дёргаться. */
 const UI_RENDER_DELAY_MS = 300;
 
 export class HTMLUIRenderer extends YarbpBasicRenderer {
@@ -83,12 +82,10 @@ export class HTMLUIRenderer extends YarbpBasicRenderer {
     this.lastDark = isDark;
   }
 
-  /** Снимок пользовательского состояния перед пересборкой разметки. */
   captureState() {
     return this.runtime ? this.runtime.getState() : null;
   }
 
-  /** Вернуть значения/строки/таб после пересборки. */
   restoreState(state) {
     if (!state || !this.runtime) return;
     this.runtime.restore(state);

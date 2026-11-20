@@ -1,14 +1,4 @@
-/**
- * Языковые директивы ЯРБП, которые меняют AST до конвертеров.
- *
- * Здесь живут только чистые функции: ни DOM, ни FileManager, ни рендереров.
- * Парсер передаёт токены/текст и колбэки разрешения типов, поэтому модуль
- * можно тестировать без редактора.
- *
- * Главный принцип: **строгий формат или ничего**. Строка, похожая на
- * директиву, но не совпавшая по формату, не даёт ни эффекта, ни диагностики:
- * иначе можно сломать произвольные директивы конвертеров.
- */
+// Языковые директивы ЯРБП, которые меняют AST до конвертеров.
 
 const MEANING = 'MEANING';
 
@@ -28,7 +18,6 @@ function isRootDirective(sourceText, start) {
   return sourceText.slice(lineStart, start) === '';
 }
 
-/** Все DIRECTIVE-токены с признаком «на нулевом отступе». */
 export function collectDirectives(tokens, sourceText = '') {
   return (tokens || [])
     .filter(isDirectiveToken)
@@ -40,37 +29,18 @@ export function collectDirectives(tokens, sourceText = '') {
     }));
 }
 
-/**
- * `! отключить идентификаторы` / `! disable ids` → true.
- *
- * Директива возвращает прежнее поведение парсера: `#id` в ключе остаётся
- * частью ключа (`поле#итог`), а не отдельным полем узла `id`. Формат строгий:
- * только эти две фразы, лишние слова и пустое значение директивой не считаются.
- */
+// `! отключить идентификаторы` / `! disable ids` → true.
 export function parseIdsDirective(value) {
   return IDS_OFF_RE.test(String(value ?? ''));
 }
 
-/**
- * Отключены ли идентификаторы узлов (`#id`) в документе.
- *
- * Как и остальные языковые директивы, работает только на нулевом отступе.
- * Подсветка (`linkRanges.js`) спрашивает эту же функцию, поэтому цвет `#id` и
- * разбор AST не расходятся.
- */
+// Отключены ли идентификаторы узлов (`#id`) в документе.
 export function idsDisabled(tokens, sourceText = '') {
   return collectDirectives(tokens, sourceText)
     .some(directive => directive.atRoot && parseIdsDirective(directive.value));
 }
 
-/**
- * Имена свойств и разделитель из правой части директивы.
- *
- * Разделитель — единственная серия символов вне `[\p{L}\p{N}_-]`, например
- * `/`, `//`, `,`, `|`. Одно имя можно объявить без разделителя. Любая
- * неоднозначность (разные разделители, лишний/недостающий разделитель,
- * пустые имена) — не директива, возвращаем null.
- */
+// Имена свойств и разделитель из правой части директивы.
 function parseSugarNames(rest) {
   const text = String(rest ?? '').trim();
   if (!text) return null;
@@ -97,13 +67,7 @@ function parseSugarNames(rest) {
   return { names, separator };
 }
 
-/**
- * `разбор-сахара(<тег>) имя-1 / имя-2` → {tag, names, separator}.
- *
- * Без скобок (`разбор-сахара имя-1 / имя-2`) тег не указан: правило
- * применяется ко всем тегам (`tag: null`). Частное правило для тега важнее
- * глобального.
- */
+// `разбор-сахара(<тег>) имя-1 / имя-2` → {tag, names, separator}.
 export function parseSugarDirective(value) {
   const text = String(value ?? '');
   const specific = text.match(SUGAR_RE);
@@ -119,13 +83,7 @@ export function parseSugarDirective(value) {
   return names ? { tag: null, ...names } : null;
 }
 
-/**
- * Делит значение сахара по объявленному разделителю.
- *
- * Ведущий одиночный разделитель (`/orders`) считается частью первого
- * значения: иначе путь OpenAPI терял бы первый символ. Остальные разделители
- * режут как обычно, поэтому `a / / b` даёт пустой средний сегмент.
- */
+// Делит значение сахара по объявленному разделителю.
 export function splitSugarValue(value, separator) {
   const text = String(value ?? '');
   if (!separator) return [text.trim()];
@@ -142,11 +100,7 @@ export function splitSugarValue(value, separator) {
   return parts;
 }
 
-/**
- * Тег без вида (`:`). Обычно id уже вынесен парсером в поле `id`, но при
- * `! отключить идентификаторы` `#` остаётся в ключе — тогда режем и его:
- * `поле#количество` → `поле`.
- */
+// Тег без вида (`:`).
 export function baseKey(key) {
   if (key === undefined || key === null) return '';
   return String(key).split(/[:#]/, 1)[0];
@@ -168,21 +122,7 @@ function makeProperty(part, key, position, resolveType, resolveValue) {
   };
 }
 
-/**
- * Разворачивает объявленный сахар в явные свойства.
- *
- * `! разбор-сахара(тег) имя / ид` + `тег = 1 / 2` даёт узлу детей
- * `.имя 1` и `.ид 2`, а `value` убирается. Без директивы ничего не меняется.
- *
- * @param {object} ast — AST парсера (ещё не заморожен)
- * @param {object} options
- * @param {Array} options.tokens — токены лексера
- * @param {string} options.sourceText — исходный текст
- * @param {Function} options.resolveType — парсер: значение → valueType
- * @param {Function} options.resolveValue — парсер: значение → JS-значение
- * @param {Array} options.diagnostics — массив нефатальных замечаний
- * @returns {object} тот же AST
- */
+// Разворачивает объявленный сахар в явные свойства.
 export function applySugarTyping(ast, options = {}) {
   const {
     tokens = [],
@@ -222,8 +162,7 @@ export function applySugarTyping(ast, options = {}) {
       return;
     }
 
-    /* Синтетические свойства этого прохода не разворачиваем повторно:
-       иначе глобальное правило применяется к самому себе бесконечно. */
+    // Синтетические свойства этого прохода не разворачиваем повторно: иначе глобальное правило применяется к самому себе…
     if (synthetic.has(node)) return;
 
     const sugarValue = typeof node.value === 'string' &&
@@ -277,13 +216,7 @@ export function applySugarTyping(ast, options = {}) {
 
 const IMPORT_RE = /^\s*импорт\s+(\S+)\s+из\s+(?:"([^"]+)"|(\S+))\s*$/iu;
 
-/**
- * `! импорт <объект> из <файл>` → {object, file}.
- *
- * Имя файла — один токен без пробелов или строка в двойных кавычках.
- * Любое отклонение (лишние слова, файл с пробелами без кавычек, незакрытая
- * кавычка) — не директива импорта: null, без диагностики.
- */
+// `! импорт <объект> из <файл>` → {object, file}.
 export function parseImportDirective(value) {
   const match = String(value ?? '').match(IMPORT_RE);
   if (!match) return null;
@@ -297,15 +230,7 @@ function importDiagnostic(diagnostics, directive, message) {
   diagnostics.push({ message, start: directive.start });
 }
 
-/**
- * Импортирует объекты из других документов песочницы.
- *
- * Директивы обрабатываются после макросов и до L-2: файл-источник
- * разбирается своим парсером (макросы и его собственный сахар уже
- * раскрыты), затем нужный объект верхнего уровня вставляется в корень.
- * Импорт в импортируемом файле в MVP не выполняется — это отдельный
- * follow-up с защитой от циклов.
- */
+// Импортирует объекты из других документов песочницы.
 export function applyImports(ast, options = {}) {
   const {
     tokens = [],

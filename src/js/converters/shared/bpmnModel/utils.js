@@ -1,11 +1,9 @@
 import { nodeTypes } from '../../../core/YarbpParser.js';
 import { escapeHtml, findChildrenByKeyValue, IdGenerator } from '../../../utils/utils.js';
 
-/* ---------------- XML ---------------- */
 
 export { escapeHtml };
 
-/* ---------------- AST ---------------- */
 
 export function childValue(node, key) {
   const found = findChildrenByKeyValue(node, 'key', key)
@@ -18,12 +16,7 @@ export function extractExplicitId(node) {
   return value === null ? null : String(value);
 }
 
-/**
- * Имя узла: явное `.имя` (а также `.лэйбл`/`.название`) важнее значения
- * после «=». Так `! разбор-сахара(задача) имя / ид` работает без
- * специальных веток в каждом билдере, а старые документы без директивы
- * продолжают брать имя из `value`.
- */
+// Имя узла: явное `.имя` (а также `.лэйбл`/`.название`) важнее значения после «=».
 export function nodeName(node) {
   for (const key of ['имя', 'лэйбл', 'название']) {
     const value = childValue(node, key);
@@ -32,7 +25,6 @@ export function nodeName(node) {
   return node && node.value !== undefined ? node.value : null;
 }
 
-/** Текст артефакта: `.текст` → `.имя` → `.лэйбл` → значение после «=». */
 export function nodeText(node) {
   for (const key of ['текст', 'имя', 'лэйбл']) {
     const value = childValue(node, key);
@@ -41,10 +33,7 @@ export function nodeText(node) {
   return node && node.value !== undefined && node.value !== null ? node.value : '';
 }
 
-/**
- * Читает .х / .у.
- * null, если оба отсутствуют; иначе недостающее = 0.
- */
+// Читает .х / .у.
 export function readBounds(node) {
   const x = childValue(node, 'х');
   const y = childValue(node, 'у');
@@ -59,9 +48,6 @@ export function readBounds(node) {
   };
 }
 
-/**
- * Читает .х-закр / .у-закр.
- */
 export function readJoinBounds(node) {
   const x = childValue(node, 'х-закр');
   const y = childValue(node, 'у-закр');
@@ -72,10 +58,7 @@ export function readJoinBounds(node) {
   };
 }
 
-/**
- * Читает .вход → [[x, y], [x, y], ...].
- * null, если не задан.
- */
+// Читает .вход → [[x, y], [x, y], ...].
 export function readWaypoints(node) {
   const value = childValue(node, 'вход');
   if (value === null || value === undefined) return null;
@@ -94,6 +77,5 @@ export function readWaypoints(node) {
   return points.length ? points : null;
 }
 
-/* ---------------- ID ---------------- */
 
 export { IdGenerator };

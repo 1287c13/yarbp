@@ -2,25 +2,19 @@ import {YarbpBasicRenderer} from "../shared/renderer.js";
 import {YarbpXPMConverter} from "./converter.js";
 import { Ticker } from '../../utils/Ticker.js';
 
-/** Пауза перед перерисовкой XPM: первый кадр сразу, дальнейшие — после набора. */
 const XPM_RENDER_DELAY_MS = 250;
 
-/**
- * Рендерер XPM-диаграмм.
- * Преобразует AST в SVG-разметку с сеточной компоновкой тайлов.
- */
+// Рендерер XPM-диаграмм.
 export class XPMRenderer extends YarbpBasicRenderer {
   static DEFAULTS = Object.freeze({
     SVG_NS: 'http://www.w3.org/2000/svg',
 
-    // Точки
     DOT_RADIUS: 7,
     CONNECTION_RADIUS_MULTIPLIER: 2,
     DOT_BASE_X: 130,
     DOT_BASE_Y: 150,
     DIAMOND_RADIUS_FACTOR: 1.4,
 
-    // Текст
     TEXT_OFFSET_X: 15,
     TEXT_OFFSET_Y: 25,
     TITLE_FONT_SIZE: 18,
@@ -29,44 +23,35 @@ export class XPMRenderer extends YarbpBasicRenderer {
     TITLE_LINE_SPACING: 18,
     FONT_FAMILY: 'Arial',
 
-    // Стрелки
     SHORT_LINE_LEN: 20,
     IN_ARROW_OFFSET: 8,
     STROKE_WIDTH: 1,
     ARROW_LABEL_POSITION: 0.2,
 
-    // Маркеры
     MARKER_WIDTH: 6,
     MARKER_HEIGHT: 6,
 
-    // Стили линий
     DASHED_LINE_PATTERN: '8,4',
     DOTTED_LINE_PATTERN: '2,3',
 
-    // Вся схема
     GLOBAL_TILE_OFFSET_X: 10,
     GLOBAL_TILE_OFFSET_Y: 10,
     TILE_BOTTOM_PADDING: 15,
 
-    // Изображения
     IMAGE_HEIGHT: 70,
 
-    // Тайлы
     DEFAULT_TILE_SIZE: 40,
 
-    // Роли
     ROLE_NAME_FONT_SIZE: 20,
     ROLE_NAME_OFFSET_X: 5,
     ROLE_NAME_OFFSET_Y: 54,
     ROLE_NAME_MAX_WIDTH: 200,
 
-    // разделитель
     DIVIDER_FONT_SIZE: 18,
     DIVIDER_OFFSET_X: 5,
     DIVIDER_OFFSET_Y: 0,
     DIVIDER_LINE_HEIGHT: 18,
 
-    // Таблица решений
     DECISION_TABLE_OFFSET_X: 10,
     DECISION_TABLE_OFFSET_Y: -35,
     DECISION_TABLE_HEADER_HEIGHT: 24,
@@ -80,7 +65,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     DECISION_ARROW_BACK_RADIUS: 10,
     DECISION_ARROW_END_CLEARANCE: 7,
 
-    // Introduction (появление)
     INTRODUCTION_IMAGE_SCALE: 0.43,
     INTRODUCTION_IMAGE_RATIO: 0.7,
     INTRODUCTION_FONT_SIZE: 12,
@@ -88,7 +72,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     INTRODUCTION_OFFSET_X: 10,
     INTRODUCTION_OFFSET_Y: 3,
 
-    // UI
     UI_PADDING: '10px 20px 10px 20px',
     UI_BACKGROUND_LIGHT: '#ffffff',
     UI_BACKGROUND_DARK: '#2d2d2d',
@@ -96,18 +79,15 @@ export class XPMRenderer extends YarbpBasicRenderer {
     UI_COLOR_DARK: '#e0e0e0',
     UI_FONT_FAMILY: 'system-ui, sans-serif',
 
-    // Ошибки
     ERROR_FONT_SIZE: 14,
     ERROR_LINE_HEIGHT: 20,
     ERROR_EMOJI_OFFSET: 24,
     ERROR_COMPACT_SIZE: 400,
 
-    // Цвета
     COLOR_MAIN_LIGHT: '#335272',
     COLOR_MAIN_DARK: '#c3cdd0',
     COLOR_WHITE: '#ffffff',
 
-    // Кэш
     SIZE_CACHE_LIMIT: 1000
   });
   static _themeVersion = 0;
@@ -238,9 +218,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     };
   }
 
-  /**
-   * Применяет dash-паттерн к элементу линии/пути.
-   */
   static applyLineStyle(el, style) {
     if (style === 'dashed') {
       el.setAttribute('stroke-dasharray', XPMRenderer.DEFAULTS.DASHED_LINE_PATTERN);
@@ -249,9 +226,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     }
   }
 
-  /**
-   * Возвращает точки подключения вокруг точки (top/right/bottom/left + radius).
-   */
   static buildConnectionPoints(dotX, dotY, dotRadius) {
     const connectionRadius = dotRadius * XPMRenderer.DEFAULTS.CONNECTION_RADIUS_MULTIPLIER;
     return {
@@ -334,14 +308,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     return g;
   }
 
-  /**
-   * Строит SVG-линию стрелки для заданного направления.
-   * @param {'left'|'right'|'top'|'down'} arrowType
-   * @param {object} arrowCfg
-   * @param {object} connectionPoints
-   * @param {number} tileWidth  — ширина тайла (для right-стрелки)
-   * @param {number} tileHeight — высота тайла (для down-стрелки)
-   */
   static drawArrow(arrowType, arrowCfg, connectionPoints, tileWidth, tileHeight) {
     const {
       show = false, style = 'solid', hasMarker = false, hasInMarker = false
@@ -415,7 +381,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     const label = arrowCfg.label;
     if (!label) return null;
 
-    // Те же координаты, что и у линии в drawArrow
     const pts = connectionPoints;
     let x1, y1, x2, y2;
 
@@ -613,7 +578,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     const rowHeight = XPMRenderer.DEFAULTS.DECISION_TABLE_ROW_HEIGHT;
     const stroke = XPMRenderer.getColor();
 
-    // --- Шапка ---
     const hasHeader = table.header.some(cell => cell !== '');
     if (hasHeader) {
       let cellX = x;
@@ -635,7 +599,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
       });
     }
 
-    // --- Рамка таблицы (только строки данных) ---
     const frameY = y + headerHeight;
     const frameHeight = rowsHeight;
 
@@ -676,7 +639,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
       }
     }
 
-    // --- Строки данных ---
     table.rows.forEach((row, rowIndex) => {
       const rowY = frameY + rowIndex * rowHeight + rowHeight / 2;
       let cellX = x;
@@ -719,7 +681,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     const group = XPMRenderer.createSvgElement('g');
     const color = XPMRenderer.getColor();
 
-    // Верхний левый угол блока
     const baseX = dotX + offsetX;
     const baseY = dotY - offsetY - iconH;
 
@@ -809,11 +770,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
   /* region Таблица решений ============================================= */
 
-  /**
-   * Строит SVG-путь обходной дуги для «обратной» стрелки таблицы решений.
-   * Точки: (x0,y0) → (x1,y0) → (x1,y1) → (x2,y1) → (x2,y2).
-   * Углы скругляются квадратичными кривыми радиуса r, если сегменты достаточно длинные.
-   */
+  // Строит SVG-путь обходной дуги для «обратной» стрелки таблицы решений.
   static _buildBackLoopPath(x0, y0, x1, y1, x2, y2, r) {
     const parts = [`M ${x0} ${y0}`];
 
@@ -822,7 +779,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     const horiz2 = Math.abs(x1 - x2);
     const vert2 = Math.abs(y2 - y1);
 
-    // Поворот 1: (x1, y0)
     if (r > 0 && horiz1 > r && vert1 > r) {
       parts.push(`L ${x1 - r} ${y0}`);
       parts.push(`Q ${x1} ${y0} ${x1} ${y0 - r}`);
@@ -830,7 +786,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
       parts.push(`L ${x1} ${y0}`);
     }
 
-    // Поворот 2: (x1, y1)
     if (r > 0 && vert1 > r && horiz2 > r) {
       parts.push(`L ${x1} ${y1 + r}`);
       parts.push(`Q ${x1} ${y1} ${x1 - r} ${y1}`);
@@ -838,7 +793,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
       parts.push(`L ${x1} ${y1}`);
     }
 
-    // Поворот 3: (x2, y1)
     if (r > 0 && horiz2 > r && vert2 > r) {
       parts.push(`L ${x2 + r} ${y1}`);
       parts.push(`Q ${x2} ${y1} ${x2} ${y1 + r}`);
@@ -850,17 +804,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
     return parts.join(' ');
   }
 
-  /**
-   * Сдвигает конец стрелки назад, чтобы маркер «всплыл» из целевой точки.
-   * Направление — от точки назначения (x2, y2) к предыдущей точке кривой (x1, y1).
-   *
-   * @param {number} x1 — предпоследняя точка кривой
-   * @param {number} y1
-   * @param {number} x2 — конец кривой (центр целевой точки)
-   * @param {number} y2
-   * @param {number} trim — на сколько пикселей отступить от (x2, y2)
-   * @returns {{x: number, y: number}}
-   */
+  // Сдвигает конец стрелки назад, чтобы маркер «всплыл» из целевой точки.
   static _trimArrowEnd(x1, y1, x2, y2, trim) {
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -871,15 +815,8 @@ export class XPMRenderer extends YarbpBasicRenderer {
     };
   }
 
-  /**
-   * Создаёт data-URI c SVG-изображением «пина» по ключу.
-   * @param {string} color
-   * @param {string} src — ключ иконки (например, 'casual-man')
-   * @returns {string}
-   */
   static _createPinSVGDataURI(color, src) {
-    // Иконки — огромные статические SVG. Base64-кодирование каждой из них
-    // на каждый рендер заметно бьёт по XPM; кэшируем готовый data-URI.
+    // Иконки — огромные статические SVG.
     const cacheKey = color + '|' + src;
     const cached = XPMRenderer.pinDataUriCache.get(cacheKey);
     if (cached) return cached;
@@ -933,8 +870,7 @@ export class XPMRenderer extends YarbpBasicRenderer {
   render() {
     const isDark = XPMRenderer.isDark();
 
-    // Первый показ — сразу: панель не должна пустовать. Дальше — по тикеру,
-    // иначе каждый keystroke пересобирает всю SVG (на XPO это секунды).
+    // Первый показ — сразу: панель не должна пустовать.
     if (!this.rendered) {
       this.performRender();
       return;
@@ -1071,7 +1007,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
             minWidth = Math.max(minWidth, tableRight - minX);
             minHeight = Math.max(minHeight, tableBottom - minY);
 
-            // Запас справа под исходящие стрелки: GAP * кол-во строк таблицы
             const arrowReserve = XPMRenderer.DEFAULTS.DECISION_TABLE_GAP * Math.max(1, config.decisionTable.rows.length);
             minWidth += arrowReserve;
           }
@@ -1084,15 +1019,12 @@ export class XPMRenderer extends YarbpBasicRenderer {
               const offsetX = XPMRenderer.DEFAULTS.INTRODUCTION_OFFSET_X;
               const offsetY = XPMRenderer.DEFAULTS.INTRODUCTION_OFFSET_Y;
 
-              // блок рисуется вправо-вверх от точки
               const introLeft = dotX + offsetX;
               const introRight = introLeft + introSize.width;
               const introTop = dotY - offsetY - introSize.height;
 
-              // расширяем по правому краю и по верху
               minWidth = Math.max(minWidth, introRight - minX);
 
-              // если верх блока выше minY, сдвигаем minY и растём по высоте
               if (introTop < minY) {
                 const delta = minY - introTop;
                 minHeight += delta;
@@ -1412,11 +1344,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
   /* region Компоновка ================================================== */
 
-  /**
-   * Собирает SVG-полотно из тайлов.
-   * @param {Array<{grid:{x:number,y:number}, config:object}>} tiles
-   * @returns {{svg: SVGElement, totalWidth: number, totalHeight: number}}
-   */
   composeTiles(tiles) {
     if (tiles.some(tile => tile.config === undefined || tile.config === null)) {
       const size = XPMRenderer.DEFAULTS.ERROR_COMPACT_SIZE;
@@ -1543,7 +1470,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
         let d;
 
         if (endX < startX) {
-          // Обратный случай: обходная дуга через верх
           const backOffsetX = XPMRenderer.DEFAULTS.DECISION_ARROW_BACK_OFFSET_X;
           const backMarginTop = XPMRenderer.DEFAULTS.DECISION_ARROW_BACK_MARGIN_TOP;
           const backRadius = XPMRenderer.DEFAULTS.DECISION_ARROW_BACK_RADIUS;
@@ -1553,13 +1479,11 @@ export class XPMRenderer extends YarbpBasicRenderer {
           const tableTopY = rowsY0;
           const loopY = Math.max(proposedLoopY, tableTopY - backMarginTop);
 
-          // Последний сегмент дуги — вертикальный вниз, поэтому конец
-          // сдвигаем строго вверх на trim.
+          // Последний сегмент дуги — вертикальный вниз, поэтому конец сдвигаем строго вверх на trim.
           const trimmedEndY = endY - trim;
 
           d = XPMRenderer._buildBackLoopPath(startX, startY, loopX, loopY, endX, trimmedEndY, backRadius);
         } else {
-          // Прямой случай: кубическая безье
           const dx = Math.max(40, Math.abs(endX - startX) * 0.3);
           const c1x = startX + dx;
           const c1y = startY;
@@ -1631,11 +1555,9 @@ export class XPMRenderer extends YarbpBasicRenderer {
         let startY;
 
         if (endX < centerX) {
-          // Обратный случай — обходная дуга начинается сверху от точки
           startX = centerX;
           startY = centerY - connectionRadius;
         } else {
-          // Прямой случай — сдвиг по направлению к цели
           const dx = endX - centerX;
           const dy = endY - centerY;
           const dist = Math.hypot(dx, dy) || 1;
@@ -1661,7 +1583,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
     let midY;
 
     if (isBackward) {
-      // Обходная дуга: вверх, назад, вниз
       const backMarginTop = XPMRenderer.DEFAULTS.DECISION_ARROW_BACK_MARGIN_TOP;
       const backRadius = XPMRenderer.DEFAULTS.DECISION_ARROW_BACK_RADIUS;
 
@@ -1679,7 +1600,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
       midX = (loopX + endX) / 2;
       midY = loopY;
     } else {
-      // Прямая кубическая безье
       const dx = Math.max(40, Math.abs(endX - startX) * 0.3);
       const c1x = startX + dx;
       const c1y = startY;
@@ -1693,7 +1613,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
       d = `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${trimmed.x} ${trimmed.y}`;
 
-      // Середина кубической безье при t = 0.5
       const t = 0.5;
       const mt = 1 - t;
       midX = mt*mt*mt*startX + 3*mt*mt*t*c1x + 3*mt*t*t*c2x + t*t*t*trimmed.x;
@@ -1714,7 +1633,6 @@ export class XPMRenderer extends YarbpBasicRenderer {
 
     if (!label) return;
 
-    // Подложка под текст цветом фона
     const fontSize = XPMRenderer.DEFAULTS.DECISION_TABLE_FONT_SIZE;
     const approxWidth = label.length * fontSize * 0.6;
 

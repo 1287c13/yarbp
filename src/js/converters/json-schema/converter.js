@@ -1,47 +1,22 @@
 import { nodeTypes } from '../../core/YarbpParser.js';
 import { buildSchemaObject } from '../shared/schemaFields.js';
 
-/**
- * Конвертер в JSON Schema (draft 2020-12).
- *
- * Та же разметка, что у OpenAPI (`схема` + `поле`), но выход — схема данных, а
- * не контракт API: её понимают валидаторы, редакторы JSON и генераторы типов.
- * Полезно, когда документ описывает структуру payload'а, а не эндпоинты.
- *
- *     ! как схема
- *     api = Заказ .версия 1 .описание "Заказ покупателя"
- *       ..схемы
- *         схема = Заказ
- *           поле = id .тип целое .обязательное да
- *           поле = client .тип ссылка:Клиент
- *         схема = Клиент
- *           поле = name .тип строка
- *
- * `$defs` — все схемы документа, корень — `.корень <имя>` (по умолчанию первая
- * схема). Непонятное — в `warnings`, как в остальных конвертерах.
- */
+// Конвертер в JSON Schema (draft 2020-12).
 
 const DRAFT = 'https://json-schema.org/draft/2020-12/schema';
 const REF_PREFIX = '#/$defs/';
 
-/** Атрибуты api — читаются через childValue, руками не обходятся. */
 const SCHEMA_API_ATTRS = Object.freeze(new Set([
   'версия', 'описание', 'заголовок', 'ид', 'корень',
 ]));
 
-/** Секции, которые разворачиваем (`..схемы`). */
 const SCHEMA_SECTIONS = Object.freeze(new Set(['схемы']));
 
 export class YarbpJsonSchemaConverter {
-  /**
-   * @param {object} ast — корень AST
-   * @param {{source?: string}} [options] — исходный текст (номера строк)
-   */
   constructor(ast, options = {}) {
     this.ast = ast;
     this.source = options.source || '';
     this.result = null;
-    /** Предупреждения: `{ line, message }[]` — читается после convert(). */
     this.warnings = [];
   }
 
@@ -111,7 +86,6 @@ export class YarbpJsonSchemaConverter {
     return this.result;
   }
 
-  /* ---------------- AST ---------------- */
 
   findApi(children) {
     for (const child of children) {
@@ -121,7 +95,6 @@ export class YarbpJsonSchemaConverter {
     return null;
   }
 
-  /** Схемы можно писать прямо в корне документа, без `api`. */
   topLevelNodes() {
     return (this.ast.children || []).filter(node => node.nodeType === nodeTypes.MEANING);
   }
@@ -161,7 +134,6 @@ export class YarbpJsonSchemaConverter {
     return null;
   }
 
-  /** Явное текстовое свойство (`.имя`, `.заголовок`, …) до `value`. */
   nodeText(node, keys) {
     for (const key of keys || []) {
       const value = this.childValue(node, key);

@@ -1,15 +1,6 @@
-/**
- * Общая часть «схемных» конвертеров: OpenAPI и JSON Schema.
- *
- * Разметка у них одна — `схема = <имя>` и `поле = <имя> .тип …`, — поэтому
- * построение полей живёт здесь, а конвертеры только раскладывают результат по
- * своим форматам. Иначе два набора типов и две трактовки `.обязательное`
- * разъехались бы через месяц.
- *
- * `ctx` — тонкий адаптер к конвертеру: `{ childValue, childValues, warn }`.
- */
+// Общая часть «схемных» конвертеров: OpenAPI и JSON Schema.
 
-/** Типы полей разметки → типы JSON Schema. */
+// Типы полей разметки → типы JSON Schema.
 export const FIELD_TYPES = Object.freeze({
   'строка':     'string',
   'целое':      'integer',
@@ -19,28 +10,17 @@ export const FIELD_TYPES = Object.freeze({
   'объект':     'object',
 });
 
-/** Значение-флаг: лексер превращает `да`/`нет` в boolean. */
 export function isFlagOn(value) {
   return value === true || value === 'да' || value === 'yes';
 }
 
-/**
- * Атрибуты поля, которые понимает конвертер.
- *
- * Список нужен не для чтения, а для проверки: `поле = id .тпи целое` раньше
- * молча становилось строкой, а `.обязателное да` — молча переставало делать
- * поле обязательным. Опечатка в три буквы не должна менять схему без единого
- * слова (у методов OpenAPI такая проверка уже была).
- */
+// Атрибуты поля, которые понимает конвертер.
 const FIELD_ATTRS = Object.freeze(new Set([
   'имя', 'название',
   'тип', 'элемент', 'формат', 'описание', 'пример', 'значение', 'обязательное',
 ]));
 
-/**
- * Одно поле схемы → JSON Schema свойства.
- * Неизвестный тип — предупреждение и `string` (как BPMN-конвертер: не молчим).
- */
+// Одно поле схемы → JSON Schema свойства.
 export function buildSchemaField(node, ctx) {
   for (const child of ctx.children(node)) {
     if (FIELD_ATTRS.has(child.key)) continue;
@@ -55,7 +35,6 @@ export function buildSchemaField(node, ctx) {
   } else if (FIELD_TYPES[typeValue]) {
     field.type = FIELD_TYPES[typeValue];
   } else if (String(typeValue).startsWith('ссылка:')) {
-    // `поле = клиент .тип ссылка:Клиент` → $ref на другую схему
     const prefix = ctx.refPrefix || '#/components/schemas/';
     field.$ref = prefix + String(typeValue).slice('ссылка:'.length);
   } else {
@@ -87,7 +66,6 @@ export function buildSchemaField(node, ctx) {
   return field;
 }
 
-/** `схема = <имя>` → объект JSON Schema с properties/required. */
 export function buildSchemaObject(node, ctx) {
   const schema = { type: 'object', properties: {} };
   const required = [];
@@ -107,7 +85,6 @@ export function buildSchemaObject(node, ctx) {
       continue;
     }
 
-    // Одноимённые поля раньше молча перетирали друг друга.
     if (schema.properties[String(name)]) {
       ctx.warn(child, 'поле «' + name + '» объявлено дважды — берём последнее');
     }

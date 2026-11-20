@@ -16,8 +16,7 @@ export class YarbpHighlighter {
     [TokenTypes.DIRECTIVE]: 'flavor',
     [TokenTypes.TYPE]: 'ide-code-type',
     [TokenTypes.CODE_BLOCK]: 'ide-code-codeblock',
-    // Недопустимый фрагмент: подсвечивается волнистым подчёркиванием, а текст
-    // под ним остаётся текстом (экранируется как все остальные токены).
+    // Недопустимый фрагмент: подсвечивается волнистым подчёркиванием, а текст под ним остаётся текстом (экранируется как…
     [TokenTypes.UNPARSED]: 'ide-code-unparsed'
   });
 
@@ -26,16 +25,7 @@ export class YarbpHighlighter {
     this.tokens = tokens;
   };
 
-  /**
-   * Диапазоны для подсветки: по возрастанию и без пересечений.
-   *
-   * Пересечения и вложенность HTML выразить не может: `<span>` не может
-   * начаться внутри одного и закончиться внутри другого. Раньше такие токены
-   * уходили в медленный путь, который вставлял разметку в уже собранную
-   * строку по «сырым» позициям — то есть давал битый HTML и вдобавок не
-   * экранировал текст. Теперь вложенный диапазон просто пропускается:
-   * внешний токен уже накрыл эти символы своим классом.
-   */
+  // Диапазоны для подсветки: по возрастанию и без пересечений.
   collectRanges() {
     const ranges = [];
 
@@ -43,7 +33,6 @@ export class YarbpHighlighter {
       const className = YarbpHighlighter.tokenTypesToCSSClasses[token.type];
       if (!className) continue;
 
-      // Нулевой или некорректный диапазон подсвечивать нечем.
       if (!Number.isFinite(token.start) || !Number.isFinite(token.end)) continue;
       if (token.end <= token.start) continue;
 
@@ -63,14 +52,7 @@ export class YarbpHighlighter {
     return ordered;
   };
 
-  /**
-   * Код → HTML подсветки. Текст экранируется: символ `<` в документе остаётся
-   * символом, а не началом тега (слой подсветки вставляется через innerHTML).
-   *
-   * Ссылки и макросы (`(( имя ))`, `@макрос`, их параметры) идут отдельным
-   * слоем диапазонов: они вложены в обычные токены, поэтому HTML не
-   * вкладывается, а режется по их границам — у куска остаются оба класса.
-   */
+  // Код → HTML подсветки.
   highlight() {
     const code = this.code ?? '';
     const ranges = this.collectRanges();
@@ -98,10 +80,7 @@ export class YarbpHighlighter {
     return collectLinkRanges(this.tokens, this.code ?? '');
   }
 
-  /**
-   * Ссылки, разложенные по токенам. И токены, и ссылки отсортированы, поэтому
-   * хватает одного прохода; ссылка всегда лежит внутри одного токена.
-   */
+  // Ссылки, разложенные по токенам.
   groupLinks(ranges, links) {
     const buckets = new Map();
     let index = 0;
@@ -121,13 +100,7 @@ export class YarbpHighlighter {
     return buckets;
   }
 
-  /**
-   * Один диапазон токена: либо обычный `<span>`, либо нарезка по вложенным
-   * ссылкам. Обычно классы не вкладываются (внешний токен уже накрыл
-   * символы), а суммируются: `ide-code-val ide-code-ref`. Исключение —
-   * диапазон с `standalone` (`#id`): он красится только своим классом, иначе
-   * наследует жирность ключа и слипается с ним.
-   */
+  // Один диапазон токена: либо обычный `<span>`, либо нарезка по вложенным ссылкам.
   renderRange(code, token, className, links) {
     if (token.type === TokenTypes.CODE_BLOCK) {
       return this.renderCodeBlock(code, token, className);

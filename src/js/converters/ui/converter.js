@@ -1,19 +1,4 @@
-/**
- * Конвертер UI-макета ЯРБП в промежуточное представление (IR).
- *
- * Модуль ничего не рисует и не трогает AST: на вход приходит дерево разбора,
- * на выходе — сериализуемый IR (form → columns → карточки, поля, кнопки).
- * HTML по IR собирает `UIFormMarkup`, стили — `UIFormStyles`.
- *
- * Словарь (всё кратко и общеупотребительно):
- *   элементы:   форма, группа, поле, кнопка, надпись, табы, таб, опция, выбор
- *   группы:     плитка (карточка), таблицаСоответствий (плашка),
- *               наборСоответствий (список), таблица (редактируемая)
- *   поля:       текст, число, целое, дата, время, почта, телефон, ссылка,
- *               штрихкод, выбор (список), радио, флаг, многострочный
- *   сахар поля: лэйбл / плейсхолдер / обязательный / постфикс
- *   сахар опции: представление / значение
- */
+// Конвертер UI-макета ЯРБП в промежуточное представление (IR).
 
 const MEANING = 'MEANING';
 
@@ -51,7 +36,6 @@ const ELEM_ALIAS = {
   'choice': ELEM.choice,
 };
 
-/** Канонические имена колонок, которые знает разметка (остальные — свои). */
 const COLUMN_SIDE = {
   'левая': 'left',
   'левый': 'left',
@@ -151,10 +135,7 @@ const NOTE_VARIANT = {
   'hint': 'hint',
 };
 
-/**
- * Маска ввода/проверки поля. Рантайм берёт её из `data-mask`, поэтому
- * формат значения задаётся типом поля, а не разметкой каждой формы.
- */
+// Маска ввода/проверки поля.
 const MASK_BY_CONTROL = {
   tel: 'tel',
   email: 'email',
@@ -167,10 +148,8 @@ const MASK_BY_CONTROL = {
   month: 'month',
 };
 
-/** Языки фрагмента `.код`, которые исполнит браузер. */
 const SCRIPT_LANGS = ['js', 'javascript', 'ecmascript', 'mjs'];
 
-/** Событие по умолчанию для вида IR-узла, если `.событие` не задано. */
 const EVENT_BY_TYPE = {
   form: 'submit',
   button: 'click',
@@ -188,7 +167,6 @@ const EVENT_BY_TYPE = {
   tab: 'click',
 };
 
-/** `.событие` по-русски и по-английски → имя DOM-события. */
 const EVENT_ALIAS = {
   'клик': 'click',
   'нажатие': 'click',
@@ -208,7 +186,6 @@ const EVENT_ALIAS = {
   'blur': 'blur',
 };
 
-/** Ключ без регистра, «ё» и разделителей: `Тип-Данных` → `типданных`. */
 export function norm(word) {
   return String(word === undefined || word === null ? '' : word)
     .toLowerCase()
@@ -216,7 +193,6 @@ export function norm(word) {
     .replace(/[^a-zа-я0-9]/g, '');
 }
 
-/** Значение свойства из «мешка» `readProps` по любому из имён. */
 export function propValue(props, ...names) {
   if (!props) return undefined;
   for (const name of names) {
@@ -226,13 +202,11 @@ export function propValue(props, ...names) {
   return undefined;
 }
 
-/** Флаговое свойство: `да`, `+`, `истина`, `1` — включено. */
 export function propFlags(props, names) {
   const value = propValue(props, ...names);
   return isTruthy(value);
 }
 
-/** Истина для сахарных отметок (`да`, `*`, `+`, `истина`, `1`). */
 export function isTruthy(value) {
   if (value === true) return true;
   if (value === false || value === undefined || value === null) return false;
@@ -243,14 +217,12 @@ export function isTruthy(value) {
     text === 'on';
 }
 
-/** Текст узла: строка или число, без ведущего `=`. */
 export function textOf(node) {
   if (!node || typeof node !== 'object') {
     return typeof node === 'string' || typeof node === 'number' ? String(node) : '';
   }
   if (node.value === undefined || node.value === null) return '';
   return String(node.value).replace(/^=\s*/, '')
-    // `-- комментарий` в той же строке лексер отдаёт частью значения.
     .replace(/\s+--\s.*$/s, '')
     .trim();
 }
@@ -259,36 +231,30 @@ export function isMeaning(node) {
   return !!node && node.nodeType === MEANING;
 }
 
-/** Хвост `-- комментарий` в ключе или значении узла. */
 export function markerTail(text) {
   const value = text === undefined || text === null ? '' : String(text);
   const match = value.match(/\s+--\s*(.+)$/s);
   return match ? match[1] : '';
 }
 
-/** Элемент по ключу узла: `поле#id` → `поле`, `группа -- левая` → `группа`. */
 export function elementOf(node) {
   if (!isMeaning(node)) return '';
   const raw = String(node.key || '').split('#')[0].split(':')[0];
   return ELEM_ALIAS[norm(markerTail(raw) ? raw.replace(/\s+--\s.*$/s, '') : raw)] || '';
 }
 
-/** Список флагов свойства: `['очистить']` или `'очистить, подсказка'`. */
 export function flagList(value) {
   if (value === undefined || value === null) return [];
   const items = Array.isArray(value) ? value : String(value).split(/[,\s]+/);
   return items.map(item => norm(item)).filter(Boolean);
 }
 
-/** Есть ли флаг в свойстве-наборе (`.доп-функционал`, `..флаги`). */
 export function hasFlag(props, names, flag) {
   return flagList(propValue(props, ...names)).indexOf(norm(flag)) >= 0;
 }
 
-/** Виды строки плашки, которые рисуются как итог (`.total-row`). */
 const TOTAL_KINDS = ['итог', 'всего', 'к-оплате', 'коплате'];
 
-/** Подпись итоговой строки: «Итого», «Всего», «К оплате». */
 export function isTotalLabel(text) {
   const value = norm(text);
   if (!value) return false;
@@ -296,7 +262,6 @@ export function isTotalLabel(text) {
     TOTAL_KINDS.indexOf(value) >= 0;
 }
 
-/** Короткий идентификатор из человеческого текста. */
 export function slug(text) {
   const base = String(text === undefined || text === null ? '' : text)
     .toLowerCase()
@@ -306,7 +271,6 @@ export function slug(text) {
   return base || 'item';
 }
 
-/** Уникальные имена в пределах одного родителя. */
 export class IdRegistry {
   constructor() {
     this.scopes = Object.create(null);
@@ -336,7 +300,6 @@ export class UIFormConvertor {
     this.fields = Object.create(null);
   }
 
-  /* ------------------------------ каркас формы ----------------------- */
 
   convert(rootAst) {
     this.fields = Object.create(null);
@@ -367,7 +330,6 @@ export class UIFormConvertor {
     this.handlerIds = Object.create(null);
     this.fieldDefs = this.indexFields(formNode);
 
-    // `.код` самой формы — обработчик события формы (по умолчанию `submit`).
     const formHandler = this.handlerOf(formNode, 'submit', 'форма');
     if (formHandler) {
       ir.handler = formHandler;
@@ -379,9 +341,7 @@ export class UIFormConvertor {
     const hasSides = children.some(node => this.columnOf(node));
     let column = null;
 
-    // Колонка по имени: «левая/правая/боковая» — канонические классы,
-    // любое другое имя (`материалы`, `первая`) — своя колонка. Числа нет:
-    // сколько имён объявлено, столько колонок и будет.
+    // Колонка по имени: «левая/правая/боковая» — канонические классы, любое другое имя (`материалы`, `первая`) — своя колонка.
     const columnFor = spec => {
       let found = ir.columns.find(item => item.side === spec.side);
       if (!found) {
@@ -400,8 +360,7 @@ export class UIFormConvertor {
       return found;
     };
 
-    // Без явных маркеров: первые две группы — две колонки, дальше — своя
-    // на каждую следующую группу (раньше всё лишнее сливалось в «боковую»).
+    // Без явных маркеров: первые две группы — две колонки, дальше — своя на каждую следующую группу (раньше всё лишнее…
     const autoColumn = () => {
       const used = ir.columns.map(item => item.side);
       const free = ['left', 'right'].find(side => used.indexOf(side) < 0);
@@ -419,13 +378,11 @@ export class UIFormConvertor {
         return;
       }
 
-      // Колонка: явное имя (`.колонка`/маркер/комментарий) важнее догадки по порядку.
       const spec = this.columnOf(node);
       if (spec) column = columnFor(spec);
       else if (!column) column = autoColumn();
       else if (!hasSides && (elem === ELEM.group || elem === ELEM.tabs)) column = autoColumn();
 
-      // Кнопка формы — такой же элемент колонки, как и остальные узлы.
       if (elem === ELEM.button) {
         const button = this.button(node, ctx);
         if (!button) return;
@@ -451,7 +408,6 @@ export class UIFormConvertor {
     return ir;
   }
 
-  /** Узел формы: `форма`, иначе — первый объект документа («как форма»). */
   findForm(node) {
     const named = this.findNamedForm(node);
     if (named) return named;
@@ -462,7 +418,6 @@ export class UIFormConvertor {
     return node;
   }
 
-  /** Поиск именно узла `форма` в дереве. */
   findNamedForm(node) {
     if (!isMeaning(node)) {
       for (const child of (node && node.children) || []) {
@@ -490,7 +445,6 @@ export class UIFormConvertor {
     this.ir.diagnostics.push({ level, code, text, path: path || '' });
   }
 
-  /* --------------------------- код-обработчики ------------------------ */
 
   /** Язык фрагмента совместим с браузером (```` ```js ````, `javascript`). */
   isScriptLang(language) {
@@ -498,11 +452,7 @@ export class UIFormConvertor {
     return !value || SCRIPT_LANGS.indexOf(value) >= 0;
   }
 
-  /**
-   * `.код` узла: сырой текст фрагмента (` ```js `) или скалярное значение.
-   * Не-JS фрагмент (```` ```bsl ````) обработчиком не становится — это
-   * диагностика, иначе браузер молча упал бы на `Процедура`.
-   */
+  // `.код` узла: сырой текст фрагмента (` ```js `) или скалярное значение.
   codeOf(node, path) {
     for (const child of this.meaningChildren(node)) {
       const key = norm(child && child.key);
@@ -532,7 +482,6 @@ export class UIFormConvertor {
     return null;
   }
 
-  /** `.событие клик|ввод|...` → имя DOM-события; иначе — по виду узла. */
   eventOf(props, fallback) {
     const raw = propValue(props, 'событие', 'event');
     const value = String(raw === undefined || raw === null ? '' : raw)
@@ -540,11 +489,9 @@ export class UIFormConvertor {
     if (!value) return fallback;
     const alias = EVENT_ALIAS[norm(value)];
     if (alias) return alias;
-    // `.событие keydown`: латинское имя события принимается как есть.
     return /^[a-z]+$/.test(value) ? value : fallback;
   }
 
-  /** Идентификатор обработчика: стабильный по пути узла и событию. */
   handlerId(path, event) {
     if (!this.handlerIds) this.handlerIds = Object.create(null);
     const base = 'h-' + slug(String(path || 'код').replace(/\./g, '-')) + '-' + event;
@@ -553,7 +500,6 @@ export class UIFormConvertor {
     return used === 0 ? base : base + '-' + (used + 1);
   }
 
-  /** `.код` + `.событие` узла → запись об обработчике (или null). */
   handlerOf(node, fallbackEvent, path) {
     const code = this.codeOf(node, path);
     if (!code) return null;
@@ -568,7 +514,6 @@ export class UIFormConvertor {
     };
   }
 
-  /** Обработчик садится на первый IR-узел и попадает в `ir.handlers`. */
   withHandler(node, items, ctx) {
     if (!items || !items.length) return items;
     const target = items[0];
@@ -580,27 +525,18 @@ export class UIFormConvertor {
     return items;
   }
 
-  /* ------------------------------ чтение AST -------------------------- */
 
   meaningChildren(node) {
     return ((node && node.children) || []).filter(isMeaning);
   }
 
-  /** Свойство ли это (`.ключ`/`..ключ`), а не элемент со своей ролью. */
   isPropNode(node) {
     const prefix = node.prefix || '';
     if (prefix !== '.' && prefix !== '..') return false;
     return !elementOf(node);
   }
 
-  /**
-   * `поле#итог:целое` → { key: 'поле', type: 'целое', id: 'итог', ref: false }.
-   * `:поле#итог` помечается как ссылка (`ref`).
-   *
-   * Парсер выносит `#id` в поле узла `id`, поэтому ключ обычно уже без `#`.
-   * Хвост после `#` остаётся запасным путём — для `! отключить идентификаторы`
-   * и для узлов, собранных до появления поля.
-   */
+  // `поле#итог:целое` → { key: 'поле', type: 'целое', id: 'итог', ref: false }.
   splitKey(node) {
     const raw = String((node && node.key) || '').trim();
     const hash = raw.indexOf('#');
@@ -618,7 +554,6 @@ export class UIFormConvertor {
     };
   }
 
-  /** Свойства узла: `.ключ значение` (скаляр) и `..ключ a b` (набор). */
   readProps(node) {
     const props = Object.create(null);
     this.meaningChildren(node).forEach(child => {
@@ -635,16 +570,11 @@ export class UIFormConvertor {
     return props;
   }
 
-  /** Содержимое узла без свойств и сахара. */
   contentChildren(node) {
     return this.meaningChildren(node).filter(child => !this.isPropNode(child) && !!child.key);
   }
 
-  /**
-   * Опции выбора: `опция = Представление / значение` (сахар разворачивает
-   * директива `! разбор-сахара(опция)`), либо явные `.представление`
-   * и `.значение`. Пустое значение не пишется в `value="..."`.
-   */
+  // Опции выбора: `опция = Представление / значение` (сахар разворачивает директива `! разбор-сахара(опция)`), либо…
   readOptions(node) {
     const options = [];
     this.meaningChildren(node).forEach(child => {
@@ -668,10 +598,7 @@ export class UIFormConvertor {
     return options;
   }
 
-  /**
-   * Индекс полей и табов: локальное имя и полный путь → описание.
-   * По нему разрешаются ссылки вида `.проверить #добавить.количество`.
-   */
+  // Индекс полей и табов: локальное имя и полный путь → описание.
   indexFields(formNode) {
     const index = Object.create(null);
     const walk = (node, parentPath) => {
@@ -709,7 +636,6 @@ export class UIFormConvertor {
     return index;
   }
 
-  /** Описание поля без привязки к месту: имя, подпись, вид, постфикс. */
   describeField(node, props, split) {
     const control = this.controlOf(split);
     const labelProp = propValue(props, 'лэйбл', 'подпись', 'метка');
@@ -737,7 +663,6 @@ export class UIFormConvertor {
     };
   }
 
-  /** Вид управления по типу поля. */
   controlOf(split) {
     const type = norm(String(split.type).replace(/\([^)]*\)/g, ''));
     if (CONTROL_BY_TYPE[type]) return CONTROL_BY_TYPE[type];
@@ -748,19 +673,16 @@ export class UIFormConvertor {
     return 'text';
   }
 
-  /** Вид управления конкретного узла (для ссылочных слотов роль не важна). */
   controlOfNode(node) {
     return this.controlOf(this.splitKey(node));
   }
 
-  /* ------------------------------ адреса узлов ------------------------ */
 
   nextUid() {
     this.uidCounter = (this.uidCounter || 0) + 1;
     return this.idPrefix + '-' + this.uidCounter;
   }
 
-  /** Узел в дереве: путь (соседние имена уникальны) и уникальный id. */
   place(ctx, local) {
     const scope = ctx.path || 'форма';
     const name = this.ids.take(scope, local || 'item');
@@ -775,7 +697,6 @@ export class UIFormConvertor {
     };
   }
 
-  /** Имя дочернего узла: `#id`, имя поля или текстовая подпись. */
   localOf(node, split, props) {
     if (split.id) return split.id;
     const named = propValue(props, 'ид', 'имя', 'name');
@@ -787,22 +708,13 @@ export class UIFormConvertor {
     return 'узел';
   }
 
-  /**
-   * Колонка узла: `.колонка правая` / `-- правая колонка` / `группа -- материалы`.
-   *
-   * «Левая/правая/боковая/центральная» получают канонические классы, любое
-   * другое имя (`материалы`, `первая`) — собственную колонку с этим именем.
-   * Количество колонок не ограничено: сколько имён объявлено, столько и будет.
-   *
-   * @returns {{side: string, name: string, share: number}|null}
-   */
+  // Колонка узла: `.колонка правая` / `-- правая колонка` / `группа -- материалы`.
   columnOf(node) {
     const props = this.readProps(node);
     let raw = propValue(props, 'колонка', 'column');
     if (raw === undefined || raw === '') raw = markerTail(node && node.key);
     if (!raw) raw = markerTail(node && node.value);
     if (!raw) raw = ((node && node.comments) || []).map(item => String((item && item.value) || '')).join(' ');
-    // `.колонка материалы -- пояснение`: хвост-комментарий не часть имени.
     const name = String(raw || '').replace(/\s+--\s.*$/s, '').trim();
     if (!name) return null;
 
@@ -820,7 +732,6 @@ export class UIFormConvertor {
     };
   }
 
-  /** Доля ширины колонки: `.доля 2` → flex-grow 2 (1..4). */
   columnShareOf(node) {
     const props = this.readProps(node);
     const raw = Number(propValue(props, 'доля', 'share'));
@@ -828,9 +739,7 @@ export class UIFormConvertor {
     return Math.min(4, Math.max(1, Math.round(raw)));
   }
 
-  /* ------------------------------ обход дерева ------------------------ */
 
-  /** Один узел → массив IR-узлов (узел может дать группу и блок условий). */
   convertNode(node, ctx) {
     const next = Object.assign({}, ctx, { depth: (ctx.depth || 0) + 1 });
     if (this.depthGuard(next)) return [];
@@ -856,7 +765,6 @@ export class UIFormConvertor {
     return this.withHandler(node, items, next);
   }
 
-  /** Неизвестный ключ: контейнер разворачивается, лист становится надписью. */
   wrapper(node, ctx) {
     const children = this.contentChildren(node);
     if (children.length) return this.convertListOf(children, ctx);
@@ -877,7 +785,6 @@ export class UIFormConvertor {
     return this.convertListOf(this.contentChildren(node), ctx);
   }
 
-  /** Дети по порядку; соседние наборы строк сливаются в один список. */
   convertListOf(children, ctx) {
     const out = [];
     children.forEach(child => {
@@ -894,7 +801,6 @@ export class UIFormConvertor {
     return out;
   }
 
-  /* ------------------------------ группы ------------------------------ */
 
   group(node, ctx) {
     const split = this.splitKey(node);
@@ -943,7 +849,6 @@ export class UIFormConvertor {
     };
   }
 
-  /** Направление и число колонок: явное `.направление` важнее догадки. */
   directionOf(props, items) {
     const raw = norm(propValue(props, 'направление', 'направление-вывода'));
     const flags = flagList(propValue(props, 'доп-функционал', 'флаги'));
@@ -994,7 +899,6 @@ export class UIFormConvertor {
     };
   }
 
-  /** Строка списка: ячейки «подпись — значение». */
   list(node, ctx, props, split) {
     const place = this.place(ctx, this.localOf(node, split, props, null));
     const slots = [];
@@ -1023,14 +927,7 @@ export class UIFormConvertor {
     };
   }
 
-  /**
-   * Редактируемая таблица: колонки из полей, строки добавляет рантайм.
-   *
-   * Колонка — обычное поле, поэтому в таблице работают те же виды:
-   * `поле:выбор` рисует список (в ячейке таблицы — компактный `select`),
-   * `поле:флаг` — флажок, `поле:многострочный` — `textarea`. Опции выбора
-   * читаются из вложенных `опция`, маска ввода — из типа поля.
-   */
+  // Редактируемая таблица: колонки из полей, строки добавляет рантайм.
   table(node, ctx, props, split) {
     const place = this.place(ctx, this.localOf(node, split, props, null));
     this.tableCounter = (this.tableCounter || 0) + 1;
@@ -1068,12 +965,7 @@ export class UIFormConvertor {
     };
   }
 
-  /**
-   * Пара «подпись — значение» для плашки и списка.
-   * Подпись — текст узла или `.лэйбл`, значение — только `.значение`:
-   * сахар разворачивает директива `! разбор-сахара(<тег>)`, конвертер
-   * слэши сам не делит.
-   */
+  // Пара «подпись — значение» для плашки и списка.
   pairOf(node, props) {
     const labelProp = propValue(props, 'лэйбл', 'подпись', 'метка');
     const label = String(labelProp === undefined ? textOf(node) : labelProp).trim();
@@ -1086,7 +978,6 @@ export class UIFormConvertor {
     };
   }
 
-  /** Значение с постфиксом: `50` + `шт.` → `50 шт.`. Макрос не рисуется. */
   formatValue(value, postfix) {
     const text = value === undefined || value === null ? '' : String(value).trim();
     if (!text || this.isMacro(text)) return '';
@@ -1094,12 +985,10 @@ export class UIFormConvertor {
     return tail ? text + ' ' + tail : text;
   }
 
-  /** Незаполненный макрос `(( имя ))` — это заготовка, а не значение. */
   isMacro(text) {
     return /^\s*\(\(.*\)\)\s*$/.test(String(text || ''));
   }
 
-  /* ------------------------------ поля -------------------------------- */
 
   fieldNode(node, ctx) {
     const split = this.splitKey(node);
@@ -1111,11 +1000,7 @@ export class UIFormConvertor {
     return [this.input(node, ctx, split, props, control)];
   }
 
-  /**
-   * Общие части поля. Значения берутся только из свойств: сахар
-   * (`лэйбл / плейсхолдер / обязательный / постфикс`) разворачивает директива
-   * `! разбор-сахара(поле)`, поэтому конвертер слэши не разбирает.
-   */
+  // Общие части поля.
   fieldParts(node, split, props) {
     const labelProp = propValue(props, 'лэйбл', 'подпись', 'метка');
     const hintProp = propValue(props, 'плейсхолдер', 'подсказка', 'hint');
@@ -1182,7 +1067,6 @@ export class UIFormConvertor {
     };
   }
 
-  /** Группа переключателей; опции с вложенностью дают блоки по условию. */
   radio(node, ctx, split, props) {
     const parts = this.fieldParts(node, split, props);
     if (parts.local === 'поле' && !split.id) {
@@ -1193,7 +1077,6 @@ export class UIFormConvertor {
     const place = this.place(ctx, parts.local);
     const name = this.nameOf(place.path);
     const options = this.readOptions(node);
-    // Первый переключатель выбран по умолчанию: как в эталоне.
     if (options.length && !options.some(option => option.checked)) options[0].checked = true;
 
     const control = {
@@ -1248,17 +1131,12 @@ export class UIFormConvertor {
     };
   }
 
-  /** Имя поля для формы: путь с дефисами (`список-количество`). */
   nameOf(path) {
     return slug(String(path || '').replace(/\./g, '-'));
   }
 
-  /* ------------------------------ кнопки ------------------------------ */
 
-  /**
-   * Роль кнопки по свойствам: перенос `..источник`→`..приемник` — копирование
-   * записи, `.навигация` — переключение представлений.
-   */
+  // Роль кнопки по свойствам: перенос `..источник`→`..приемник` — копирование записи, `.навигация` — переключение…
   buttonRoleOf(props) {
     const source = propValue(props, 'источник', 'откуда');
     const target = propValue(props, 'приемник', 'куда');
@@ -1307,13 +1185,11 @@ export class UIFormConvertor {
       checkGoal: norm(propValue(props, 'цель-проверки', 'цельпроверки')) || '',
       dialog,
       clear: hasFlag(props, ['доп-функционал', 'флаги'], 'очистить'),
-      // `.ui-action` нужен только проверкам и диалогам: навигацию и перенос
-      // разбирают роли (`show-form-btn`, `add-copy`, `back-to-list`).
+      // `.ui-action` нужен только проверкам и диалогам: навигацию и перенос разбирают роли (`show-form-btn`, `add-copy`,…
       action: !!(checks.length || dialog),
     };
   }
 
-  /** Служебная кнопка рантайма: `show-form-btn`, `add-copy`, `back-to-list`. */
   autoButton(mode, label, path) {
     const role = mode === 'show-form-btn' ? 'show-form'
       : (mode === 'back-to-list' ? 'back-to-list' : (mode === 'add-copy' ? 'add-copy' : ''));
@@ -1339,7 +1215,6 @@ export class UIFormConvertor {
     };
   }
 
-  /** `.диалог Текст / Ок` и `.неуспех Текст / Ок`. */
   parseDialog(raw) {
     if (raw === undefined || raw === null) return null;
     const text = String(raw).trim();
@@ -1351,7 +1226,6 @@ export class UIFormConvertor {
     return message ? { message, ok } : null;
   }
 
-  /** Ссылки `.проверить #a.b #c.d` → `['a.b', 'c.d']`. */
   refList(value) {
     if (value === undefined || value === null) return [];
     const items = Array.isArray(value) ? value : String(value).split(/[,\s]+/);
@@ -1360,7 +1234,6 @@ export class UIFormConvertor {
       .filter(Boolean);
   }
 
-  /* ------------------------------ надписи ----------------------------- */
 
   note(node, ctx) {
     const split = this.splitKey(node);
@@ -1377,13 +1250,8 @@ export class UIFormConvertor {
     }];
   }
 
-  /* ------------------------------ табы -------------------------------- */
 
-  /**
-   * `табы` — это два состояния одной карточки: список и форма добавления.
-   * IR-узел `views` знает своё локальное имя: по нему строятся id
-   * `<имя>-list-view` и `<имя>-form-view`.
-   */
+  // `табы` — это два состояния одной карточки: список и форма добавления.
   tabs(node, ctx) {
     const split = this.splitKey(node);
     const props = this.readProps(node);
@@ -1406,10 +1274,7 @@ export class UIFormConvertor {
     return { type: 'views', id: place.uid, path: place.path, local: place.name, items };
   }
 
-  /**
-   * Поля формы добавления плоские: контейнеры-группы разворачиваются,
-   * самостоятельные блоки (плашка, список, таблица) остаются как есть.
-   */
+  // Поля формы добавления плоские: контейнеры-группы разворачиваются, самостоятельные блоки (плашка, список, таблица)…
   flattenFields(children) {
     const out = [];
     const visit = list => list.forEach(child => {
@@ -1429,10 +1294,7 @@ export class UIFormConvertor {
     return out;
   }
 
-  /**
-   * Таб: список (есть строки-соответствия), форма добавления (есть перенос
-   * `..источник` → `..приемник`) или панель по порядку.
-   */
+  // Таб: список (есть строки-соответствия), форма добавления (есть перенос `..источник` → `..приемник`) или панель по…
   tab(node, ctx, index) {
     const split = this.splitKey(node);
     const props = this.readProps(node);

@@ -1,6 +1,5 @@
 import { sizeFor } from '../shared/bpmnModel/definitions.js';
 
-/* ---------------- обход узлов ---------------- */
 
 export function collectAllNodes(nodes) {
   const result = [];
@@ -42,7 +41,6 @@ export function findNodeById(nodes, id) {
   return null;
 }
 
-/* ---------------- владельцы ассоциаций ---------------- */
 
 export function findAssocOwner(process, targetRef) {
   const check = (nodes) => {
@@ -50,7 +48,6 @@ export function findAssocOwner(process, targetRef) {
       for (const a of n.dataOutputAssocs || []) {
         if (a.targetRef === targetRef) return n;
       }
-      // данные-вход: ссылка — источник связи, владелец — сама задача (B-5)
       for (const a of n.dataInputAssocs || []) {
         if (a.sourceRef === targetRef) return n;
       }
@@ -83,7 +80,6 @@ export function findAssocOwnerAll(model, targetRef) {
   return null;
 }
 
-/* ---------------- геометрия ---------------- */
 
 export function boundsOf(node) {
   const size = sizeFor(node.tag, node.name);
@@ -95,10 +91,7 @@ export function boundsOf(node) {
   };
 }
 
-/**
- * Простая ортогональная трасса между двумя прямоугольниками:
- * выходит из ближайшей стороны источника, входит в ближайшую сторону цели.
- */
+// Простая ортогональная трасса между двумя прямоугольниками: выходит из ближайшей стороны источника, входит в…
 export function simpleWaypoints(source, target) {
   const s = boundsOf(source);
   const t = boundsOf(target);

@@ -1,10 +1,6 @@
 import { nodeTypes, valueTypes } from '../../core/YarbpParser.js';
 
 export class YarbpXMLConverter {
-  /**
-   * @param {Object} ast - AST, полученный из YarbpParser
-   * @param {boolean} pretty - добавлять отступы и переводы строк (по умолчанию true)
-   */
   constructor(ast, pretty = true) {
     this.ast = ast;
     this.pretty = pretty;

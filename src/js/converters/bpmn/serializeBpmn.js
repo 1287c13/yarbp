@@ -42,7 +42,6 @@ export function serializeBpmn(definitions) {
   return lines.join('\n');
 }
 
-/** B-7: `<bpmn:category>` со значениями — подписи групп. */
 function serializeCategory(category, lines, depth) {
   const ind = INDENT.repeat(depth);
   lines.push(`${ind}<bpmn:category id="${escapeHtml(category.id)}">`);
@@ -55,7 +54,6 @@ function serializeCategory(category, lines, depth) {
   lines.push(`${ind}</bpmn:category>`);
 }
 
-/* ------------------------------------------------------------------ */
 
 function serializeCollaboration(collab, definitions, lines, depth) {
   const ind = INDENT.repeat(depth);
@@ -119,7 +117,6 @@ function serializeProcess(process, definitions, lines, depth) {
     );
   }
 
-  // B-7: группы-артефакты процесса
   for (const group of process.groups || []) {
     lines.push(
       `${ind}${INDENT}<bpmn:group id="${escapeHtml(group.id)}" ` +
@@ -156,10 +153,8 @@ function serializeFlowNode(node, lines, depth) {
   if (node.tag === 'boundaryEvent' && node.attachedToRef) {
     attrs.push(`attachedToRef="${escapeHtml(node.attachedToRef)}"`);
   }
-  // B-3/B-4: «непрерывающее» boundary и поток по умолчанию у шлюза.
   if (node.cancelActivity === false) attrs.push('cancelActivity="false"');
   if (node.defaultFlowId) attrs.push(`default="${escapeHtml(node.defaultFlowId)}"`);
-  // B-7: вызов процесса
   if (node.calledElement) attrs.push(`calledElement="${escapeHtml(node.calledElement)}"`);
 
   const loopXml = loopCharacteristicsXml(node.loopCharacteristics);
@@ -231,13 +226,7 @@ function loopCharacteristicsXml(kind) {
   return null;
 }
 
-/**
- * `ioSpecification` задачи: какие данные она принимает и отдаёт.
- *
- * Без него associations ссылаются в пустоту: по BPMN 2.0 у активности должны
- * быть объявлены `dataInput`/`dataOutput` и их наборы. Идентификаторы выводим
- * из id задачи — так они детерминированы и не конфликтуют между задачами.
- */
+// `ioSpecification` задачи: какие данные она принимает и отдаёт.
 function ioSpecificationXml(node, inputAssocs, outputAssocs, ind) {
   if (!inputAssocs.length && !outputAssocs.length) return null;
 
@@ -288,7 +277,6 @@ function serializeSequenceFlow(flow, lines, depth) {
   ];
   if (flow.name) attrs.splice(1, 0, `name="${escapeHtml(flow.name)}"`);
 
-  // B-4: условие ветки — дочерний conditionExpression, а не атрибут.
   if (!flow.condition) {
     lines.push(`${ind}<bpmn:sequenceFlow ${attrs.join(' ')} />`);
     return;
@@ -300,7 +288,6 @@ function serializeSequenceFlow(flow, lines, depth) {
   lines.push(`${ind}</bpmn:sequenceFlow>`);
 }
 
-/* ------------------------------------------------------------------ */
 
 function serializeDiagram(definitions, lines, depth) {
   const ind = INDENT.repeat(depth);
@@ -452,7 +439,6 @@ function serializeTextAnnotationShape(ta, lines, depth) {
   lines.push(`${ind}</bpmndi:BPMNShape>`);
 }
 
-/** B-7: рамка группы — обычный BPMNShape с bpmnElement группы. */
 function serializeGroupShape(group, lines, depth) {
   if (!group.bounds) return;
   const ind = INDENT.repeat(depth);

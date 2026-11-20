@@ -1,7 +1,6 @@
 import { YarbpBasicRenderer } from '../shared/renderer.js';
 import { escText } from '../../utils/escape.js';
 
-/** `! как lexer` — pretty-view токенов лексера. */
 export class LexerDebugRenderer extends YarbpBasicRenderer {
   render() {
     if (!this.renderTextarea || !this.renderHighlightDiv) return;

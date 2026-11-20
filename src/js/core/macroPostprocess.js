@@ -20,13 +20,10 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
     });
   };
 
-  /* Определение: @a. Вызов: `имя(a)` — макрос в скобках, имя результата
-     перед скобками; `имя` без скобок оставляет имя как есть.
-     Имена — Unicode: макрос `@макро` с кириллицей должен работать так же. */
+  // Определение: @a.
   const macroDefRegex = /^@([\p{L}\p{N}_-]+)$/u;
   const macroCallRegex = /^([\p{L}\p{N}_-]+)(?:\(([\p{L}\p{N}_-]+)\))?$/u;
 
-  /* В скобках — имя макроса, перед скобками — имя результата. */
   const getMacroName = (match) => match ? (match[2] || match[1]) : null;
 
   const macros = new Map();
@@ -41,7 +38,6 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
         macroBody.key = macroName;
         macros.set(macroName, { body: macroBody });
       } else {
-        // Неизвестное `@...` не молча теряем.
         otherRoot.push(child);
       }
     } else {
@@ -49,12 +45,7 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
     }
   }
 
-  /* ------------------------------------------------------------------
-   * Подстановка (( имя )) вне макросов.
-   *
-   * Источник — ключ нулевого уровня. Область действия: всё, кроме тел
-   * определений @ и вызовов макросов — их семантика не меняется.
-   * ------------------------------------------------------------------ */
+  // Подстановка (( имя )) вне макросов.
 
   const isMacroCallNode = (node) => {
     if (!node || node.nodeType !== 'MEANING') return false;
@@ -69,8 +60,7 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
     if (!node || node.nodeType !== 'MEANING') return;
     if (node.key && node.key.startsWith('@')) return;
 
-    /* В аргументах вызова (( имя )) — это уже область вне макроса:
-       имена собираем, чтобы ключ-источник был удалён из вывода. */
+    // В аргументах вызова (( имя )) — это уже область вне макроса: имена собираем, чтобы ключ-источник был удалён из вывода.
     const macroCall = isMacroCallNode(node);
 
     if (!macroCall && node.valueType === 'STRING' && typeof node.value === 'string') {
@@ -83,9 +73,7 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
   };
   otherRoot.forEach(collectPlaceholders);
 
-  /* Ключ нулевого уровня — строка, начинающаяся с ключа без отступа.
-     Это не всегда корневой ребёнок AST: неявный объект `а` держит scope до
-     конца документа, поэтому `.с` из примера 2.3 лежит внутри `а`. */
+  // Ключ нулевого уровня — строка, начинающаяся с ключа без отступа.
   const isZeroLevelNode = (node) => {
     if (!node || node.nodeType !== 'MEANING' || !node.key) return false;
     if (!sourceText) return (ast.children || []).includes(node);
@@ -104,9 +92,7 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
 
     const macroCall = isMacroCallNode(node);
 
-    /* Сам вызов макроса источником быть не может, но его дети — могут:
-       из-за scope неявного объекта ключ с нулевым отступом иногда попадает
-       внутрь вызова. Это чинится здесь, без правки лексера. */
+    // Сам вызов макроса источником быть не может, но его дети — могут: из-за scope неявного объекта ключ с нулевым…
     if (!macroCall && isZeroLevelNode(node)) sources.set(node.key, node);
     for (const child of node.children || []) collectSources(child);
   };
@@ -130,8 +116,7 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
     if (!node || node.nodeType !== 'MEANING') return node;
     if (node.key && node.key.startsWith('@')) return node;
 
-    /* Вызов макроса сам не подставляется, но его аргументы — уже «вне
-       макроса»: в них работает подстановка по ключу нулевого уровня. */
+    // Вызов макроса сам не подставляется, но его аргументы — уже «вне макроса»: в них работает подстановка по ключу…
     if (isMacroCallNode(node)) {
       if (!Array.isArray(node.children)) return node;
 
@@ -150,7 +135,6 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
       return result;
     }
 
-    /* Ключ-источник нужен только как источник: убираем его из вывода. */
     if (sourceNodes.has(node) && usedNames.has(node.key)) return REMOVE;
 
     if (node.valueType === 'STRING' && typeof node.value === 'string') {
@@ -248,9 +232,7 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
   }
 
   function substitute(body, params, positional = []) {
-    /* Имена, встречающиеся в теле, закреплены за одноимёнными аргументами.
-       Остальные аргументы могут закрывать безымянные элементы массива
-       по порядку (кейс 44_bsl_code: (( первый )), (( второй ))). */
+    // Имена, встречающиеся в теле, закреплены за одноимёнными аргументами.
     const namedNames = new Set();
     const collectNames = (node) => {
       if (!node || node.nodeType !== 'MEANING') return;
@@ -276,9 +258,7 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
 
       if (isProcessed) {
         let newNode = clone(node);
-        /* У объектного узла значение может быть шорткатом: `@макро = (( имя ))`.
-           Подставляем только чистый плейсхолдер: inline-значения объектов
-           исторически не раскрываются (кейс 12_macro). */
+        // У объектного узла значение может быть шорткатом: `@макро = (( имя ))`.
         if (node.valueType !== 'CODE' && typeof node.value === 'string'
             && isPurePlaceholder(node.value)) {
           newNode.value = replaceInString(node.value, params);
@@ -313,8 +293,7 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
 
           if (param) {
             if (param.valueType === 'CODE') {
-              /* Фрагмент кода как параметр макроса: переносим целиком,
-                 содержимое-остров не разбираем и не подставляем внутрь. */
+              // Фрагмент кода как параметр макроса: переносим целиком, содержимое-остров не разбираем и не подставляем внутрь.
               const newNode = clone(node);
               newNode.valueType = 'CODE';
               newNode.value = param.value;

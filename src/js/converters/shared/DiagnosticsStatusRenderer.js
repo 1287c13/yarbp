@@ -1,19 +1,11 @@
 import { YarbpBasicRenderer } from './renderer.js';
 
-/**
- * База для панелей, которые показывают результат конвертера и строку
- * диагностики: `warnings[]` конвертера → строка под панелью (как в BPMN).
- *
- * Наследники задают только `createConverter()`/`render()` и имя класса строки
- * (`.openapi-status`, `.schema-status`, `.mermaid-status`), чтобы стили и
- * `destroy()` не путались между панелями.
- */
+// База для панелей, которые показывают результат конвертера и строку диагностики: `warnings[]` конвертера → строка под…
 export class DiagnosticsStatusRenderer extends YarbpBasicRenderer {
   get statusClassName() {
     return 'json-status';
   }
 
-  /** Строка диагностики: первые три сообщения и счётчик остальных. */
   showWarnings(warnings) {
     const host = this.panelHost();
     if (!host) return;
@@ -44,13 +36,11 @@ export class DiagnosticsStatusRenderer extends YarbpBasicRenderer {
     this.statusBox.title = items.map(label).join('\n');
   }
 
-  /** Контейнер панели — тот же, что у BPMN: там есть position для строки. */
   panelHost() {
     return this.renderTextarea.closest('.editor-container') ||
       this.renderTextarea.closest('#render-pane');
   }
 
-  /** Смена флейвора: убираем строку диагностики, чтобы не висела. */
   destroy() {
     const host = this.panelHost();
     if (host) {

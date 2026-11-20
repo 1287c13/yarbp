@@ -1,14 +1,6 @@
 import { escText } from '../../utils/escape.js';
 
-/**
- * Лёгкая подсветка содержимого фрагментов кода.
- *
- * Внешних зависимостей нет: редактор полностью офлайн, Prism/Monaco/CodeMirror
- * не подключаются. Профиль — набор «липких» (sticky) правил, которые
- * применяются по порядку с текущей позиции. Всё, что не совпало с правилом,
- * копируется как экранированный текст, поэтому `textContent` результата
- * всегда равен исходному коду.
- */
+// Лёгкая подсветка содержимого фрагментов кода.
 
 const BSL_KEYWORDS = new Set([
   'процедура', 'конецпроцедуры', 'функция', 'конецфункции',
@@ -18,7 +10,6 @@ const BSL_KEYWORDS = new Set([
   'перем', 'знач', 'экспорт', 'истина', 'ложь', 'неопределено',
   'и', 'или', 'не', 'продолжить', 'прервать', 'вызватьисключение',
   'перейти', 'добавитьобработчик', 'удалитьобработчик',
-  /* английские синонимы BSL */
   'procedure', 'endprocedure', 'function', 'endfunction',
   'if', 'then', 'else', 'elsif', 'endif',
   'for', 'each', 'in', 'to', 'do', 'enddo', 'while',
@@ -126,10 +117,7 @@ const LANGUAGE_ALIASES = new Map([
   ['json', 'json'], ['json5', 'json']
 ]);
 
-/**
- * Язык из info-строки → канонический профиль или generic.
- * Пустой/не указанный язык → null (подсветка не запускается).
- */
+// Язык из info-строки → канонический профиль или generic.
 export function normalizeCodeLanguage(language) {
   const raw = String(language ?? '').trim().toLowerCase();
   if (!raw) return null;
@@ -146,10 +134,7 @@ export class CodeBlockHighlighter {
     return normalizeCodeLanguage(language);
   }
 
-  /**
-   * Код → HTML. Любой несматченный символ экранируется и копируется как есть,
-   * поэтому сумма текста всех узлов равна исходной строке.
-   */
+  // Код → HTML.
   highlight(code) {
     const text = String(code ?? '');
     const { rules, keywords } = this.profile;

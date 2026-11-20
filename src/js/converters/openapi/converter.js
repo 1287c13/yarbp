@@ -3,30 +3,8 @@ import {
   FIELD_TYPES, buildSchemaObject, buildSchemaField, isFlagOn,
 } from '../shared/schemaFields.js';
 
-/**
- * Конвертер в OpenAPI 3.0 (JSON).
- *
- * Это «выход в мир»: одна и та же разметка описывает и схему процесса, и
- * контракт REST API, а результат открывается Swagger UI, Postman, генераторами
- * клиентов. Ядро языка не трогаем — только читаем AST.
- *
- * Разметка (обязателен только `api`):
- *
- *     ! как openapi
- *     api = Заказы .версия 1.0.0 .описание "API заказов"
- *       сервер = https://api.example.com/v1
- *       путь = /orders .описание "Заказы"
- *         метод = get .операция "Список заказов" .ответ 200
- *         метод = post .операция "Создать заказ" .ответ 201 .запрос Заказ
- *       схема = Заказ
- *         поле = id .тип целое .обязательное да .описание "Номер заказа"
- *         поле = status .тип строка .значение new .значение paid
- *
- * Принцип тот же, что в BPMN-конвертере: непонятное не теряется молча — в
- * `warnings` попадает строка и понятный текст.
- */
+// Конвертер в OpenAPI 3.0 (JSON).
 
-/** Коды ответов → описание по умолчанию. */
 const RESPONSE_TEXT = Object.freeze({
   200: 'OK',
   201: 'Created',
@@ -43,27 +21,19 @@ const RESPONSE_TEXT = Object.freeze({
   503: 'Service Unavailable',
 });
 
-/** Атрибуты метода — всё остальное в методе считается опечаткой. */
 const OPENAPI_METHOD_KEYS = Object.freeze(new Set([
   'операция', 'глагол', 'ответ', 'запрос', 'тег', 'обязательное', 'ид',
 ]));
 
-/** Секции (`..пути`, `..схемы`): контейнеры, которые конвертер разворачивает. */
 const OPENAPI_SECTIONS = Object.freeze(new Set(['пути', 'схемы', 'серверы']));
 
-/** Атрибуты api — читаются через childValue, руками не обходятся. */
 const OPENAPI_API_ATTRS = Object.freeze(new Set(['версия', 'описание', 'заголовок', 'ид']));
 
 export class YarbpOpenAPIConverter {
-  /**
-   * @param {object} ast — корень AST
-   * @param {{source?: string}} [options] — исходный текст (номера строк в предупреждениях)
-   */
   constructor(ast, options = {}) {
     this.ast = ast;
     this.source = options.source || '';
     this.result = null;
-    /** Предупреждения сборки: `{ line, message }[]` — читается после convert(). */
     this.warnings = [];
   }
 
@@ -99,7 +69,6 @@ export class YarbpOpenAPIConverter {
     const schemas = {};
     const paths = {};
 
-    // секции (`..пути`, `..схемы`) разворачиваем: конвертеру важен только тип узла
     for (const node of this.apiNodes(api)) {
       if (OPENAPI_API_ATTRS.has(node.key)) continue;
 
@@ -149,7 +118,6 @@ export class YarbpOpenAPIConverter {
     return this.result;
   }
 
-  /* ---------------- api → пути ---------------- */
 
   buildPath(node) {
     const ops = {};
@@ -223,9 +191,7 @@ export class YarbpOpenAPIConverter {
     return operation;
   }
 
-  /* ---------------- api → схемы ---------------- */
 
-  /** Адаптер для общей «схемной» части (schemaFields.js). */
   fieldContext() {
     return {
       children: (node) => this.meaningChildren(node),
@@ -244,7 +210,6 @@ export class YarbpOpenAPIConverter {
     return buildSchemaField(node, this.fieldContext());
   }
 
-  /* ---------------- проверки ссылок ---------------- */
 
   checkRefs(api) {
     const known = new Set();
@@ -254,7 +219,6 @@ export class YarbpOpenAPIConverter {
     }
 
     for (const node of this.apiNodes(api)) {
-      // `поле = клиент .тип ссылка:Клиент` — ссылка должна куда-то вести
       if (node.key === 'схема') {
         for (const field of this.meaningChildren(node)) {
           if (field.key !== 'поле') continue;
@@ -287,9 +251,7 @@ export class YarbpOpenAPIConverter {
     }
   }
 
-  /* ---------------- AST ---------------- */
 
-  /** Узел `api` — прямой ребёнок корня документа. */
   findApi(children) {
     for (const child of children) {
       if (child.nodeType !== nodeTypes.MEANING) continue;
@@ -298,13 +260,7 @@ export class YarbpOpenAPIConverter {
     return null;
   }
 
-  /**
-   * Содержимое api с развёрнутыми секциями.
-   *
-   * Секция (`..пути`, `..схемы`) — это контейнер для читаемости: конвертеру
-   * важен тип узла, а не то, на каком уровне его написали. Внутрь обычных узлов
-   * (путь, схема) не спускаемся — там своя логика.
-   */
+  // Содержимое api с развёрнутыми секциями.
   apiNodes(api) {
     const result = [];
 
@@ -334,7 +290,6 @@ export class YarbpOpenAPIConverter {
     return null;
   }
 
-  /** Явное текстовое свойство (`.имя`, `.заголовок`, …) до `value`. */
   nodeText(node, keys) {
     for (const key of keys || []) {
       const value = this.childValue(node, key);

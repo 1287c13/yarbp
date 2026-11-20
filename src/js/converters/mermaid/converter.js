@@ -1,34 +1,15 @@
 import { nodeTypes } from '../../core/YarbpParser.js';
 import { buildModel } from '../shared/bpmnModel/buildModel.js';
 
-/**
- * Конвертер BPMN-модели в **Mermaid flowchart**.
- *
- * Зачем: схему процесса хочется видеть не только в редакторе и не только в
- * `.bpmn`. Mermaid рендерится прямо в GitHub/GitLab и в markdown-ревью, поэтому
- * один и тот же документ можно показать в PR текстом — без картинок.
- *
- * Модель берётся из того же `buildModel`, что и у BPMN: диагностика (непонятные
- * узлы, дубли id, узлы без входящего потока) приходит оттуда же, поэтому текст
- * и XML не разъезжаются в трактовке разметки.
- *
- *     ! как мермейд
- *     процесс = Отгрузка
- *       ...та же разметка, что для BPMN...
- *
- * Формы намеренно из «безопасного» набора Mermaid (без экзотики): если форма
- * не поддерживается версией рендерера, ломается вся картинка, а не один узел.
- */
+// Конвертер BPMN-модели в **Mermaid flowchart**.
 
 const INDENT = '  ';
 
-/** Mermaid не любит пробелы и дефисы в идентификаторах. */
 function safeId(value) {
   const safe = String(value || '').replace(/[^A-Za-z0-9_]/g, '_');
   return /^[0-9]/.test(safe) ? 'n_' + safe : (safe || 'node');
 }
 
-/** Подпись: кавычки внутри ломают разметку Mermaid, переносы — тоже. */
 function label(value, fallback) {
   const text = String(value === null || value === undefined ? '' : value)
     .replace(/["«»]/g, "'")
@@ -37,13 +18,11 @@ function label(value, fallback) {
   return text || String(fallback || '');
 }
 
-/** Подпись ребра: `|"текст"|`, либо пусто. */
 function edgeLabel(value) {
   const text = label(value);
   return text ? '|"' + text + '"|' : '';
 }
 
-/** Подписи по умолчанию: у событий имени может не быть вовсе. */
 const DEFAULT_LABELS = Object.freeze({
   startEvent: 'Старт',
   endEvent: 'Конец',
@@ -53,10 +32,6 @@ const DEFAULT_LABELS = Object.freeze({
 });
 
 export class YarbpMermaidConverter {
-  /**
-   * @param {object} ast — корень AST
-   * @param {{source?: string}} [options] — исходный текст (номера строк)
-   */
   constructor(ast, options = {}) {
     this.ast = ast;
     this.source = options.source || '';
@@ -95,7 +70,6 @@ export class YarbpMermaidConverter {
     return lines.join('\n') + '\n';
   }
 
-  /* ---------------- процессы и дорожки ---------------- */
 
   emitProcess(process, lines, depth) {
     const ind = INDENT.repeat(depth);
@@ -134,8 +108,7 @@ export class YarbpMermaidConverter {
       }
     }
 
-    // данные и хранилища объявляем внутри процесса, иначе Mermaid нарисует
-    // для них безымянные узлы по идентификатору
+    // данные и хранилища объявляем внутри процесса, иначе Mermaid нарисует для них безымянные узлы по идентификатору
     for (const ref of process.dataObjectRefs || []) {
       lines.push(ind + INDENT + this.nodeDeclaration({
         id: ref.id, tag: 'dataObjectReference', name: ref.name,
@@ -179,7 +152,6 @@ export class YarbpMermaidConverter {
     lines.push(ind + 'end');
   }
 
-  /* ---------------- узлы ---------------- */
 
   nodeDeclaration(node) {
     const id = safeId(node.id);
@@ -203,7 +175,6 @@ export class YarbpMermaidConverter {
     }
   }
 
-  /* ---------------- рёбра ---------------- */
 
   emitEdges(flows, lines, depth, defaults) {
     const ind = INDENT.repeat(depth);
@@ -213,8 +184,7 @@ export class YarbpMermaidConverter {
       const condition = flow.condition ? label(flow.condition) : '';
       const name = flow.name ? label(flow.name) : '';
 
-      // Поток по умолчанию и поток с условием — пунктиром: по ним видно, какие
-      // ветки шлюза решаются выражением, а какая срабатывает «иначе».
+      // Поток по умолчанию и поток с условием — пунктиром: по ним видно, какие ветки шлюза решаются выражением, а какая…
       let arrow = '-->';
       let text = name;
 
@@ -231,7 +201,6 @@ export class YarbpMermaidConverter {
     }
   }
 
-  /** Идентификаторы потоков «по умолчанию» среди узлов контейнера. */
   defaultFlowIds(nodes) {
     const ids = new Set();
     for (const node of nodes) {
@@ -240,7 +209,6 @@ export class YarbpMermaidConverter {
     return ids;
   }
 
-  /** Boundary-события и данные: пунктиром, чтобы не путать с потоком работ. */
   emitArtifactEdges(nodes, lines, depth) {
     const ind = INDENT.repeat(depth);
 

@@ -106,8 +106,8 @@ loadRenderer: () => import('./renderer.js').then(module => module.BPMNRenderer),
   нормализует регистр, пробелы, дефисы, подчёркивания и скобки;
 - ровно одно из `renderer` / `loadRenderer`;
 - `suggestions` — необязательный словарь подсказок;
-- тяжёлый конвертер (BPMN, OpenAPI, Schema, Mermaid, FlexForms) обязан быть
-  ленивым, иначе он попадёт в первый экран редактора.
+- тяжёлый конвертер (BPMN, OpenAPI, Schema, Mermaid, FlexForms, UI, XPM)
+  обязан быть ленивым, иначе он попадёт в первый экран редактора.
 
 ### 2. `converter.js` — AST → целевой формат
 

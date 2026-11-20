@@ -7,7 +7,6 @@ export class BpmnDefinitions {
   }
 }
 
-/** B-7: категория со значениями — на неё ссылаются `<bpmn:group>`. */
 export class BpmnCategory {
   constructor(id) {
     this.id     = id;
@@ -82,7 +81,6 @@ export class BpmnProcess {
   }
 }
 
-/** B-7: группа-артефакт вокруг задачи; имя хранится в `<bpmn:categoryValue>`. */
 export class BpmnGroup {
   constructor({ id, name, categoryValueId, ownerId }) {
     this.id              = id;
@@ -151,10 +149,7 @@ export class BpmnDataOutputAssociation {
   }
 }
 
-/**
- * Чтение данных задачей: источник — `dataObjectReference`, приёмник — задача.
- * В XML это `<bpmn:dataInputAssociation><bpmn:sourceRef>…`.
- */
+// Чтение данных задачей: источник — `dataObjectReference`, приёмник — задача.
 export class BpmnDataInputAssociation {
   constructor({ id, sourceRef, name }) {
     this.id         = id;

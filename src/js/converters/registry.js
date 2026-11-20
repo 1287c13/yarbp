@@ -1,16 +1,4 @@
-/**
- * Реестр конвертеров ЯРБП.
- *
- * Каждый конвертер описывает себя в `./<id>/index.js` через
- * `defineConverter` (см. `contract.js`). Реестр только:
- *  - строит карту «имя директивы → описание»;
- *  - выбирает конвертер по `! как …`;
- *  - лениво загружает тяжёлые рендереры и кэширует `import()`.
- *
- * Публичный API (`YarbpFlavor`, `prefetchFlavors`) сохранён: им пользуются
- * `app.js` и тесты. Новые конвертеры не должны импортировать чужие каталоги —
- * только `shared/` и `core/`.
- */
+// Реестр конвертеров ЯРБП.
 
 import { lexerConverter } from './lexer/index.js';
 import { astConverter } from './ast/index.js';
@@ -25,7 +13,6 @@ import { jsonSchemaConverter } from './json-schema/index.js';
 import { mermaidConverter } from './mermaid/index.js';
 import { flexFormsConverter } from './flexforms/index.js';
 
-/** Все зарегистрированные конвертеры в порядке приоритета. */
 export const CONVERTER_DEFINITIONS = Object.freeze([
   lexerConverter,
   astConverter,
@@ -41,7 +28,6 @@ export const CONVERTER_DEFINITIONS = Object.freeze([
   flexFormsConverter,
 ]);
 
-/** Ключ карты: `! как Форма-ТСД` → `форматсд`. */
 function converterKey(name) {
   return String(name ?? '').replaceAll(/[\s\-_()]/g, '').toLowerCase();
 }
@@ -52,18 +38,15 @@ const FlavorMap = new Map(
   )
 );
 
-/** Конвертер по id (`json`, `json-schema`, …). */
 export function getConverterById(id) {
   return CONVERTER_DEFINITIONS.find(converter => converter.id === id) || null;
 }
 
-/** Конвертер по имени директивы (`форматсд`, `json`, …). */
 export function findConverter(name) {
   return FlavorMap.get(converterKey(name)) || null;
 }
 
-/* Один import() на конвертер: выбранный рендерер и фоновый prefetch делят
-   результат, поэтому модуль не запрашивается дважды. */
+// Один import() на конвертер: выбранный рендерер и фоновый prefetch делят результат, поэтому модуль не запрашивается…
 const RendererPromises = new WeakMap();
 
 function loadFlavorRenderer(flavorData) {
@@ -82,15 +65,26 @@ function loadFlavorRenderer(flavorData) {
   return pending;
 }
 
-/**
- * Фоновая догрузка тяжёлых конвертеров. Вызывается после первого рендера
- * выбранного конвертера: интерфейс уже готов, остальные рендереры догружаются
- * в фоне и при переключении не ждут сеть.
- */
-export function prefetchFlavors() {
+// Фоновая догрузка остальных конвертеров: по одному, после первого рендера.
+// `exclude` — id уже показанного конвертера; его рендерер не загружаем повторно.
+export async function prefetchFlavors(options = {}) {
+  const exclude = options && options.exclude ? String(options.exclude) : '';
   const dynamicFlavors = CONVERTER_DEFINITIONS
-    .filter(converter => typeof converter.loadRenderer === 'function');
-  return Promise.allSettled(dynamicFlavors.map(loadFlavorRenderer));
+    .filter(converter => typeof converter.loadRenderer === 'function' &&
+      converter.id !== exclude);
+
+  const results = [];
+  for (const converter of dynamicFlavors) {
+    try {
+      const value = await loadFlavorRenderer(converter);
+      results.push({ status: 'fulfilled', value });
+    } catch (reason) {
+      results.push({ status: 'rejected', reason });
+    }
+    // Дадим браузеру кадр между импортами: фон не должен спорить с вводом.
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  return results;
 }
 
 export class YarbpFlavor {
@@ -108,27 +102,12 @@ export class YarbpFlavor {
     return loadFlavorRenderer(this.flavorData);
   }
 
-  /**
-   * Директива выбора конвертера: `! как …` / `! as …`.
-   *
-   * Нужна, чтобы языковые директивы (`! импорт`, `! разбор-сахара`)
-   * можно было ставить выше `! как`: редактор ищет первую именно
-   * флейворную директиву, а не просто первую `DIRECTIVE`.
-   */
+  // Директива выбора конвертера: `! как …` / `! as …`.
   static isFlavorDirective(value) {
     return /^\s*(?:as|как)(?=[\s\-_]|$)/i.test(String(value ?? ''));
   }
 
-  /**
-   * Директива → «сплющенное» имя конвертера: `! как Форма-ТСД` → `форматсд`.
-   *
-   * Директива не чувствительна к регистру, лишним пробелам, дефисам и
-   * подчёркиваниям: `! AS json`, `! as-json`, `! как  JSON` — одно и то же.
-   * Без ведущего `as`/`как` директива конвертером не считается (undefined).
-   *
-   * Граница после `as`/`как` проверяется lookahead-ом, а не `\b`: в JS `\b`
-   * опирается на ASCII-`\w`, поэтому для «как» он не срабатывает.
-   */
+  // Директива → «сплющенное» имя конвертера: `! как Форма-ТСД` → `форматсд`.
   normalizeFlavorName(directive) {
     const match = String(directive ?? '').match(
       /^\s*(?:as|как)(?=[\s\-_]|$)\s*(.+)$/i);

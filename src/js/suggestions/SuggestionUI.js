@@ -2,15 +2,7 @@ import { measureCharWidth } from '../utils/utils.js';
 
 let uiCounter = 0;
 
-/**
- * Меню подсказок с тремя явными состояниями: `idle` / `hint` / `list`.
- *
- * - в `hint` (начало строки) список не перехватывает `Tab`: он уходит в
- *   редактор и делает отступ;
- * - в `list` `Tab` принимает вариант, `↑`/`↓` выбирают, `Escape` закрывает;
- * - при непустом выделении `Tab` не «полузаменяет» выделение: меню
- *   закрывается, а отступ делает редактор.
- */
+// Меню подсказок с тремя явными состояниями: `idle` / `hint` / `list`.
 export class SuggestionUI {
   constructor(textarea, container) {
     this.textarea = textarea;
@@ -38,10 +30,7 @@ export class SuggestionUI {
     this.hintBox.hidden = true;
     this.hintBox.setAttribute('role', 'status');
 
-    // Порядок в popup: шапка-контекст («Свойства формы») → список → описание
-    // выбранного варианта → чип hint-режима. Раньше контекст и описание стояли
-    // подряд под списком одной серой массой, и было непонятно, что из них к
-    // чему относится.
+    // Порядок в popup: шапка-контекст («Свойства формы») → список → описание выбранного варианта → чип hint-режима.
     this.root.appendChild(this.blockDocBox);
     this.root.appendChild(this.list);
     this.root.appendChild(this.itemDocBox);
@@ -90,8 +79,7 @@ export class SuggestionUI {
 
       this.renderList();
       this.renderDoc();
-      // Только чип подсказки: renderHint() дополнительно прячет список и
-      // доки, а в режиме списка они только что отрисованы.
+      // Только чип подсказки: renderHint() дополнительно прячет список и доки, а в режиме списка они только что отрисованы.
       this.renderHintBox('');
       this.position();
       this.textarea?.setAttribute('aria-expanded', 'true');
@@ -283,7 +271,6 @@ export class SuggestionUI {
     let end;
 
     if (selectionStart !== selectionEnd) {
-      // Выделение заменяем целиком — не «половину» до каретки.
       start = selectionStart;
       end = selectionEnd;
     } else if (this.current.replace === false) {
@@ -306,10 +293,7 @@ export class SuggestionUI {
 
     this.hide();
 
-    /* Вставка идёт через execCommand('insertText'), а не setRangeText: только
-       так правка попадает в нативную историю отмены, и Ctrl+Z возвращает
-       набранный префикс. setRangeText историю не пополняет (в Chrome ещё и
-       сбрасывает её), поэтому после принятия подсказки Ctrl+Z молчал. */
+    // Вставка идёт через execCommand('insertText'), а не setRangeText: только так правка попадает в нативную историю…
     const doc = ta.ownerDocument || document;
     if (doc.activeElement !== ta) ta.focus();
     ta.setSelectionRange(start, end);
@@ -317,10 +301,7 @@ export class SuggestionUI {
       ? doc.execCommand('insertText', false, prepared.text)
       : false;
 
-    /* execCommand устарел и в некоторых окружениях (headless, чужой iframe)
-       молча ничего не делает — подстановка обязана появиться в любом случае.
-       Но при совпадении вставляемого текста с заменяемым значение не меняется
-       законно, поэтому «не изменилось» само по себе — не признак отказа. */
+    // execCommand устарел и в некоторых окружениях (headless, чужой iframe) молча ничего не делает — подстановка обязана…
     if (!accepted || (ta.value === before && replaced !== prepared.text)) {
       ta.setRangeText(prepared.text, start, end, 'end');
     }
@@ -352,9 +333,7 @@ export class SuggestionUI {
       lineIndent++;
     }
 
-    // Соседняя строка на уровень выше: убираем лишние пробелы не только
-    // у следующих строк шаблона, но и перед самим курсором. Иначе `:` так и
-    // останется в отступе свойств, а не строки.
+    // Соседняя строка на уровень выше: убираем лишние пробелы не только у следующих строк шаблона, но и перед самим курсором.
     let dedentChars = 0;
     if (variant?.dedent) {
       const cursorCol = Math.max(0, offset - lineStart);
@@ -394,7 +373,6 @@ export class SuggestionUI {
   handleKey(e) {
     if (!this.isOpen()) return false;
 
-    // Alt/Ctrl/Cmd — это шорткаты редактора (Alt, Ctrl+Space и т.п.).
     if (e.ctrlKey || e.metaKey || e.altKey) return false;
 
     if (this.state === 'hint') {

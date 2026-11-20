@@ -48,20 +48,12 @@ class ASTNode {
 }
 
 
-/**
- * `expandMacros` исторически всегда возвращает `children` (даже пустой), и
- * снимки AST это фиксируют. Быстрый путь без макросов держит ту же форму,
- * иначе у документов без детей поле пропадает.
- */
+// `expandMacros` исторически всегда возвращает `children` (даже пустой), и снимки AST это фиксируют.
 function withChildren(node) {
   return Array.isArray(node.children) ? node : { ...node, children: [] };
 }
 
-/**
- * AST — общий кэш для подсказок и конвертеров. Ни один потребитель не должен
- * его менять: иначе следующий рендер увидит уже испорченное дерево. Заморозка
- * делает это правило явным — запись в узел в strict mode (ES-модули) падает.
- */
+// AST — общий кэш для подсказок и конвертеров.
 function deepFreeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
 
@@ -86,17 +78,14 @@ export class YarbpParser {
     this.tokens = [];
     this.idx = 0;
     this.AST = { };
-    /* `! отключить идентификаторы` выключает вынос `#id` в поле `id`.
-       Значение ставит `getAST()` перед обходом токенов. */
+    // `! отключить идентификаторы` выключает вынос `#id` в поле `id`.
     this.idsEnabled = true;
-    // Кэш AST: за один пересчёт его просят дважды (подсказки и рендерер).
     this.cachedTokens = null;
     this.cachedAST = null;
     this.cachedDiagnostics = [];
     this.cachedImportVersion = null;
 
-    /* Импорт объектов из других документов песочницы: резолвер и версия
-       содержимого файлов. Без резолвера проход импорта не запускается. */
+    // Импорт объектов из других документов песочницы: резолвер и версия содержимого файлов.
     this.importResolver = null;
     this.importVersionProvider = null;
 
@@ -105,16 +94,7 @@ export class YarbpParser {
     this.lastDiagnostics = [];
   };
 
-  /**
-   * Ключ узла и его идентификатор: `поле#итог` → `{key: 'поле', id: 'итог'}`.
-   *
-   * Разделитель — первый `#` в ключе. Пустые половины (`#итог`, `поле#`)
-   * идентификатором не считаются: ключ остаётся как есть, чтобы такие
-   * документы разбирались по-старому. При `! отключить идентификаторы`
-   * (`this.idsEnabled === false`) `#` тоже остаётся частью ключа.
-   *
-   * @returns {{key: string, id?: string}}
-   */
+  // Ключ узла и его идентификатор: `поле#итог` → `{key: 'поле', id: 'итог'}`.
   keyProps(value) {
     const text = String(value ?? '');
     const hash = this.idsEnabled ? text.indexOf('#') : -1;
@@ -133,7 +113,6 @@ export class YarbpParser {
     for (this.idx; this.idx < this.lexer.tokens.length; this.idx++) {
       let token = this.lexer.tokens[this.idx];
 
-      /** if directive or comment - put it to last encountered value */
       if ([TokenTypes.COMMENT, TokenTypes.COMMENT_TODO, TokenTypes.COMMENT_IMPORTANT,
             TokenTypes.COMMENT_OUT, TokenTypes.DIRECTIVE].includes(token.type)) {
         let parent = root.children?.at(-1) ?? root;
@@ -155,7 +134,6 @@ export class YarbpParser {
 
       } else
 
-      /** if object or array - it's a new node's declaration, so enrich root */
       if ( [TokenTypes.OBJECT, TokenTypes.ARRAY].includes(token.type) ) {
         const typeMap = {
           [TokenTypes.OBJECT]: valueTypes.OBJECT,
@@ -170,7 +148,6 @@ export class YarbpParser {
         root.position = { start: token.start, end: token.end };
       } else
 
-      /** if a key for primitive value - start constructing a new node (key-value pair) */
       if (token.type === TokenTypes.PRIMITIVE) {
 
         const keyProps = this.keyProps(token.value);
@@ -186,13 +163,11 @@ export class YarbpParser {
         isNestedKeyMet = true;
       } else
 
-      /** if type specified - deside is it for valueInConstructing or is it for root, then enrich */
       if (token.type === TokenTypes.TYPE) {
         let enrichedEntity = isNestedKeyMet ? valueInConstructing : root;
         enrichedEntity.type = token.value;
       } else
 
-      /** фрагмент кода: примитив с сырым значением и необязательным языком */
       if (token.type === TokenTypes.CODE_BLOCK) {
         const codePosition = {
           start: token.contentStart ?? token.start,
@@ -238,10 +213,7 @@ export class YarbpParser {
         });
       } else
 
-      /** if value - deside is it for key or is it standing alone
-       *  - if is for key so enrich valueInConstructing and stop constructing a key-value
-       *  - if standing alone so create a new node
-       *  Add node to root anyway. */
+      // if value - deside is it for key or is it standing alone - if is for key so enrich valueInConstructing and stop…
       if (token.type === TokenTypes.ANY_VALUE) {
         let enrichedEntities = [];
 
@@ -354,22 +326,13 @@ export class YarbpParser {
     return text.includes('@') || text.includes('((');
   }
 
-  /**
-   * Подключить резолвер файлов для `! импорт`.
-   *
-   * @param {Function} resolver — ключ файла → {ok, id, name, content} или
-   *   {ok:false, reason, candidates}; см. FileManager.resolveImport.
-   * @param {Function} [versionProvider] — версия содержимого файлов: при её
-   *   изменении кэш AST пересобирается, даже если текст текущего документа
-   *   не менялся.
-   */
+  // Подключить резолвер файлов для `! импорт`.
   setImportResolver(resolver, versionProvider = null) {
     this.importResolver = typeof resolver === 'function' ? resolver : null;
     this.importVersionProvider = typeof versionProvider === 'function' ? versionProvider : null;
     this.invalidate();
   }
 
-  /** Сбросить кэш AST (например, после изменения другого файла). */
   invalidate() {
     this.cachedTokens = null;
     this.cachedAST = null;
@@ -377,10 +340,7 @@ export class YarbpParser {
     this.cachedImportVersion = null;
   }
 
-  /**
-   * Разбор импортируемого документа: без резолвера импорта (MVP — один
-   * уровень), но со своими макросами и своим `! разбор-сахара`.
-   */
+  // Разбор импортируемого документа: без резолвера импорта (MVP — один уровень), но со своими макросами и своим `!…
   parseImportedFile(text) {
     const lexer = new YarbpLexer();
     lexer.setInitialState(text);
@@ -406,22 +366,18 @@ export class YarbpParser {
     this.idx = 0;
     this.AST = { root: new ASTNode({ nodeType: nodeTypes.ROOT }) };
 
-    /* `! отключить идентификаторы` / `! disable ids` — языковая директива:
-       решает, станет ли `#id` полем узла или останется частью ключа. Читаем до
-       обхода: директива действует на весь документ, где бы она ни стояла. */
+    // `! отключить идентификаторы` / `! disable ids` — языковая директива: решает, станет ли `#id` полем узла или…
     this.idsEnabled = !idsDisabled(this.lexer?.tokens || [], this.lexer?.text || '');
 
     const ast = this.traverse(this.AST.root);
 
-    // Без макросов раскрывать нечего: `expandMacros` пересобирает дерево и
-    // клонирует каждый узел, а результат структурно равен входу.
+    // Без макросов раскрывать нечего: `expandMacros` пересобирает дерево и клонирует каждый узел, а результат структурно…
     const diagnostics = [];
     const result = this.hasMacroSyntax()
       ? expandMacros(ast, diagnostics, this.lexer?.text || '')
       : withChildren(ast);
 
-    /* Импорт объектов из других документов — до L-2: файл-источник
-       приходит уже со своим раскрытым сахаром. */
+    // Импорт объектов из других документов — до L-2: файл-источник приходит уже со своим раскрытым сахаром.
     if (this.importResolver) {
       applyImports(result, {
         tokens: this.lexer?.tokens || [],
@@ -432,9 +388,7 @@ export class YarbpParser {
       });
     }
 
-    /* Языковые директивы (`! разбор-сахара`) меняют AST до конвертеров:
-       `тег = 1 / 2` превращается в явные `.свойство 1`. Без директив проход
-       ничего не делает и не трогает старые документы. */
+    // Языковые директивы (`! разбор-сахара`) меняют AST до конвертеров: `тег = 1 / 2` превращается в явные `.свойство 1`.
     applySugarTyping(result, {
       tokens: this.lexer?.tokens || [],
       sourceText: this.lexer?.text || '',

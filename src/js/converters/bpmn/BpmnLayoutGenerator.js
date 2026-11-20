@@ -1,7 +1,4 @@
-/**
- * Порт BpmnLayoutGenerator с Python.
- * Раскладка одного процесса: сетка (столбец × ветка × лейн) → координаты → waypoints.
- */
+// Порт BpmnLayoutGenerator с Python.
 
 import { LAYOUT } from './layoutConfig.js';
 import { sizeFor } from '../shared/bpmnModel/definitions.js';
@@ -101,7 +98,6 @@ export class BpmnLayoutGenerator {
     for (const sp of this.subprocesses) this.applyToSubprocess(sp);
   }
 
-  /* ---------------- Сбор данных ---------------- */
 
   collectNodes(nodes, process) {
     for (const node of nodes) {
@@ -185,7 +181,6 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  /* ---------------- 1. add_structure_attrs ---------------- */
 
   addStructureAttrs(repr) {
     this.branchCounter = 1;
@@ -247,16 +242,7 @@ export class BpmnLayoutGenerator {
     return result;
   }
 
-  /**
-   * Узлы, с которых начинается сетка.
-   *
-   * Раньше это были только startEvent. Но содержимое подпроцесса сплошь и рядом
-   * пишут без внутреннего стартового события (`процесс: ... подпроцесс ...`),
-   * и тогда сетка оставалась пустой: всем узлам доставалась одна ячейка, и они
-   * рисовались друг поверх друга. Поэтому, если стартовых событий нет, входными
-   * считаем узлы без входящих потоков (граничные события не в счёт — они стоят
-   * на задаче, а не начинают ветку).
-   */
+  // Узлы, с которых начинается сетка.
   getEntryNodesIds(repr) {
     const starts = this.getStartEventsIds(repr);
     if (starts.length) return starts;
@@ -322,7 +308,6 @@ export class BpmnLayoutGenerator {
     return result;
   }
 
-  /* ---------------- 2. calc_grid_structure ---------------- */
 
   calcGridStructure(repr) {
     const currentColElemsIds = this.getEntryNodesIds(repr);
@@ -407,7 +392,6 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  /* ---------------- 3. calc_grid_sizes ---------------- */
 
   calcGridSizes(process) {
     const filtered = [...this.repr.values()].filter(
@@ -558,7 +542,6 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  /* ---------------- 4. calc_elems_coords ---------------- */
 
   calcElemsCoords(repr, grid, processId) {
     let subprocessShiftLeft = 0;
@@ -572,8 +555,7 @@ export class BpmnLayoutGenerator {
       }
     }
 
-    // Ряды, где у кого-то есть артефакты: весь ряд выравниваем по низу,
-    // чтобы события и задачи стояли на одной линии, а не «лесенкой».
+    // Ряды, где у кого-то есть артефакты: весь ряд выравниваем по низу, чтобы события и задачи стояли на одной линии, а не…
     const rowsWithArtifacts = new Set();
     for (const p of this.elemParams.values()) {
       if (!p.artifactsH) continue;
@@ -597,8 +579,7 @@ export class BpmnLayoutGenerator {
 
       const taskH = params.realH || params.h;
 
-      // в ряду с артефактами всё резервированное место отдаём наверх,
-      // иначе половина уйдёт вниз и подписи вылезут за рамку пула
+      // в ряду с артефактами всё резервированное место отдаём наверх, иначе половина уйдёт вниз и подписи вылезут за рамку пула
       const sortedToBottom = params.artifactsH || rowsWithArtifacts.has(params.r);
       const verticalOffset = sortedToBottom
         ? cellHeight - taskH
@@ -609,7 +590,6 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  /* ---------------- 5. calc_edges ---------------- */
 
   calcEdges(repr) {
     for (const [id, elem] of repr) {
@@ -657,10 +637,7 @@ export class BpmnLayoutGenerator {
           && !this.isUpperBranchOfGateway(targetParams.id, id)) {
         arrowType = 'rb';
       } else if (isRightShift && isUpShift) {
-        // Подъём из нижнего ряда в верхний: идём вправо до правой грани, поднимаемся
-        // в промежутке между задачами и входим в левую грань цели. Раньше подъём
-        // шёл по центру источника (x = центр), и это совпадало с вертикалью
-        // входящего сверху потока — две стрелки рисовались одной линией.
+        // Подъём из нижнего ряда в верхний: идём вправо до правой грани, поднимаемся в промежутке между задачами и входим в…
         arrowType = 'rlv';
       } else if (this.isGatewayId(sourceParams.id)
           && this.isGatewayId(targetParams.id)
@@ -677,8 +654,7 @@ export class BpmnLayoutGenerator {
       if (arrowType === 'bl' || arrowType === 'tl') {
         waypoints = [firstWaypoint, [firstWaypoint[0], lastWaypoint[1]], lastWaypoint];
       } else if (arrowType === 'rlv') {
-        // вправо до правой грани, вверх по этой же вертикали, затем влево-вправо
-        // в левую грань цели: вертикаль проходит в промежутке между задачами
+        // вправо до правой грани, вверх по этой же вертикали, затем влево-вправо в левую грань цели: вертикаль проходит в…
         waypoints = [firstWaypoint, [firstWaypoint[0], lastWaypoint[1]], lastWaypoint];
       } else if (arrowType === 'rb' || arrowType === 'rt') {
         waypoints = [firstWaypoint, [lastWaypoint[0], firstWaypoint[1]], lastWaypoint];
@@ -743,7 +719,6 @@ export class BpmnLayoutGenerator {
     return false;
   }
 
-  /* ---------------- 6. optimize_layout ---------------- */
 
   optimizeLayout() {
     let col = this.grid.cols.length;
@@ -894,9 +869,7 @@ export class BpmnLayoutGenerator {
       const converted = this.getConvertedWaypoints();
       const virtual   = this.getVirtualWaypoints(axis);
       return [
-        // Содержимое подпроцесса живёт в координатах своего контейнера: его
-        // двигает не общая сетка процесса, а syncSubprocessContents — иначе
-        // рамка уезжает, а узлы внутри остаются на месте.
+        // Содержимое подпроцесса живёт в координатах своего контейнера: его двигает не общая сетка процесса, а…
         ...[...this.elemParams.values()].filter(p => !p.p).filter(match),
         ...converted.filter(match),
         ...virtual.filter(match),
@@ -905,7 +878,6 @@ export class BpmnLayoutGenerator {
     return elsToFilter.filter(match);
   }
 
-  /* ---------------- 6.5. realign_by_logical_columns ---------------- */
 
   realignByLogicalColumns(repr) {
     const byCol = new Map();
@@ -937,7 +909,6 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  /* ---------------- 6.6. resolve_column_overlaps ---------------- */
 
   resolveColumnOverlaps(repr) {
     const byCol = new Map();
@@ -975,7 +946,6 @@ export class BpmnLayoutGenerator {
     }
   }
 
-  /* ---------------- 7. update_pool ---------------- */
 
   updatePool(process) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1004,7 +974,6 @@ export class BpmnLayoutGenerator {
       p.y += shiftY;
     }
 
-    // сдвигаем labelPos шлюзов вместе с элементами
     for (const [, elem] of this.repr) {
       if (elem.node && elem.node.labelPos) {
         elem.node.labelPos.x += shiftX;
@@ -1068,16 +1037,8 @@ export class BpmnLayoutGenerator {
     };
   }
 
-  /* ---------------- 6.7. sync_subprocess_contents ---------------- */
 
-  /**
-   * Держит содержимое подпроцесса внутри его рамки.
-   *
-   * Между расчётом координат содержимого и этим местом рамку ещё двигают
-   * (`optimizeLayout`, `realignByLogicalColumns`, `resolveColumnOverlaps`),
-   * поэтому узлы внутри переносим на ту же дельту, что уехала рамка, и
-   * подращиваем рамку, если содержимое в неё не влезло.
-   */
+  // Держит содержимое подпроцесса внутри его рамки.
   syncSubprocessContents() {
     for (const sp of this.subprocesses) {
       const parent = this.elemParams.get(sp.id);
@@ -1101,7 +1062,6 @@ export class BpmnLayoutGenerator {
         sp.originY = parent.y;
       }
 
-      // граничные события и стрелки считаем заново — они зависят от координат
       this.attachBoundaryParams(sp.repr);
       this.calcEdges(sp.repr);
 

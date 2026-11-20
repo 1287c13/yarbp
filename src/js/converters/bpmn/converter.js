@@ -6,18 +6,12 @@ import { recalculateDi, getLayoutStats, resetLayoutStats } from './BpmnDiGenerat
 export { getLayoutStats, resetLayoutStats };
 
 export class YarbpBPMNConverter {
-  /**
-   * @param {object} ast — корень AST
-   * @param {{source?: string}} [options] — исходный текст: нужен только для
-   *   номеров строк в предупреждениях сборки (B-1)
-   */
   constructor(ast, options = {}) {
     if (!ast || ast.nodeType !== nodeTypes.ROOT) {
       throw new Error('Invalid AST: root node must be of type ROOT');
     }
     this.ast = ast;
     this.options = options;
-    /** Предупреждения модели: `{ line, message }[]` — читается после convert(). */
     this.warnings = [];
   }
 

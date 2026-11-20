@@ -3,18 +3,9 @@ import { YarbpBPMNConverter } from './converter.js';
 import { XMLHighlighter } from '../shared/XMLHighlighter.js';
 import { Ticker } from '../../utils/Ticker.js';
 
-/**
- * Пауза автообновления схемы.
- *
- * Пересборка BPMN — самая тяжёлая операция редактора: модель, раскладка
- * (несколько проходов оптимизации), DI, сериализация и подсветка XML. На
- * каждый keystroke это секунды на большой схеме, а смотреть на промежуточные
- * состояния всё равно никто не успевает. Поэтому: первая отрисовка — сразу,
- * следующие — после паузы в наборе, плюс кнопка принудительного обновления.
- */
+// Пауза автообновления схемы.
 const BPMN_RENDER_DELAY_MS = 2000;
 
-/** Кружок из стрелок: «обновить». */
 const REFRESH_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
   'stroke-linejoin="round" aria-hidden="true">' +
@@ -33,27 +24,20 @@ export class BPMNRenderer extends YarbpBasicRenderer {
     this.rendered = false;
   }
 
-  /**
-   * Вызывается на каждый ввод (observer лексера).
-   *
-   * Первый вызов рисует сразу — панель не должна пустовать при переключении
-   * флейвора. Дальше — по тикеру, чтобы набор текста не пересобирал схему.
-   */
+  // Вызывается на каждый ввод (observer лексера).
   render() {
     if (!this.rendered) {
       this.renderNow();
       return;
     }
 
-    // Тема и раскладка тоже просят перерисовку, но документ при этом не
-    // менялся: токены — тот же массив, значит пересобирать схему незачем.
+    // Тема и раскладка тоже просят перерисовку, но документ при этом не менялся: токены — тот же массив, значит…
     if (this.lexer && this.lastTokens === this.lexer.tokens) return;
 
     this.markStale(true);
     this.ticker.schedule(() => this.performRender());
   }
 
-  /** Принудительная перерисовка: кнопка «обновить» рядом со скачиванием. */
   renderNow() {
     this.ticker.cancel();
     this.performRender();
@@ -71,8 +55,7 @@ export class BPMNRenderer extends YarbpBasicRenderer {
     this.markStale(false);
     this.showWarnings(converter.warnings);
 
-    // Тот же результат — не трогаем DOM: каретка, прокрутка и выделение
-    // в панели результата остаются на месте.
+    // Тот же результат — не трогаем DOM: каретка, прокрутка и выделение в панели результата остаются на месте.
     if (XML === this.lastXML && this.downloadButton) return;
 
     this.lastXML = XML;
@@ -82,13 +65,7 @@ export class BPMNRenderer extends YarbpBasicRenderer {
     this.mountButtons();
   }
 
-  /**
-   * Строка диагностики панели BPMN (B-1).
-   *
-   * Конвертер сообщает, что не понял (неизвестный узел, дубль id, узел без
-   * входящего потока, процесс без старта). Показываем первые три строки и
-   * счётчик остальных; полный список — в `title`.
-   */
+  // Строка диагностики панели BPMN (B-1).
   showWarnings(warnings) {
     const host = this.buttonHost();
     if (!host) return;
@@ -119,9 +96,6 @@ export class BPMNRenderer extends YarbpBasicRenderer {
     this.statusBox.title = items.map(label).join('\n');
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Кнопки панели: скачать и обновить                                   */
-  /* ------------------------------------------------------------------ */
 
   buttonHost() {
     return this.renderTextarea.closest('.editor-container') ||
@@ -186,7 +160,6 @@ export class BPMNRenderer extends YarbpBasicRenderer {
     URL.revokeObjectURL(url);
   }
 
-  /** Смена флейвора: снять тикер и убрать кнопки BPMN. */
   destroy() {
     this.ticker.cancel();
 

@@ -5,16 +5,7 @@ import {
   findAssocOwner, findAssocOwnerAll, simpleWaypoints,
 } from './layoutUtils.js';
 
-/**
- * Переиспользование раскладки (B-6).
- *
- * Пока правится имя узла, геометрия не меняется, а `BpmnLayoutGenerator`
- * считался заново целиком (это самый дорогой шаг пересборки). Ключ —
- * «структурная» часть модели: id, теги, связи, артефакты, явные координаты;
- * имена и подписи в него не входят. При совпадении координаты берутся из кэша,
- * а пост-обработка DI (артефакты, границы, укладка пулов) выполняется как
- * обычно — она дешёвая и от имён тоже не зависит.
- */
+// Переиспользование раскладки (B-6).
 const LAYOUT_CACHE_LIMIT = 8;
 const layoutCache = new Map();
 const layoutStats = { runs: 0, hits: 0 };
@@ -223,7 +214,6 @@ export function recalculateDi(model) {
   return model;
 }
 
-/* ---------------- участники ---------------- */
 
 function syncParticipantBounds(model) {
   if (!model.collaboration) return;
@@ -240,14 +230,12 @@ function syncParticipantBounds(model) {
   }
 }
 
-/* ---------------- артефакты процесса ---------------- */
 
 function applyArtifactBounds(model, process) {
   const nodesById = new Map();
   collectNodesById(process.flowNodes, nodesById);
 
-  // у каких задач есть текстовая аннотация: объекты данных ставим выше неё,
-  // иначе «Накладная» и «Заказ собран по накладной» рисуются друг на друге
+  // у каких задач есть текстовая аннотация: объекты данных ставим выше неё, иначе «Накладная» и «Заказ собран по…
   const annotatedOwners = new Set();
   const collab = model.collaboration;
   if (collab) {
@@ -259,8 +247,7 @@ function applyArtifactBounds(model, process) {
   }
   const annotationSpace = LAYOUT.textAnnotationHeight + LAYOUT.textAnnotationAbove;
 
-  // Несколько артефактов над одной задачей встают в ряд: иначе `.данные Товар`
-  // и `.данные Накладная` оказываются в одной точке и вторая рисуется поверх.
+  // Несколько артефактов над одной задачей встают в ряд: иначе `.данные Товар` и `.данные Накладная` оказываются в одной…
   const byOwner = new Map();
   for (const ref of process.dataObjectRefs) {
     const owner = findAssocOwner(process, ref.id);
@@ -289,8 +276,7 @@ function applyArtifactBounds(model, process) {
         width,
         height: LAYOUT.dataObjectHeight,
       };
-      // подпись не задаём: внешний просмотрщик сам ставит её под объектом данных,
-      // а нулевой BPMNLabel рисовался прямо поверх рамки
+      // подпись не задаём: внешний просмотрщик сам ставит её под объектом данных, а нулевой BPMNLabel рисовался прямо поверх…
       nodesById.set(ref.id, { id: ref.id, tag: 'dataObjectReference', bounds: ref.bounds });
       topMost = Math.min(topMost, ref.bounds.y);
     });
@@ -351,7 +337,6 @@ function applyArtifactBounds(model, process) {
   }
 }
 
-/* ---------------- артефакты collaboration ---------------- */
 
 function applyCollaborationArtifacts(model) {
   const collab = model.collaboration;
@@ -395,7 +380,6 @@ function applyCollaborationArtifacts(model) {
   }
 }
 
-/* ---------------- пограничные события ---------------- */
 
 function fixBoundaryBounds(process) {
   const allNodes = collectAllNodes(process.flowNodes);
@@ -414,7 +398,6 @@ function fixBoundaryBounds(process) {
   }
 }
 
-/* ---------------- вертикальная укладка пулов ---------------- */
 
 function stackProcesses(model) {
   let y = 0;
@@ -515,7 +498,6 @@ function shiftProcessBy(process, dx, dy) {
   }
 }
 
-/* ---------------- end-события у правого края пула ---------------- */
 
 function snapEndEventsToRightEdge(model) {
   for (const process of model.processes) {
@@ -549,7 +531,6 @@ function shiftIncomingFlows(process, targetId, dx) {
     const [lx, ly] = flow.waypoints[last];
     if (!Number.isFinite(lx)) return;
 
-    // сдвигаем только последнюю точку (вход в end-событие)
     flow.waypoints[last] = [lx + dx, ly];
   };
 
@@ -559,12 +540,8 @@ function shiftIncomingFlows(process, targetId, dx) {
   }
 }
 
-/* ---------------- B-7: рамки групп ---------------- */
 
-/**
- * Группа — рамка вокруг задачи. Считаем в самом конце: после укладки пулов и
- * сдвигов, иначе рамка отрывается от задачи.
- */
+// Группа — рамка вокруг задачи.
 function applyGroupBounds(process) {
   const nodesById = new Map();
   collectNodesById(process.flowNodes, nodesById);
@@ -582,7 +559,6 @@ function applyGroupBounds(process) {
   }
 }
 
-/* ---------------- пересчёт waypoints ---------------- */
 
 function refreshAssocWaypoints(process) {
   const nodesById = new Map();

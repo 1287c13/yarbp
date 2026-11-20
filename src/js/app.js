@@ -246,16 +246,7 @@ function lineColumnAt(text, offset) {
   return { line: lines.length, column: lines[lines.length - 1].length + 1 };
 }
 
-/**
- * Первая проблема разбора — в строку статуса.
- *
- * Лексер уже отдаёт и токены `UNPARSED`, и текст `error`; не хватало только
- * вывода. Сообщения лексера технические («invalid char»), поэтому здесь они
- * переводятся в человеческие формулировки — сам лексер не меняется.
- *
- * Второй источник — нефатальные диагностики парсера (нет ключа подстановки,
- * цикл). Они не меняют AST и golden-снимки, но должны быть видны пользователю.
- */
+// Первая проблема разбора — в строку статуса.
 function describeSyntaxError(code, tokens, parserDiagnostics = []) {
   const broken = tokens.find(token => token.error || token.type === TokenTypes.UNPARSED);
   if (broken) {
@@ -291,7 +282,6 @@ function updateStatus(code, parserDiagnostics = []) {
 }
 
 function cleanupRenderer() {
-  // Инвалидируем незавершённую динамическую загрузку: её результат уже не нужен.
   rendererLoadGeneration++;
   pendingRendererName = null;
 
@@ -301,8 +291,7 @@ function cleanupRenderer() {
   }
   YarbpAppGlobals.renderer = null;
 
-  // Страховка для флейворов, которые рисуют кнопки/контейнеры вне редактора:
-  // после смены флейвора в панели результата не должно остаться чужих действий.
+  // Страховка для флейворов, которые рисуют кнопки/контейнеры вне редактора: после смены флейвора в панели результата не…
   const renderPane = renderTextarea ? renderTextarea.closest('#render-pane') : null;
   if (renderPane) {
     renderPane.querySelectorAll('.bpmn-actions, .bpmn-download-btn, .ui-render-container')
@@ -310,9 +299,7 @@ function cleanupRenderer() {
   }
 }
 
-/* Пересчёт панелей — раз в кадр, а не на каждое нажатие: rAF склеивает серию
-   событий `input` в одну отрисовку. Текст, который не изменился (undo в
-   исходное состояние, повторное событие), полностью не пересчитывается. */
+// Пересчёт панелей — раз в кадр, а не на каждое нажатие: rAF склеивает серию событий `input` в одну отрисовку.
 let pendingUpdateFrame = 0;
 let lastRenderedCode = null;
 let lastAST = null;
@@ -320,23 +307,31 @@ let rendererLoadGeneration = 0;
 let pendingRendererName = null;
 let flavorPrefetchStarted = false;
 
-/* Табуляция — это отступ, а не ввод. После неё меню подсказок не открываем:
-   пользователь, скорее всего, будет табулировать дальше, и следующий Tab
-   принял бы подсказку вместо отступа. Флаг снимает ровно один проход
-   подсказок — тот, который вызван `input` от самой табуляции. */
+// Табуляция — это отступ, а не ввод.
 let skipSuggestionsOnce = false;
 
-/**
- * Фоновая догрузка остальных флейворов. Запускается только после того, как
- * выбранный флейвор уже отрисован: первый экран не ждёт BPMN/FlexForms/OpenAPI.
- */
-function scheduleFlavorPrefetch() {
+// Фоновая догрузка остальных флейворов. Выбранный конвертер уже отрисован;
+// остальные приходят по одному после `load`, чтобы не спорить с первым экраном.
+function scheduleFlavorPrefetch(flavor) {
   if (flavorPrefetchStarted) return;
   flavorPrefetchStarted = true;
 
+  const exclude = flavor && flavor.flavorData ? flavor.flavorData.id : '';
+  const connection = typeof navigator !== 'undefined'
+    ? (navigator.connection || navigator.mozConnection || navigator.webkitConnection)
+    : null;
+
+  if (connection && (connection.saveData ||
+      /(^|-)2g$/.test(String(connection.effectiveType || '')))) {
+    document.documentElement.dataset.flavorPrefetch = 'skipped';
+    return;
+  }
+
+  document.documentElement.dataset.flavorPrefetch = 'waiting';
+
   const start = () => {
     document.documentElement.dataset.flavorPrefetch = 'loading';
-    prefetchFlavors()
+    prefetchFlavors({ exclude })
       .then(results => {
         const failed = results.filter(result => result.status === 'rejected');
         document.documentElement.dataset.flavorPrefetch = failed.length ? 'partial' : 'done';
@@ -350,19 +345,21 @@ function scheduleFlavorPrefetch() {
       });
   };
 
-  // Стартуем сразу после `load`: интерфейс уже готов, а prefetch не должен
-  // задерживать само событие загрузки. setTimeout(0) отделяет запуск от
-  // обработчика load, но не откладывает его до простоя.
-  const startSoon = () => window.setTimeout(start, 0);
+  const startWhenIdle = () => {
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(start, { timeout: 1000 });
+    } else {
+      window.setTimeout(start, 200);
+    }
+  };
 
   if (document.readyState === 'complete') {
-    startSoon();
+    window.setTimeout(startWhenIdle, 100);
   } else {
-    window.addEventListener('load', startSoon, { once: true });
+    window.addEventListener('load', () => window.setTimeout(startWhenIdle, 100), { once: true });
   }
 }
 
-/** Создать рендерер выбранного флейвора и подписать его на лексер. */
 function instantiateRenderer(flavor, RendererClass) {
   const renderer = new RendererClass(
     YarbpAppGlobals.lexer, YarbpAppGlobals.parser,
@@ -371,14 +368,10 @@ function instantiateRenderer(flavor, RendererClass) {
   YarbpAppGlobals.renderer = renderer;
   YarbpAppGlobals.lexer.setObserver(renderer);
   YarbpAppGlobals.lexer.callRendererObserver();
-  scheduleFlavorPrefetch();
+  scheduleFlavorPrefetch(flavor);
 }
 
-/**
- * Выбранный тяжёлый флейвор грузится первым (без него нечего рисовать), а
- * остальные — фоном после первого рендера. Пока грузится выбранный — не плодим
- * запросы; повторный выбор переиспользует тот же import().
- */
+// Выбранный тяжёлый флейвор грузится первым (без него нечего рисовать), а остальные — фоном после первого рендера.
 function startRenderer(flavor, RendererClass) {
   if (RendererClass) {
     instantiateRenderer(flavor, RendererClass);
@@ -413,7 +406,6 @@ function scheduleUpdateViews() {
   });
 
   // Страховка: в фоновой вкладке и в скрытом iframe кадры могут не приходить.
-  // Тогда пересчитываем по таймеру — правка не должна «застревать».
   setTimeout(() => {
     if (!pendingUpdateFrame) return;
     cancelAnimationFrame(pendingUpdateFrame);
@@ -422,17 +414,13 @@ function scheduleUpdateViews() {
   }, 100);
 }
 
-/**
- * Проход подсказок, вызванный табуляцией, пропускается: меню закрывается и не
- * открывается заново. Флаг одноразовый — следующий ввод подсказывает как обычно.
- */
+// Проход подсказок, вызванный табуляцией, пропускается: меню закрывается и не открывается заново.
 function tabbedSuggestionsSkipped() {
   if (!skipSuggestionsOnce) return false;
   skipSuggestionsOnce = false;
   return true;
 }
 
-/** Подсказки зависят от каретки, поэтому планируются и при неизменном тексте. */
 function scheduleSuggestions(flavor, ast) {
   YarbpAppGlobals.suggestionTicker.schedule(() => {
     if (tabbedSuggestionsSkipped()) {
@@ -452,12 +440,7 @@ function scheduleSuggestions(flavor, ast) {
   });
 }
 
-/**
- * Каретка перемещена без ввода (клик мышью или `selectionchange`): подсказки
- * относятся к позиции каретки, поэтому меню нужно пересобрать для новой
- * позиции. Иначе popup остаётся на старом месте и подсказывает чужой контекст.
- * Закрытое меню клик по тексту не открывает — для этого есть Alt.
- */
+// Каретка перемещена без ввода (клик мышью или `selectionchange`): подсказки относятся к позиции каретки, поэтому меню…
 function resuggestForCaret() {
   if (document.activeElement !== textarea) return;
   if (!YarbpAppGlobals.suggestionUI.isOpen()) return;
@@ -469,7 +452,6 @@ function updateViews() {
 
   const code = textarea.value;
 
-  // Тот же текст: тяжёлую часть (лексинг, AST, конвертер, innerHTML) пропускаем.
   if (code === lastRenderedCode && YarbpAppGlobals.flavor) {
     scheduleSuggestions(YarbpAppGlobals.flavor, lastAST);
     return;
@@ -479,7 +461,6 @@ function updateViews() {
   YarbpAppGlobals.lexer.setInitialState(code);
   YarbpAppGlobals.lexer.tokenize();
 
-  /* AST нужен и для статуса: диагностики подстановок не попадают в токены. */
   let ast = null;
   try {
     ast = YarbpAppGlobals.parser.getAST();
@@ -493,11 +474,9 @@ function updateViews() {
   YarbpAppGlobals.highlighter.tokens = YarbpAppGlobals.lexer.tokens;
   highlightDiv.innerHTML = YarbpAppGlobals.highlighter.highlight();
 
-  /* Рамки директив: соседние строки получают одну общую рамку. Разметку
-     подсветки это не меняет — рамки живут отдельным слоем. */
+  // Рамки директив: соседние строки получают одну общую рамку.
   drawFlavorFrames(highlightDiv);
 
-  /* Подсветка встроенных языков — отдельным отложенным проходом. */
   YarbpAppGlobals.codeBlockHighlightPass.schedule(
     code, YarbpAppGlobals.lexer.tokens);
 
@@ -518,8 +497,7 @@ function updateViews() {
   const flavorChanged = !!YarbpAppGlobals.flavor &&
     YarbpAppGlobals.flavor.flavorName !== flavor.flavorName;
 
-  // Сначала убираем UI прошлого рендерера (BPMN-кнопку и т.п.), иначе его
-  // действия остаются в панели результата после переключения конвертера.
+  // Сначала убираем UI прошлого рендерера (BPMN-кнопку и т.п.), иначе его действия остаются в панели результата после…
   if (flavorChanged) cleanupRenderer();
 
   if (!flavor.flavorData) {
@@ -528,7 +506,6 @@ function updateViews() {
   }
 
   if (!YarbpAppGlobals.flavor || flavorChanged || !YarbpAppGlobals.renderer) {
-    // Тот же тяжёлый флейвор уже грузится — не начинаем загрузку заново.
     if (!flavor.flavorData.renderer && pendingRendererName === flavor.flavorName) {
       return;
     }
@@ -550,8 +527,7 @@ function updateViews() {
 
 /* endregion */
 
-/* Эффективная ориентация: auto следует за окном, явный режим принудительно
-   задаёт сторону, на которой находится код. */
+// Эффективная ориентация: auto следует за окном, явный режим принудительно задаёт сторону, на которой находится код.
 function getOrientation() {
   if (layoutMode === 'horizontal') return 'landscape';
   if (layoutMode === 'vertical') return 'portrait';
@@ -648,10 +624,7 @@ if (textarea) {
     return positions;
   };
 
-  /* Отступ — два пробела, но Tab не «докидывает» их слепо: он выравнивает
-     строку по следующей границе отступа. На чётном столбце это два пробела,
-     на нечётном — один. Иначе после ручной правки отступы уезжают на 1 и
-     сетка вложенности ломается. */
+  // Отступ — два пробела, но Tab не «докидывает» их слепо: он выравнивает строку по следующей границе отступа.
   const tabSpaces = (text, offset, width = 2) => {
     const lineStart = text.lastIndexOf('\n', offset - 1) + 1;
     let col = 0;
@@ -736,26 +709,19 @@ if (textarea) {
     }
   };
 
-  /**
-   * Отступ — не ввод, поэтому меню после Tab не открывается: закрываем его
-   * сразу (чип в начале строки иначе висел бы до следующего прохода) и гасим
-   * подсказки, вызванные `input` от самой табуляции.
-   */
+  // Отступ — не ввод, поэтому меню после Tab не открывается: закрываем его сразу (чип в начале строки иначе висел бы до…
   const tabKeepsMenuClosed = () => {
     YarbpAppGlobals.suggestionUI.hide();
     skipSuggestionsOnce = true;
   };
 
   textarea.addEventListener('keydown', (e) => {
-    // Запрет после Tab одноразовый и живёт до следующей клавиши: любая другая
-    // клавиша — это уже осознанный ввод, и подсказки снова обычные.
+    // Запрет после Tab одноразовый и живёт до следующей клавиши: любая другая клавиша — это уже осознанный ввод, и…
     if (e.key !== 'Tab') skipSuggestionsOnce = false;
 
     if (YarbpAppGlobals.suggestionUI.handleKey(e)) return;
 
-    // Alt и Ctrl+Space — принудительный вызов подсказок. В начале строки
-    // список сам не открывается (там hint и Tab = отступ), поэтому явный
-    // вызов — единственный способ посмотреть варианты, не начиная ввод.
+    // Alt и Ctrl+Space — принудительный вызов подсказок.
     const isAlt = e.key === 'Alt' && !e.shiftKey && !e.ctrlKey && !e.metaKey;
     const isCtrlSpace = e.code === 'Space' && e.ctrlKey &&
       !e.altKey && !e.shiftKey && !e.metaKey;
@@ -792,7 +758,6 @@ if (textarea) {
       YarbpAppGlobals.suggestionUI.hide();
     }
 
-    // Ctrl+/ (и Cmd+/ на macOS) — массовое комментирование/раскомментирование
     const isSlash = e.code === 'Slash' || e.key === '/';
     if (isSlash && (e.ctrlKey || e.metaKey) && !e.altKey) {
       e.preventDefault();
@@ -860,9 +825,7 @@ if (textarea) {
           if (textarea.value === before) {
             textarea.setRangeText('', target, start, 'end');
           }
-          // Каретка — на первый непробельный символ. Иначе после удаления
-          // отступа она остаётся на переводе строки, и следующий Alt
-          // продолжает контекст предыдущей строки.
+          // Каретка — на первый непробельный символ.
           textarea.setSelectionRange(target, target);
         }
       }
@@ -902,16 +865,13 @@ YarbpAppGlobals.indentGuides = new IndentGuides(
 );
 YarbpAppGlobals.indentGuides.init();
 
-/* Веб-шрифт приезжает после первой отрисовки и меняет метрики текста, а с ними
-   и геометрию рамок директив. Пересчитываем один раз, когда шрифты готовы. */
+// Веб-шрифт приезжает после первой отрисовки и меняет метрики текста, а с ними и геометрию рамок директив.
 document.fonts?.ready.then(() => drawFlavorFrames(highlightDiv));
 
-// Инициализация файлового менеджера
 const fileManagerContainer = document.getElementById('file-manager-container');
 const fileManager = new FileManager();
 
 // Импорт объектов из других файлов песочницы (`! импорт`) и подсказки имён.
-// Подключаем до init: стартовый файл тоже должен сразу видеть импорт.
 YarbpAppGlobals.parser.setImportResolver(
   key => fileManager.resolveImport(key),
   () => fileManager.revision
@@ -946,11 +906,9 @@ if (textarea && highlightDiv) {
   textarea.addEventListener('input', scheduleUpdateViews);
   textarea.addEventListener('scroll', () => {
     syncScroll();
-    // Popup привязан к каретке — при прокрутке он едет вместе с ней.
     YarbpAppGlobals.suggestionUI.refresh();
   });
-  // Каретка, поставленная мышью, — это новый контекст: `input` не срабатывает,
-  // и без этих слушателей меню осталось бы на старом месте.
+  // Каретка, поставленная мышью, — это новый контекст: `input` не срабатывает, и без этих слушателей меню осталось бы на…
   textarea.addEventListener('mouseup', resuggestForCaret);
   document.addEventListener('selectionchange', resuggestForCaret);
   renderTextarea.addEventListener('scroll', syncRenderScroll);

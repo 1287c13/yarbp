@@ -12,50 +12,18 @@ import {
 } from './page.js';
 import { FLEX_FORMS_MOCK_SERVER } from './mock-server.js';
 
-/** Пауза перед перезагрузкой предпросмотра: пока печатают — не дёргаем iframe. */
 const PREVIEW_DEBOUNCE_MS = 400;
 
-/**
- * Страница-хост предпросмотра.
- *
- * Отдельный документ нужен из-за CSP: `srcdoc`/`blob:` наследуют политику
- * редактора, а страница формы собрана из встроенных <script>/<style>.
- * `preview/host.html` отдаётся сервером и политику не наследует — см. файл
- * `src/preview/host.html` и описание протокола `postMessage` там же.
- *
- * Путь считаем от модуля, а не от текущей страницы: рендерер запускается и
- * из `src/index.html`, и из тестовых страниц (`tests/flexforms/smoke.html`).
- * Относительный `preview/host.html` от документа во втором случае указывал бы на
- * несуществующий `tests/flexforms/preview/host.html`, iframe получал 404 и форма
- * не монтировалась (`нет #track`).
- */
+// Страница-хост предпросмотра.
 const PREVIEW_HOST_PAGE = new URL('../../../preview/host.html', import.meta.url).href;
 
-/** Заглушка экрана, если из разметки не собирается IR. */
 const EMPTY_IR_HINT = '<!DOCTYPE html><meta charset="utf-8">' +
   '<style>html,body{margin:0;height:100%;background:#0a0c10;color:#8b93a7;' +
   'font:14px/1.4 system-ui,sans-serif;display:flex;align-items:center;' +
   'justify-content:center;text-align:center;padding:16px}</style>' +
   'Форма не собрана — проверьте разметку.';
 
-/**
- * Рендерер флейвора «форма-ТСД» (`! как форма-тсд`).
- *
- * Разметка ЯРБП → AST → IR формы (YarbpFlexFormsConverter) → страница формы,
- * собранная из встроенной копии страницы ТСД (FlexFormsPage) → предпросмотр в рамке
- * корпуса ТСД внутри iframe.
- *
- * Наружу рендерер отдаёт **конфиг JSON** (кнопка «JSON»), **готовую
- * HTML-страницу** (кнопка «HTML») и **Python-мок сервера** (кнопка
- * «мок-сервер»). JSON нужен расширению 1С, HTML можно открыть как обычную
- * страницу: CSS, движок и IR уже внутри, мок-сервер поднимает локальные
- * эндпоинты хука/отправки/health для проверки формы.
- *
- * Почему iframe: страница формы — самостоятельное приложение (свой `data-theme`,
- * localStorage, beforeunload, `100dvh`). В iframe она живёт ровно тем же кодом,
- * что и на ТСД, без правок CSS/движка. `srcdoc` наследует origin редактора,
- * поэтому localStorage в предпросмотре работает.
- */
+// Рендерер флейвора «форма-ТСД» (`! как форма-тсд`).
 export class FlexFormsRenderer extends YarbpBasicRenderer {
   constructor(...args) {
     super(...args);
@@ -85,19 +53,16 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     if (serialized === this.lastIR && this.iframe && this.iframe.isConnected) return;
 
     if (IR === null) {
-      // Разметка неполная — прошлый предпросмотр не трогаем; если его не было,
-      // показываем, что форма пока не собрана.
+      // Разметка неполная — прошлый предпросмотр не трогаем; если его не было, показываем, что форма пока не собрана.
       if (this.iframe && !this.previewMounted) this.showPreviewHtml(EMPTY_IR_HINT);
       return;
     }
 
     clearTimeout(this.timer);
-    // Первый показ — сразу, дальше — после паузы в наборе.
     const delay = this.previewMounted ? PREVIEW_DEBOUNCE_MS : 0;
     this.timer = setTimeout(() => this.mountPreview(IR, serialized), delay);
   }
 
-  /** Разметка → IR. null, если AST не собран или конвертер не смог. */
   convertToIR() {
     let AST = null;
     try { AST = this.parser.getAST(); } catch (e) { return null; }
@@ -111,7 +76,6 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     }
   }
 
-  /** Контейнер предпросмотра в панели результата (класс — как у остальных рендереров). */
   ensureContainer() {
     const renderPane = this.renderTextarea.closest('#render-pane');
     if (!renderPane) return null;
@@ -154,17 +118,12 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     return container;
   }
 
-  /** Фон панели под тему редактора (как у остальных рендереров). */
   applyTheme(container) {
     const isDark = document.body.classList.contains('dark');
     container.style.background = isDark ? '#2d2d2d' : '#ffffff';
   }
 
-  /**
-   * Три выгрузки: JSON-конфиг для расширения 1С, готовая HTML-страница и
-   * Python-мок сервера. Подписи текстовые: одинаковые иконки не объясняли бы,
-   * что скачивается.
-   */
+  // Три выгрузки: JSON-конфиг для расширения 1С, готовая HTML-страница и Python-мок сервера.
   createExportButtons(container) {
     const group = document.createElement('div');
     group.className = 'ff-export-buttons';
@@ -201,14 +160,7 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     return config;
   }
 
-  /**
-   * IR текущей разметки → файл конфига для расширения 1С.
-   *
-   * Текст — ровно тот JSON, который получает страница предпросмотра (см.
-   * buildFormConfig), поэтому на стороне 1С достаточно подставить его в
-   * оболочку вместо маркера. Файл пишется как UTF-8 без BOM: это стандарт JSON,
-   * и `ПрочитатьJSON` не спотыкается о первый символ.
-   */
+  // IR текущей разметки → файл конфига для расширения 1С.
   downloadConfig() {
     const IR = this.convertToIR();
     const error = formConfigError(IR);
@@ -219,19 +171,12 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
 
     this.saveFile(buildFormConfig(IR), formFileName(IR, 'json'), 'application/json;charset=utf-8');
 
-    // Файл уже скачан: замечания не блокируют выгрузку, а говорят, что
-    // расширение 1С применит конфиг «как есть» (например, без типКлиента).
+    // Файл уже скачан: замечания не блокируют выгрузку, а говорят, что расширение 1С применит конфиг «как есть» (например,…
     const warnings = formConfigWarnings(IR);
     if (warnings.length) this.showExportError(warnings.join(' '), 'warning');
   }
 
-  /**
-   * IR текущей разметки → самостоятельная HTML-страница.
-   *
-   * Без `{ preview: true }`: в файле не должно быть редакторских заглушек,
-   * отключающих автофокус и сбрасывающих сохранённый IR. Страница содержит
-   * CSS, движок и данные формы, поэтому открывается без сборки и сети.
-   */
+  // IR текущей разметки → самостоятельная HTML-страница.
   downloadPage() {
     const IR = this.convertToIR();
     const error = formConfigError(IR);
@@ -243,16 +188,11 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     this.saveFile(buildFormPage(IR, { standalone: true }), formFileName(IR, 'html'), 'text/html;charset=utf-8');
   }
 
-  /**
-   * Python-мок сервера: один stdlib-модуль с хуком, отправкой и health.
-   * Он не зависит от IR: метод определяется по последнему сегменту URL,
-   * поэтому подходит и для `/rt_morato_bot/hs/dp/link`, и для `/api/v2/link`.
-   */
+  // Python-мок сервера: один stdlib-модуль с хуком, отправкой и health.
   downloadMockServer() {
     this.saveFile(FLEX_FORMS_MOCK_SERVER, 'flexforms_mock_server.py', 'text/x-python;charset=utf-8');
   }
 
-  /** Текст → файл. */
   saveFile(text, fileName, mimeType) {
     const blob = new Blob([text], { type: mimeType });
     const url = URL.createObjectURL(blob);
@@ -265,14 +205,7 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     URL.revokeObjectURL(url);
   }
 
-  /**
-   * Отказ выгрузки показываем в панели, а не тостом: тост макета занят
-   * сообщениями самой формы (хук, отправка), а молчание кнопки выглядит
-   * поломкой. Плашка уходит сама.
-   *
-   * `tone = 'warning'` — мягкое замечание (`formConfigWarnings`): файл уже
-   * скачан, плашка лишь говорит, что на приёмке в 1С стоит проверить.
-   */
+  // Отказ выгрузки показываем в панели, а не тостом: тост макета занят сообщениями самой формы (хук, отправка), а…
   showExportError(message, tone = 'error') {
     if (!this.container || !this.container.isConnected) return;
 
@@ -301,13 +234,7 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     }
   }
 
-  /**
-   * Отдать готовую страницу в iframe через страницу-хост.
-   *
-   * Хост перезагружается на каждую перерисовку: `document.write` заменяет
-   * документ целиком вместе с обработчиком `message`, поэтому «готовность»
-   * всегда приходит из свежего документа.
-   */
+  // Отдать готовую страницу в iframe через страницу-хост.
   showPreviewHtml(html) {
     if (!this.iframe || !this.iframe.isConnected) return;
 
@@ -317,7 +244,6 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     this.previewMounted = true;
   }
 
-  /** Хост загрузился и ждёт документ — отдаём ему собранную страницу формы. */
   handlePreviewMessage(event) {
     if (event.origin !== window.location.origin) return;
 
@@ -340,7 +266,6 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     );
   }
 
-  /** Смена флейвора и уход со страницы: снять слушатель и таймеры. */
   destroy() {
     window.removeEventListener('message', this.onPreviewMessage);
     this.disconnectResize();
@@ -351,9 +276,6 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     this.container = null;
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Рамка: масштаб под размер панели                                    */
-  /* ------------------------------------------------------------------ */
 
   observeResize(container) {
     this.fitPhone();
@@ -385,25 +307,7 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
     }
   }
 
-  /**
-   * Рамка масштабируется целиком: SVG — вектор (не мылит), а экран (iframe)
-   * сохраняет свой логический размер 356x471. Значит форма верстается один раз
-   * и дальше только масштабируется: в узкой панели она уменьшается, а не
-   * перекомпоновывается под её ширину (иначе при широкой панели форма «расползалась»
-   * бы на планшетную раскладку, а в узкой обрезалась).
-   *
-   * Крупнее 1:1 не увеличиваем. При масштабе 1 CSS-пиксель формы равен пикселю
-   * эталонной страницы: предпросмотр показывает ровно тот же размер, что страница на ТСД,
-   * а текст и 1px-рамки полей остаются резкими. Раньше рамка могла расти до 1.6,
-   * и «тот же» макет в панели выглядел крупнее, чем на устройстве.
-   *
-   * Вписываем не корпус, а саму форму. Корпус нарисован вместе с клавиатурой и
-   * потому почти в два раза длиннее экрана (799 против 84+471): подгонка по
-   * корпусу ужимала бы форму даже в высокой панели (в панели 720 точек это
-   * −14%, то есть та самая разница с эталонной страницей). Поэтому по высоте считаем
-   * запас до НИЗА ЭКРАНА, и если он влезает — масштаб остаётся 1, а «хвост»
-   * корпуса просто уезжает в прокрутку панели.
-   */
+  // Рамка масштабируется целиком: SVG — вектор (не мылит), а экран (iframe) сохраняет свой логический размер 356x471.
   fitPhone() {
     if (!this.container || !this.container.isConnected) return;
 
@@ -423,8 +327,7 @@ export class FlexFormsRenderer extends YarbpBasicRenderer {
       availableH / screenBottom
     );
 
-    // Размер рамки в раскладке — уже умноженный: место занимает именно он,
-    // иначе трансформация вылезала бы за панель и рисовала бы скроллбары.
+    // Размер рамки в раскладке — уже умноженный: место занимает именно он, иначе трансформация вылезала бы за панель и…
     box.style.width = (FLEX_FORMS_PHONE.width * scale).toFixed(2) + 'px';
     box.style.height = (FLEX_FORMS_PHONE.height * scale).toFixed(2) + 'px';
     phone.style.transform = 'scale(' + scale.toFixed(4) + ')';

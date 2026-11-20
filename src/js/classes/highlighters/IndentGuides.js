@@ -1,12 +1,4 @@
-/**
- * Направляющие отступов и номера строк для редактора кода.
- *
- * Слой рисуется поверх подсветки, но под textarea, и проявляется только когда
- * каретка стоит перед первым непустым символом строки. Для каждого уникального
- * отступа в документе рисуется одна вертикальная линия (без дублей по строкам),
- * сверху линии подписан размер отступа в пробелах. Слева показываются номера
- * строк — они появляются и исчезают вместе с линиями.
- */
+// Направляющие отступов и номера строк для редактора кода.
 
 import { measureCharWidth } from '../../utils/utils.js';
 
@@ -16,10 +8,6 @@ const GUTTER_RIGHT_PADDING = 8;
 const FALLBACK_CHAR_WIDTH_RATIO = 0.6;
 
 export class IndentGuides {
-  /**
-   * @param {HTMLTextAreaElement} textarea - поле ввода кода
-   * @param {HTMLElement|null} container - контейнер редактора (по умолчанию ближайший .editor-container)
-   */
   constructor(textarea, container = null) {
     this.textarea = textarea;
     this.container = container || textarea?.closest('.editor-container') || null;
@@ -68,9 +56,6 @@ export class IndentGuides {
     };
   }
 
-  /**
-   * Создаёт слой и подписывается на изменения редактора.
-   */
   init() {
     if (this.destroyed || !this.textarea || !this.container || this.overlay) return;
 
@@ -117,22 +102,13 @@ export class IndentGuides {
     }
   }
 
-  /**
-   * Пересчитывает содержимое и перерисовывает слой (например, после смены файла).
-   */
   refresh() {
     if (this.destroyed) return;
     this.contentDirty = true;
     this.render();
   }
 
-  /**
-   * Пометить содержимое грязным и отрисовать в ближайшем кадре.
-   *
-   * `refresh()` синхронный и на каждый ввод дублировал работу собственного
-   * input-обработчика: полный parseContent + renderNumbers прямо в updateViews.
-   * Для больших документов это заметная пауза; здесь работа уходит в rAF.
-   */
+  // Пометить содержимое грязным и отрисовать в ближайшем кадре.
   invalidate() {
     if (this.destroyed) return;
     this.contentDirty = true;
@@ -174,9 +150,6 @@ export class IndentGuides {
     this.updateCurrentLevel();
   }
 
-  /**
-   * Разбирает текст: начала строк, отступы и уникальные уровни отступа.
-   */
   parseContent() {
     const lines = this.textarea.value.split('\n');
     const levels = new Set();
@@ -229,18 +202,12 @@ export class IndentGuides {
     this.numbersLayer.style.transform = `translateY(${-scrollTop}px)`;
   }
 
-  /**
-   * Привязка к пиксельной сетке устройства — так же, как браузер рисует каретку.
-   * Без неё линия может встать на 1px левее/правее каретки при дробном dpr.
-   */
+  // Привязка к пиксельной сетке устройства — так же, как браузер рисует каретку.
   snapToDevicePixel(value) {
     const ratio = window.devicePixelRatio || 1;
     return Math.floor(value * ratio) / ratio;
   }
 
-  /**
-   * Одна линия на уровень отступа + подпись с количеством пробелов над ней.
-   */
   renderGuides() {
     const fragment = document.createDocumentFragment();
     const top = this.paddingTop;
@@ -268,9 +235,6 @@ export class IndentGuides {
     this.linesLayer.replaceChildren(fragment);
   }
 
-  /**
-   * Номера строк — только для видимой области, чтобы не плодить DOM.
-   */
   renderNumbers() {
     const total = this.lineInfo.length;
     if (!total) {
@@ -307,9 +271,6 @@ export class IndentGuides {
     this.numbersLayer.replaceChildren(fragment);
   }
 
-  /**
-   * Каретка должна стоять ровно перед первым непустым символом строки.
-   */
   isCaretBeforeFirstSymbol() {
     const textarea = this.textarea;
 
@@ -354,9 +315,6 @@ export class IndentGuides {
     this.overlay.classList.toggle('is-visible', shouldBeVisible);
   }
 
-  /**
-   * Подсвечивает направляющую уровня отступа текущей строки с кареткой.
-   */
   updateCurrentLevel() {
     const lineIndex = this.findLineIndex(this.textarea.selectionStart);
     const line = this.lineInfo[lineIndex];

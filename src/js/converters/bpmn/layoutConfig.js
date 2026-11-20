@@ -1,5 +1,4 @@
 export const LAYOUT = Object.freeze({
-  // отступы внутри ячейки сетки
   visualIndent:        18.0,
 
   poolElemShift:       30.0,

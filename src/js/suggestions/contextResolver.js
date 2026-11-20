@@ -23,7 +23,6 @@ export function resolveContext(ast, cursorOffset, text) {
       path, node, text, cursorOffset);
   }
 
-  // Анонимный узел (значение массива) — используем ARRAY-предка
   if (!node.key && node.valueType !== 'OBJECT' && node.valueType !== 'ARRAY') {
     let arrayParent = null;
     let arrayParentIdx = -1;
@@ -72,9 +71,7 @@ export function resolveContext(ast, cursorOffset, text) {
       path, node, text, cursorOffset);
   }
 
-  // Ключ с типом (`поле:штрихкод`, `.приемник:Справочник.Номенклатура`):
-  // лексер уже отделил тип, но пользователь всё ещё набирает КЛЮЧ. Пока на
-  // строке нет `=`, это не значение `поле`, а продолжение ключа.
+  // Ключ с типом (`поле:штрихкод`, `.приемник:Справочник.Номенклатура`): лексер уже отделил тип, но пользователь всё ещё…
   const keyTail = text.slice(node.position.end, cursorOffset);
   if (keyTail.startsWith(':') && !keyTail.includes('=') &&
       !keyTail.includes('\n') && !keyTail.includes(' ')) {
@@ -126,17 +123,7 @@ export function resolveContext(ast, cursorOffset, text) {
     path, node, text, cursorOffset);
 }
 
-/**
- * Дополняет контекст тем, что нужно словарю подсказок:
- *
- * - `anonymous` — курсор внутри анонимного объекта (`:` в колонке таблицы,
- *   строке обработчика, опции). У таких объектов нет собственного ключа,
- *   поэтому свойства ищутся не по `parentKey`, а по владельцу;
- * - `ownerKey` — ближайший именованный предок анонимного объекта
- *   (`таблица`, `опции`, `формированиеКэша`, …);
- * - `valueStart` / `rawValue` — где начинается значение и что уже набрано.
- *   По ним подсказка заменяет всё значение, а не последнее слово.
- */
+// Дополняет контекст тем, что нужно словарю подсказок: - `anonymous` — курсор внутри анонимного объекта (`:` в колонке…
 function withMeta(ctx, path, node, text, cursorOffset) {
   if (!ctx) return ctx;
 

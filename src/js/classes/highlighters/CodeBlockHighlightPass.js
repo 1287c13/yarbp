@@ -2,14 +2,7 @@ import { Ticker } from '../../utils/Ticker.js';
 import { TokenTypes } from '../../core/YarbpLexer.js';
 import { CodeBlockHighlighter } from './CodeBlockHighlighter.js';
 
-/**
- * Отложенная подсветка содержимого фрагментов кода.
- *
- * Основной YarbpHighlighter уже нарисовал разметку ЯРБП, границы и язык
- * блока. Этот проход отдельным таймером (100–200 мс) находит блоки с
- * языком и заменяет только внутренности `.ide-code-body`. Textarea и
- * слой ЯРБП не трогаются, поэтому курсор и выделение не сбиваются.
- */
+// Отложенная подсветка содержимого фрагментов кода.
 export const CODE_BLOCK_HIGHLIGHT_DELAY_MS = 150;
 
 export class CodeBlockHighlightPass {
@@ -21,13 +14,11 @@ export class CodeBlockHighlightPass {
     this.highlighted = new WeakMap();
   }
 
-  /** Поставить проход в очередь: предыдущий отменяется. */
   schedule(code, tokens) {
     this.pending = { code, tokens };
     this.ticker.schedule(() => this.apply());
   }
 
-  /** Синхронный запуск для тестов и принудительной перерисовки. */
   highlightNow() {
     this.ticker.cancel();
     this.apply();
@@ -47,7 +38,6 @@ export class CodeBlockHighlightPass {
     const { code, tokens } = pending;
     const source = String(code ?? '');
 
-    /* innerHTML может сбросить прокрутку слоя подсветки — возвращаем её. */
     const scrollTop = this.highlightDiv.scrollTop;
     const scrollLeft = this.highlightDiv.scrollLeft;
 
@@ -74,7 +64,6 @@ export class CodeBlockHighlightPass {
         host.innerHTML = new CodeBlockHighlighter(language).highlight(content);
         this.highlighted.set(host, { language, content });
       } catch (error) {
-        /* Ошибка хайлайтера не должна ломать редактор: блок остаётся текстом. */
         console.error('[highlight] code block failed:', error);
       }
     }

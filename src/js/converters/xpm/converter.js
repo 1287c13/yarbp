@@ -57,7 +57,6 @@ export class YarbpXPMConverter {
       .filter(child => child.key);
 
     // Участник резервирует колонку 0 под иконку, остальные дети идут с x = 1.
-    // Дорожка и прочие узлы — без резерва, дети с x = 0.
     const sizeX = rootChildren.reduce((max, actor) => {
       if (actor.key === YarbpXPMConverter.VOCABULARY.participant) {
         const tilesWithoutImage = (actor.children || [])
@@ -90,15 +89,11 @@ export class YarbpXPMConverter {
     return { tiles: this.result };
   }
 
-  // ---------------------------------------------------------------------------
-  // Раскладка строк
-  // ---------------------------------------------------------------------------
 
   _layoutParticipant(actor, y) {
     const roleName = this._extractRoleName(actor);
     const imageNode = this._findImageNode(actor);
 
-    // Иконка всегда создаётся и всегда лежит в x = 0
     const imageTile = this._getTileByCoords(0, y);
     if (imageTile) {
       imageTile.config = this._getActorImageTileConfig(0, y, {
@@ -107,7 +102,6 @@ export class YarbpXPMConverter {
       });
     }
 
-    // Остальные дети — начиная с x = 1
     let x = 1;
     (actor.children || []).forEach(tile => {
       if (tile.key === YarbpXPMConverter.VOCABULARY.image || tile.prefix === '.') return;
@@ -131,15 +125,8 @@ export class YarbpXPMConverter {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Иконки
-  // ---------------------------------------------------------------------------
 
-  /**
-   * Явный текст узла: `.имя` → `.заголовок` → `.текст`.
-   * Возвращает пустую строку, если ничего не задано; вызывающий решает,
-   * использовать ли старый `value`.
-   */
+  // Явный текст узла: `.имя` → `.заголовок` → `.текст`.
   _nodeText(node, keys = ['имя', 'заголовок', 'текст']) {
     for (const key of keys) {
       const found = findChildrenByKeyValue(node, 'key', key)[0];
@@ -168,10 +155,7 @@ export class YarbpXPMConverter {
     return YarbpXPMConverter._resolve(trimmed, YarbpXPMConverter.VOCABULARY) || trimmed;
   }
 
-  /**
-   * Двигает иконку из x = 0 вплотную к первой точке строки.
-   * Если точек нет — иконка остаётся в x = 0.
-   */
+  // Двигает иконку из x = 0 вплотную к первой точке строки.
   _repositionImages() {
     const rows = new Map();
     this.result.forEach(tile => {
@@ -201,12 +185,8 @@ export class YarbpXPMConverter {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Резолв таблиц решений
-  // ---------------------------------------------------------------------------
 
   _resolveTargets() {
-    // Индекс id → grid по всем точкам
     const idIndex = new Map();
     this.result.forEach(tile => {
       if ((tile.config || {}).tileType !== 'point') return;
@@ -214,7 +194,6 @@ export class YarbpXPMConverter {
       if (id) idIndex.set(id, tile.grid);
     });
 
-    // Резолв строк таблиц
     this.result.forEach(tile => {
       if ((tile.config || {}).tileType !== 'point') return;
 
@@ -230,8 +209,7 @@ export class YarbpXPMConverter {
         });
       }
 
-      // Резолв id-стрелок
-            // Резолв id-стрелок
+      // Резолв id-стрелок Резолв id-стрелок
       const arrows = tile.config.arrows;
       if (arrows) {
         ['right', 'down', 'left', 'top'].forEach(dir => {
@@ -239,8 +217,7 @@ export class YarbpXPMConverter {
           if (!arrow || !arrow.targetId) return;
           const grid = idIndex.get(arrow.targetId);
           arrow.targetGrid = grid ? { x: grid.x, y: grid.y } : null;
-          // Если цель найдена — рисуем безье в рендерере,
-          // а исходную стрелку гасим, чтобы не дублировалась
+          // Если цель найдена — рисуем безье в рендерере, а исходную стрелку гасим, чтобы не дублировалась
           if (arrow.targetGrid) {
             arrow.show = false;
           }
@@ -249,9 +226,6 @@ export class YarbpXPMConverter {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Стрелки
-  // ---------------------------------------------------------------------------
 
   _inheritArrows() {
     const tiles = this.result || [];
@@ -404,7 +378,6 @@ export class YarbpXPMConverter {
         currentX += dx;
         currentY += dy;
       } else {
-        // Препятствие (image, divider, ...)
         return null;
       }
     }
@@ -459,9 +432,6 @@ export class YarbpXPMConverter {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Извлечение свойств
-  // ---------------------------------------------------------------------------
 
   _extractProps(tile, context = {}) {
     switch (tile.key) {
@@ -513,7 +483,6 @@ export class YarbpXPMConverter {
 
         let str = String(val).trim();
 
-        // Подпись в квадратных скобках в начале
         let label = '';
         const labelMatch = str.match(/^\[([^\]]*)\]/);
         if (labelMatch) {
@@ -521,13 +490,11 @@ export class YarbpXPMConverter {
           str = str.slice(labelMatch[0].length);
         }
 
-        // Символ стрелки: только из -.<>
         const arrowMatch = str.match(/^([\-.<>]+)(.*)$/);
         if (!arrowMatch) return { show: false };
 
         const arrowStr = arrowMatch[1];
         const rest = arrowMatch[2];
-        // id начинается с буквы
         const targetId = /^[A-Za-zА-Яа-яЁё]/.test(rest) ? rest : null;
 
         let style = 'solid';
@@ -661,9 +628,6 @@ export class YarbpXPMConverter {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Фабрики конфигов
-  // ---------------------------------------------------------------------------
 
   _getTileConfig(tileType) {
     switch (tileType) {
@@ -723,9 +687,6 @@ export class YarbpXPMConverter {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Сетка
-  // ---------------------------------------------------------------------------
 
   _createGrid(sizeX, sizeY) {
     this.result = [];

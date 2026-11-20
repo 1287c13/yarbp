@@ -1,36 +1,24 @@
 // FileManager.js
-//
-// Встроенные примеры умеют открываться ссылкой: ?example=<slug> (см.
-// readExampleKeyFromUrl / writeExampleKeyToUrl в конце файла).
 import { escAttr, escText } from '../utils/escape.js';
 import { clearStored, removeStored, readStored, storedKeys, writeStored } from '../utils/storage.js';
 
 const EXAMPLE_PARAM = 'example';
 
-/**
- * Текст из файла или хранилища → нормальные переводы строк.
- *
- * Лексер работает с LF: `\r` из чужого файла (Windows-выгрузка, «Загрузить из
- * файла») попадает в токены и ломает отступы. Поэтому нормализуем на входе, а
- * не в лексере — иначе поехали бы позиции подсветки.
- */
+// Текст из файла или хранилища → нормальные переводы строк.
 function normalizeText(text) {
   return String(text ?? '').replace(/\r\n?/g, '\n');
 }
 
 export class FileManager {
-  /** Версия формата экспорта: 1 — без id/slug (читается), 2 — с ними. */
   static EXPORT_VERSION = 2;
 
-  /** Резервная копия перед импортом: `<префикс><timestamp>`; храним последние N. */
   static BACKUP_PREFIX = 'yarbp_backup_';
   static BACKUP_LIMIT = 3;
 
   constructor(storageKey = 'yarbp_files') {
     this.storageKey = storageKey;
     this.data = this._loadData();
-    // Пример из адреса (?example=xpo / #example=xpo) главнее localStorage:
-    // ссылку присылают именно для того, чтобы у получателя открылся этот пример.
+    // Пример из адреса (?example=xpo / #example=xpo) главнее localStorage: ссылку присылают именно для того, чтобы у…
     this._applyExampleFromUrl();
     this.editor = null;
     this.onContentChange = null;
@@ -38,16 +26,9 @@ export class FileManager {
     this.autoSaveTimer = null;
     this.autoSaveInterval = 5000; // 5 секунд
     this._boundSyncFromUrl = null;
-    /** Версия содержимого файлов: импорт из другого файла должен обновлять AST. */
     this.revision = 0;
   }
 
-  /**
-   * Инициализация файлового менеджера
-   * @param {HTMLTextAreaElement} editorTextarea - поле ввода кода
-   * @param {HTMLElement} uiContainer - контейнер для вставки UI
-   * @param {Function} onContentChange - колбэк при смене контента (например, updateViews)
-   */
   init(editorTextarea, uiContainer, onContentChange) {
     this.editor = editorTextarea;
     this.uiContainer = uiContainer;
@@ -55,20 +36,13 @@ export class FileManager {
 
     this._renderUI();
     this._loadActiveFile();
-    // Адрес всегда показывает активный пример: ссылку можно копировать сразу,
-    // не переключая файлы (и она не зависит от localStorage получателя).
+    // Адрес всегда показывает активный пример: ссылку можно копировать сразу, не переключая файлы (и она не зависит от…
     this._syncUrlWithActiveFile();
     this._setupAutoSave();
     this._setupUrlSync();
   }
 
-  // ---------------------------------------------
-  // Пример из адреса страницы (?example=<slug>)
-  // ---------------------------------------------
-  /**
-   * Слушать изменения адреса: ссылку можно вставить в ту же вкладку, а
-   * hashchange/popstate приходят и от ручной правки URL, и от «назад».
-   */
+  // Слушать изменения адреса: ссылку можно вставить в ту же вкладку, а hashchange/popstate приходят и от ручной правки…
   _setupUrlSync() {
     if (typeof window === 'undefined' || !window.addEventListener) return;
     this._boundSyncFromUrl = () => this._syncFromUrl();
@@ -76,10 +50,7 @@ export class FileManager {
     window.addEventListener('popstate', this._boundSyncFromUrl);
   }
 
-  /**
-   * Включить пример, указанный в адресе. Нет параметра или пример неизвестен —
-   * ничего не меняем (страница открывается как обычно).
-   */
+  // Включить пример, указанный в адресе.
   _applyExampleFromUrl() {
     const key = readExampleKeyFromUrl();
     if (!key) return;
@@ -92,7 +63,6 @@ export class FileManager {
     this.data.activeFileId = file.id;
   }
 
-  /** Переключиться на пример из адреса (после ручной правки URL или «назад»). */
   _syncFromUrl() {
     const key = readExampleKeyFromUrl();
     const file = key ? this._findBuiltinByKey(key) : null;
@@ -100,10 +70,7 @@ export class FileManager {
     this.switchTo(file.id);
   }
 
-  /**
-   * Встроенный пример по ключу из адреса. Принимаем и slug, и id
-   * (builtin-3): ссылки, скопированные вручную по id, не должны ломаться.
-   */
+  // Встроенный пример по ключу из адреса.
   _findBuiltinByKey(key) {
     const needle = String(key || '').trim().toLowerCase();
     if (!needle) return null;
@@ -114,24 +81,17 @@ export class FileManager {
     )) || null;
   }
 
-  /** Ключ файла для адреса: у встроенных — slug, у своих файлов ключа нет. */
   _exampleKeyOf(file) {
     if (!file || !file.isBuiltin) return '';
     return file.slug || file.id;
   }
 
-  /**
-   * Показать активный пример в адресе страницы. Свой (пользовательский) файл
-   * ключа не имеет — параметр снимается, чтобы ссылка не врала.
-   */
+  // Показать активный пример в адресе страницы.
   _syncUrlWithActiveFile() {
     const activeFile = this.data.files.find(f => f.id === this.data.activeFileId);
     writeExampleKeyToUrl(this._exampleKeyOf(activeFile));
   }
 
-  // ---------------------------------------------
-  // Работа с localStorage
-  // ---------------------------------------------
   _loadData() {
     const defaults = this._getDefaultData();
     const builtinFiles = defaults.files.filter(f => f.isBuiltin);
@@ -144,7 +104,6 @@ export class FileManager {
           const userFiles = (parsed.files || []).filter(f => !f.isBuiltin);
           const activeId = parsed.activeFileId;
 
-          // Если активный файл был встроенным — сбрасываем на первый встроенный
           const isActiveUserFile = userFiles.some(f => f.id === activeId);
           const activeFileId = isActiveUserFile
             ? activeId
@@ -171,16 +130,12 @@ export class FileManager {
   _getDefaultData() {
     return {
       version: 1,
-      // Стартовый пример — форма: при открытии редактора сразу видно,
-      // как работает генератор UI. Остальные примеры — в папке «Примеры».
+      // Стартовый пример — форма: при открытии редактора сразу видно, как работает генератор UI.
       activeFileId: 'builtin-10',
       files: [
         {
           id: 'builtin-1',
           // slug — стабильный ключ примера для адреса страницы (?example=xpo).
-          // Именно он попадает в ссылку, поэтому имя можно менять свободно,
-          // а slug — только вместе с поддержкой старого значения в
-          // _findBuiltinByKey (см. алиасы по id).
           name: 'Lexer output',
           slug: 'lexer-output',
           content: `! as lexer
@@ -416,7 +371,6 @@ Order
         {
           id: 'builtin-9',
           name: 'Форма ТСД',
-          // Ссылка на этот пример: index.html?example=tsd-form
           slug: 'tsd-form',
           // Компактный пример формы ТСД: значения по умолчанию в разметке
           // не дублируются — их подставляет конвертер (см. FlexFormsConvertor).
@@ -503,13 +457,8 @@ Order
         {
           id: 'builtin-10',
           name: 'Форма',
-          // Ссылка на пример: index.html?example=ui-order-form
           slug: 'ui-order-form',
-          // Форма производственного заказа на разметке UI-генератора
-          // (`! как форма`): карточки с легендой, плашка «подпись — значение»,
-          // два представления списка (список и форма добавления), условные
-          // блоки по переключателю.
-          // Сахар полей и опций разворачивает `! разбор-сахара(...)`.
+          // Форма производственного заказа на разметке UI-генератора (`! как форма`): карточки с легендой, плашка «подпись —…
           content: `! как форма
 ! разбор-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс
 ! разбор-сахара(опция) представление / значение
@@ -680,13 +629,7 @@ Order
     return saved;
   }
 
-  /**
-   * Показать, что изменения не сохраняются: квота или запрет хранилища.
-   *
-   * Молчание здесь опаснее ошибки — пользователь считает, что документ уже
-   * сохранён. Метка живёт в шапке файлового менеджера и гаснет, когда запись
-   * снова проходит.
-   */
+  // Показать, что изменения не сохраняются: квота или запрет хранилища.
   _setSaveState(saved) {
     this.saveIssue = !saved;
     const marker = this.uiContainer?.querySelector('#fm-save-state');
@@ -698,9 +641,6 @@ Order
       'изменения не сохраняются. Скачайте экспорт, чтобы не потерять файлы.';
   }
 
-  // ---------------------------------------------
-  // Работа с текущим файлом
-  // ---------------------------------------------
   _loadActiveFile() {
     const activeFile = this.data.files.find(f => f.id === this.data.activeFileId);
     if (activeFile && this.editor) {
@@ -711,7 +651,6 @@ Order
     this._highlightActiveInUI();
   }
 
-  /** Файлы, доступные для `! импорт` и подсказок. */
   listImportableFiles() {
     return this.data.files
       .filter(file => file && typeof file.content === 'string')
@@ -723,13 +662,7 @@ Order
       }));
   }
 
-  /**
-   * Найти файл по имени/slug/id без учёта регистра.
-   *
-   * Возвращает объект для парсера: успех — `{ok:true, id, name, content}`,
-   * ошибка — `{ok:false, reason, candidates}`. Имя с пробелами ищется как
-   * есть: кавычки снимает директива, а не FileManager.
-   */
+  // Найти файл по имени/slug/id без учёта регистра.
   resolveImport(key) {
     const needle = String(key ?? '').trim().toLowerCase();
     const files = this.data.files.filter(file =>
@@ -766,14 +699,7 @@ Order
     };
   }
 
-  /**
-   * Сохранить текущий файл.
-   *
-   * Встроенные примеры поставляются кодом и в localStorage не пишутся. Если
-   * пользователь начал их править, первая же правка создаёт пользовательскую
-   * копию: иначе изменения жили бы только до перезагрузки и терялись молча
-   * (в шапке при этом было бы «сохранено»).
-   */
+  // Сохранить текущий файл.
   _saveCurrentContent() {
     const activeFile = this.data.files.find(f => f.id === this.data.activeFileId);
     if (!activeFile || !this.editor) return;
@@ -789,7 +715,6 @@ Order
     this._saveData();
   }
 
-  /** Правка встроенного примера → пользовательская копия с текущим текстом. */
   _forkBuiltinFile(builtin) {
     const baseName = builtin.name + ' (копия)';
     let name = baseName;
@@ -810,22 +735,17 @@ Order
     this.data.activeFileId = copy.id;
     this._saveData();
     if (this.uiContainer) this._renderFileList();
-    // Встроенный пример больше не активен: ?example= должен исчезнуть,
-    // иначе ссылка продолжит открывать исходный пример.
+    // Встроенный пример больше не активен: ?example= должен исчезнуть, иначе ссылка продолжит открывать исходный пример.
     this._syncUrlWithActiveFile();
     return copy;
   }
 
-  // ---------------------------------------------
-  // Публичные методы управления файлами
-  // ---------------------------------------------
   switchTo(fileId) {
     if (fileId === this.data.activeFileId) return;
 
     const file = this.data.files.find(f => f.id === fileId);
     if (!file) return;                // неизвестный id: раньше активным становился «мусор»
 
-    // Сохраняем текущий перед переключением
     this._saveCurrentContent();
 
     this.data.activeFileId = fileId;
@@ -835,7 +755,6 @@ Order
   }
 
   createNewFile(baseName = 'Новый файл') {
-    // Генерируем уникальное имя
     let counter = 1;
     let newName = baseName;
     while (this.data.files.some(f => f.name === newName)) {
@@ -853,7 +772,6 @@ Order
     this.data.files.push(newFile);
     this._saveData();
 
-    // Переключаемся на новый файл
     this._saveCurrentContent(); // сохраняем старый
     this.data.activeFileId = newFile.id;
     this._saveData();
@@ -871,7 +789,6 @@ Order
     const index = this.data.files.findIndex(f => f.id === fileId);
     this.data.files.splice(index, 1);
 
-    // Если удалили активный файл, переключаемся на первый встроенный
     if (this.data.activeFileId === fileId) {
       const firstBuiltin = this.data.files.find(f => f.isBuiltin);
       this.data.activeFileId = firstBuiltin ? firstBuiltin.id : this.data.files[0]?.id;
@@ -896,18 +813,9 @@ Order
     return true;
   }
 
-  /**
-   * Экспорт «всего проекта» в JSON.
-   *
-   * Версия 2: у файлов сохраняются `id` (и `slug` у встроенных), а ещё
-   * активный файл. Без идентификаторов экспорт→импорт менял «личность»
-   * файлов: import генерировал новые id, активным становился первый, а
-   * ссылки вида `?example=` переставали работать.
-   */
+  // Экспорт «всего проекта» в JSON.
   exportAll() {
-    // Экспорт должен включать последний ввод, даже если автосохранение ещё
-    // не сработало (и особенно если правится встроенный пример: тогда
-    // _saveCurrentContent создаст пользовательскую копию).
+    // Экспорт должен включать последний ввод, даже если автосохранение ещё не сработало (и особенно если правится…
     this._saveCurrentContent();
 
     const exportData = {
@@ -933,9 +841,6 @@ Order
     URL.revokeObjectURL(url);
   }
 
-  // ---------------------------------------------
-  // UI Рендеринг
-  // ---------------------------------------------
   _renderUI() {
     if (!this.uiContainer) return;
 
@@ -967,19 +872,16 @@ Order
     const builtinFiles = this.data.files.filter(f => f.isBuiltin);
     const userFiles = this.data.files.filter(f => !f.isBuiltin);
 
-    // Сортируем по дате изменения (новые сверху)
     const sortFn = (a, b) => (b.lastModified || 0) - (a.lastModified || 0);
     builtinFiles.sort(sortFn);
     userFiles.sort(sortFn);
 
     let html = '';
 
-    // Пользовательские файлы (в корне)
     userFiles.forEach(file => {
       html += this._renderFileItem(file);
     });
 
-    // Встроенные файлы в папке
     if (builtinFiles.length > 0) {
       const folderId = 'builtin-folder';
       const isExpanded = readStored('yarbp_builtin_folder_expanded') !== 'false';
@@ -1000,7 +902,6 @@ Order
 
     listEl.innerHTML = html;
 
-    // Обработчик раскрытия папки
     const folderHeader = listEl.querySelector('.folder-header');
     if (folderHeader) {
       folderHeader.addEventListener('click', (e) => {
@@ -1017,7 +918,6 @@ Order
       });
     }
 
-    // Привязываем события к элементам списка
     listEl.querySelectorAll('.file-item').forEach(item => {
       const fileId = item.dataset.id;
       item.addEventListener('click', (e) => {
@@ -1026,7 +926,6 @@ Order
       });
     });
 
-    // Кнопки действий
     listEl.querySelectorAll('.rename').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1049,8 +948,7 @@ Order
   _renderFileItem(file) {
     const isActive = file.id === this.data.activeFileId;
     const classes = `file-item ${isActive ? 'active' : ''} ${file.isBuiltin ? 'builtin' : 'user'}`;
-    // `id` приходит из импортируемого «экспорта проекта», поэтому в атрибут —
-    // только через escAttr: кавычка в id иначе добавит свои атрибуты элементу.
+    // `id` приходит из импортируемого «экспорта проекта», поэтому в атрибут — только через escAttr: кавычка в id иначе…
     const fileId = escAttr(file.id);
     const actions = !file.isBuiltin ? `
       <div class="file-item-actions">
@@ -1089,7 +987,6 @@ Order
       // «сейчас N файлов, в файле M» (см. importFromJSON). Слепой вопрос до
       // выбора файла не сообщал ничего полезного.
 
-      // Создаём скрытый input для выбора файла
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.json,application/json';
@@ -1127,9 +1024,6 @@ Order
     }
   }
 
-  // ---------------------------------------------
-  // Автосохранение
-  // ---------------------------------------------
   _setupAutoSave() {
     if (!this.editor) return;
 
@@ -1146,13 +1040,9 @@ Order
       this.autoSaveTimer = setTimeout(flush, this.autoSaveInterval);
     });
 
-    // Потеря фокуса — обычный случай, когда пользователь уходит из редактора.
     this.editor.addEventListener('blur', flush);
 
-    // Закрытие вкладки/уход со страницы и уход в фон на мобильном: 5-секундный
-    // таймер может не успеть, а ввод уже есть. pagehide/visibilitychange
-    // срабатывают до выгрузки документа и не показывают диалог, в отличие от
-    // beforeunload.
+    // Закрытие вкладки/уход со страницы и уход в фон на мобильном: 5-секундный таймер может не успеть, а ввод уже есть.
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       window.addEventListener('pagehide', flush);
     }
@@ -1163,23 +1053,11 @@ Order
     }
   }
 
-  // Утилита
   _escapeHtml(text) {
     return escText(text);
   }
 
-  /**
-   * Разобрать «экспорт проекта», ничего не меняя.
-   *
-   * Возвращает `{ userFiles, wantedActive }` либо null, если файл не годится
-   * (пользователю уже сообщили). Отделено от применения: подтверждение должно
-   * показывать количество файлов до перезаписи, а не после.
-   *
-   * Встроенные примеры из файла игнорируются: они поставляются кодом и в
-   * localStorage не живут, иначе после импорта появлялись бы дубли.
-   * Дубли `id` внутри файла разводятся суффиксом — иначе переключение файлов
-   * цепляется не за тот документ.
-   */
+  // Разобрать «экспорт проекта», ничего не меняя.
   parseImport(jsonData) {
     try {
       const imported = JSON.parse(jsonData);
@@ -1200,9 +1078,7 @@ Order
       for (const raw of imported.files) {
         if (!raw || typeof raw !== 'object' || raw.isBuiltin) continue;
 
-        // Запись похожа на файл, только если у неё есть строковое имя или
-        // содержимое. Всё остальное (числа, объекты без полей) — мусор из
-        // чужого JSON: молча пропускаем, иначе в списке появляются пустышки.
+        // Запись похожа на файл, только если у неё есть строковое имя или содержимое.
         const hasName = typeof raw.name === 'string';
         const hasContent = typeof raw.content === 'string';
         if (!hasName && !hasContent) continue;
@@ -1236,14 +1112,7 @@ Order
     }
   }
 
-  /**
-   * Резервная копия текущих файлов перед перезаписью (D-08).
-   *
-   * Копия пишется в отдельный ключ `yarbp_backup_<timestamp>`, поэтому отмена
-   * импорта уже ничего не восстанавливает — но при неудачном импорте данные
-   * можно вернуть вручную из хранилища. Старые копии подрезаются, чтобы не
-   * съесть квоту.
-   */
+  // Резервная копия текущих файлов перед перезаписью (D-08).
   _backupBeforeImport() {
     const payload = {
       version: 1,
@@ -1256,8 +1125,7 @@ Order
     const saved = writeStored(key, JSON.stringify(payload));
 
     if (!saved) {
-      // Квота или запрет хранилища: импорт не блокируем (пользователь уже
-      // подтвердил замену), но метка «не сохранено» покажет проблему.
+      // Квота или запрет хранилища: импорт не блокируем (пользователь уже подтвердил замену), но метка «не сохранено»…
       console.warn('[FileManager] резервная копия не сохранена:', key);
     }
 
@@ -1265,7 +1133,6 @@ Order
     return saved;
   }
 
-  /** Оставить только последние `limit` резервных копий (имя содержит timestamp). */
   _pruneBackups(limit = FileManager.BACKUP_LIMIT) {
     const backups = storedKeys()
       .filter(key => key.startsWith(FileManager.BACKUP_PREFIX))
@@ -1275,7 +1142,6 @@ Order
       .forEach(key => removeStored(key));
   }
 
-  /** Применить разобранный импорт: встроенные — из кода, пользовательские — из файла. */
   applyImport(parsed) {
     const builtins = this._getDefaultData().files.filter(file => file.isBuiltin);
     const activeFileId = parsed.userFiles.some(file => file.id === parsed.wantedActive)
@@ -1294,10 +1160,7 @@ Order
     this._renderFileList();
   }
 
-  /**
-   * Импорт «экспорта проекта»: разбор → подтверждение с числами → резервная
-   * копия → применение. Пока пользователь не подтвердил, ничего не меняется.
-   */
+  // Импорт «экспорта проекта»: разбор → подтверждение с числами → резервная копия → применение.
   importFromJSON(jsonData) {
     const parsed = this.parseImport(jsonData);
     if (!parsed) return false;
@@ -1318,15 +1181,7 @@ Order
   }
 }
 
-// ---------------------------------------------
-// Пример в адресе страницы
-// ---------------------------------------------
-/**
- * Ключ примера из адреса. Приоритет у query-параметра: именно его пишет
- * writeExampleKeyToUrl, он переживает перезагрузку и пересылку ссылки целиком.
- * Hash-форма (#example=xpo) поддерживается как ручной/запасной вариант.
- * Пустая строка — параметра нет (страница открывается как обычно).
- */
+// Ключ примера из адреса.
 function readExampleKeyFromUrl() {
   if (typeof location === 'undefined') return '';
 
@@ -1334,7 +1189,6 @@ function readExampleKeyFromUrl() {
     const fromQuery = new URLSearchParams(location.search).get(EXAMPLE_PARAM);
     if (fromQuery && fromQuery.trim()) return fromQuery.trim();
   } catch (e) {
-    // URLSearchParams недоступен (очень старый движок) — остаётся hash-форма
   }
 
   const hash = String(location.hash || '').replace(/^#/, '');
@@ -1348,14 +1202,7 @@ function readExampleKeyFromUrl() {
   }
 }
 
-/**
- * Записать ключ примера в адрес; пустой ключ — убрать параметр.
- *
- * history.replaceState, а не pushState: переключение примеров не должно
- * плодить записи истории, иначе «назад» листает примеры вместо ухода со
- * страницы. Если адрес поменять нельзя (file://, запрет history), работаем
- * через hash — переключение примеров при этом продолжает работать.
- */
+// Записать ключ примера в адрес; пустой ключ — убрать параметр.
 function writeExampleKeyToUrl(key) {
   const value = String(key || '').trim();
   if (typeof location === 'undefined') return;
@@ -1365,8 +1212,7 @@ function writeExampleKeyToUrl(key) {
     if (value) url.searchParams.set(EXAMPLE_PARAM, value);
     else url.searchParams.delete(EXAMPLE_PARAM);
 
-    // Два ключа в одном адресе (?example=json#example=xpo) — путаница,
-    // поэтому hash-форму того же параметра убираем.
+    // Два ключа в одном адресе (?example=json#example=xpo) — путаница, поэтому hash-форму того же параметра убираем.
     const hash = String(location.hash || '').replace(/^#/, '');
     if (hash) {
       const hashParams = new URLSearchParams(hash);
@@ -1384,7 +1230,6 @@ function writeExampleKeyToUrl(key) {
       return;
     }
   } catch (e) {
-    // location/history недоступны для записи — ниже фолбэк на hash
   }
 
   try {
@@ -1395,6 +1240,5 @@ function writeExampleKeyToUrl(key) {
       if (hash && new URLSearchParams(hash).has(EXAMPLE_PARAM)) location.hash = '';
     }
   } catch (e) {
-    // менять адрес нечем — переключение примеров всё равно работает
   }
 }

@@ -11,11 +11,6 @@ export function calcLeadingSpaces(text) {
 
 let measureCanvas = null;
 
-/**
- * Ширина символа моноширинного шрифта по вычисленному стилю элемента.
- * @param {CSSStyleDeclaration} style - стиль элемента с нужным шрифтом
- * @param {number} fallback - значение на случай, если измерить не удалось
- */
 export function measureCharWidth(style, fallback = 7.2) {
   try {
     if (!measureCanvas) measureCanvas = document.createElement('canvas');
@@ -91,9 +86,7 @@ export function dedentMultilineString(str) {
   const firstLine = lines[start];
   const restLines = lines.slice(start + 1);
 
-  /* Закрывающая кавычка на отдельной строке оставляет пустую последнюю
-     строку. Это разделитель формы записи, а не часть значения: иначе
-     вариант «значение с новой строки» не был бы эквивалентен inline. */
+  // Закрывающая кавычка на отдельной строке оставляет пустую последнюю строку.
   if (restLines.length > 0 && restLines[restLines.length - 1].trim() === '') {
     restLines.pop();
   }

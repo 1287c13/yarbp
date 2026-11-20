@@ -1,14 +1,8 @@
 import { DiagnosticsStatusRenderer } from './DiagnosticsStatusRenderer.js';
 import { escText } from '../../utils/escape.js';
 
-/**
- * Панель «JSON-документ»: конвертер → JSON + строка диагностики.
- *
- * Общая часть конвертеров, которые отдают объект и `warnings[]` (OpenAPI,
- * JSON Schema): отличается только конвертер и имя класса строки статуса.
- */
+// Панель «JSON-документ»: конвертер → JSON + строка диагностики.
 export class JsonDocumentRenderer extends DiagnosticsStatusRenderer {
-  /** @abstract */
   createConverter() {
     throw new Error('createConverter must be implemented');
   }

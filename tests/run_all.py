@@ -34,6 +34,8 @@ SUITES = [
     ('openapi2yarbp', 'openapi2yarbp'),
     ('schema2yarbp', 'schema2yarbp'),
     ('structure', 'structure'),
+    ('ui-parity', 'ui-parity'),
+    ('perf', 'perf'),
 ]
 
 

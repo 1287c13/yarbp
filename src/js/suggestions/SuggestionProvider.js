@@ -2,9 +2,7 @@ import { TokenTypes } from '../core/YarbpLexer.js';
 import { COMMON_DIRECTIVES, DOCUMENT_DIRECTIVES } from './commonDirectives.js';
 import { resolveContext } from './contextResolver.js';
 
-// Hint-режим: короткая пиктограмма раскрытия + клавиша. Длинная фраза
-// («Alt — подсказки · Tab — отступ») конкурировала с кодом и объясняла Tab,
-// который и так делает отступ.
+// Hint-режим: короткая пиктограмма раскрытия + клавиша.
 const HINT = '▼ Alt';
 
 export class SuggestionProvider {
@@ -12,7 +10,6 @@ export class SuggestionProvider {
     this.fileCatalog = null;
   }
 
-  /** Источник имён файлов для подсказок `! импорт`. */
   setFileCatalog(provider) {
     this.fileCatalog = typeof provider === 'function' ? provider : null;
   }
@@ -23,8 +20,7 @@ export class SuggestionProvider {
     const source = text ?? '';
     if (this.isInsideCodeBlock(tokens, cursorOffset)) return null;
 
-    // Уже распознанная директива: подсказки по директивам работают при любом
-    // конвертере, в том числе без собственного словаря.
+    // Уже распознанная директива: подсказки по директивам работают при любом конвертере, в том числе без собственного словаря.
     const directive = this.findDirectiveAt(tokens, cursorOffset, source);
     if (directive) {
       return this.resolveDirectiveContext(directive, cursorOffset, source);
@@ -32,22 +28,14 @@ export class SuggestionProvider {
 
     const config = flavor?.flavorData?.suggestions;
 
-    // Набран `!` — директива уже начата, даже если лексер ещё не собрал
-    // `DIRECTIVE` (без пробела после `!` есть только `PREFIX`). В этом
-    // состоянии нужны директивы, а не свойства текущего флейвора.
+    // Набран `!` — директива уже начата, даже если лексер ещё не собрал `DIRECTIVE` (без пробела после `!` есть только…
     const lineStart = source.lastIndexOf('\n', cursorOffset - 1) + 1;
     const lineBefore = source.slice(lineStart, cursorOffset);
     if (/^\s*!/.test(lineBefore)) {
       return this.resolveDocumentContext(cursorOffset, source, force);
     }
 
-    /* У конвертера нет словаря контекстных подсказок (`json`, `xml`, `ast`,
-       `openapi`, `мермейд`, …). Меню ему не нужно вовсе: раньше здесь
-       срабатывала ветка «с чего начать документ», и список директив всплывал
-       над готовым текстом — там, где подсказывать нечего, в том числе по Alt.
-       Единственное исключение — начало пустого файла, где без подсказки не
-       узнать про `! как`. Внутри `! …` подсказки выданы выше при любом
-       конвертере. */
+    // У конвертера нет словаря контекстных подсказок (`json`, `xml`, `ast`, `openapi`, `мермейд`, …).
     if (!config) {
       if (!this.isAtEmptyFileStart(source, cursorOffset)) return null;
       return this.resolveDocumentContext(cursorOffset, source, force);
@@ -57,44 +45,23 @@ export class SuggestionProvider {
       return this.resolveFlavorContext(ast, cursorOffset, source, config, force);
     }
 
-    // AST не собрался — контекст недоступен. Ведём себя как конвертер без
-    // словаря: подсказки только в начале пустого файла.
+    // AST не собрался — контекст недоступен.
     if (!this.isAtEmptyFileStart(source, cursorOffset)) return null;
 
     return this.resolveDocumentContext(cursorOffset, source, force);
   }
 
-  /**
-   * В документе нет ничего, кроме пробельных символов.
-   *
-   * Само по себе это ещё не разрешает подсказки конвертеру без словаря:
-   * нужен ещё курсор в начале файла (см. `isAtEmptyFileStart`). Иначе
-   * директивы предлагались бы в любой пустой строке посреди документа.
-   */
+  // В документе нет ничего, кроме пробельных символов.
   isDocumentEmpty(text) {
     return !String(text ?? '').trim();
   }
 
-  /**
-   * Курсор в начале пустого файла.
-   *
-   * «Пустой» — документ без значимых символов (только пробелы и переводы
-   * строк). «В начале» — каретка стоит в нулевой позиции, до набранных
-   * пробелов: в пустых строках ниже списка директив быть не должно.
-   *
-   * Только в этом состоянии конвертер без словаря контекстных подсказок
-   * предлагает директивы. Второе исключение — уже начатая директива: её
-   * обслуживают `findDirectiveAt` и проверка строки с `!` до этой ветки.
-   */
+  // Курсор в начале пустого файла.
   isAtEmptyFileStart(text, cursorOffset) {
     return cursorOffset === 0 && this.isDocumentEmpty(text);
   }
 
-  /**
-   * Курсор внутри фрагмента кода — это чужой язык (BSL/JS/SQL/...),
-   * подсказки ЯРБП там не применяются. Проверяем весь остров, включая
-   * fence: на строке с ``` тоже не должно быть меню.
-   */
+  // Курсор внутри фрагмента кода — это чужой язык (BSL/JS/SQL/...), подсказки ЯРБП там не применяются.
   isInsideCodeBlock(tokens, cursorOffset) {
     for (const t of tokens) {
       if (t.type === TokenTypes.CODE_BLOCK) {
@@ -109,14 +76,7 @@ export class SuggestionProvider {
     return false;
   }
 
-  /**
-   * Директива на текущей строке.
-   *
-   * Директива с телом занимает строку целиком, а `! ` без тела — только сам
-   * `!` (токен с пустым значением). Курсор при этом стоит уже за концом
-   * токена, поэтому проверяем не только интервал токена, но и то, что курсор
-   * остался на его строке.
-   */
+  // Директива на текущей строке.
   findDirectiveAt(tokens, cursorOffset, text) {
     const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
     const newline = text.indexOf('\n', cursorOffset);
@@ -133,7 +93,6 @@ export class SuggestionProvider {
     return null;
   }
 
-  /** Где в тексте начинается значение директивы (после `!` и пробелов). */
   directiveValueStart(token, text) {
     let i = token.start;
     while (i < text.length &&
@@ -158,9 +117,7 @@ export class SuggestionProvider {
       const variants = this.matchVariants(COMMON_DIRECTIVES.names, prefix);
       if (!variants.length) return null;
 
-      // Пользователь мог набрать `!к` без пробела. Заменяем директиву
-      // целиком (вместе с `!`) и вставляем канонический `! имя ` — иначе
-      // `!` остаётся склеенным с именем.
+      // Пользователь мог набрать `!к` без пробела.
       return {
         suggestions: variants.map(variant => ({
           ...variant,
@@ -196,10 +153,7 @@ export class SuggestionProvider {
     };
   }
 
-  /**
-   * `! импорт <объект> из <файл>`: после `из ` подсказываем имена файлов
-   * проекта. Файлы с пробелами вставляются в кавычках — как требует парсер.
-   */
+  // `! импорт <объект> из <файл>`: после `из ` подсказываем имена файлов проекта.
   resolveImportDirectiveContext(token, cursorOffset, text) {
     const valueStart = this.directiveValueStart(token, text);
     const valueUpToCursor = text.slice(valueStart, cursorOffset);
@@ -237,7 +191,6 @@ export class SuggestionProvider {
     };
   }
 
-  /** Подсказки до выбора конвертера: с чего начать документ. */
   resolveDocumentContext(cursorOffset, text, force) {
     const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
     const lineBefore = text.slice(lineStart, cursorOffset);
@@ -261,9 +214,7 @@ export class SuggestionProvider {
     const variants = this.matchVariants(DOCUMENT_DIRECTIVES.variants, word);
     if (!variants.length) return null;
 
-    // Варианты этой ветки включают `!` («! как»). Если на строке уже есть `!`,
-    // а слово ещё не набрано (`! ` — директиву только начали), заменять надо
-    // вместе с ним: иначе вставка добавит второй `!` и сломает разметку.
+    // Варианты этой ветки включают `!` («! как»).
     const bangOffset = word ? -1 : lineBefore.search(/!/);
     const replaceFrom = bangOffset === -1 ? from : lineStart + bangOffset;
 
@@ -302,7 +253,6 @@ export class SuggestionProvider {
 
     const node = this.contextNode(config, ctx);
 
-    // 1. value-ветка (приоритет)
     if (ctx.slot === 'value' && ctx.childKey) {
       const childNode = config.nodes?.[ctx.childKey];
       if (childNode) {
@@ -350,14 +300,11 @@ export class SuggestionProvider {
       return null;
     }
 
-    // 2. key-ветка внутри именованного объекта или анонимного контейнера
     if (ctx.slot === 'key' && node) {
       const filtered = this.matchVariants(node.variants ?? [], word);
       if (!filtered.length) return null;
 
-      // Внутри строки-объекта (`:`) новый `:` — это соседняя строка, а не
-      // вложенная. Выравниваем её на уровень владельца только тогда, когда
-      // курсор уже стоит глубже уровня самой строки (в её свойствах).
+      // Внутри строки-объекта (`:`) новый `:` — это соседняя строка, а не вложенная.
       const canDedent = ctx.ownerIndent != null &&
         this.lineIndentAt(text, cursorOffset) > ctx.ownerIndent + 2;
 
@@ -377,7 +324,6 @@ export class SuggestionProvider {
       };
     }
 
-    // 3. root-ветка: курсор в корне документа перед первым ключом
     if (ctx.slot === 'key' && !ctx.anonymous && ctx.parentKey === null &&
         config.root) {
       const filtered = this.matchVariants(config.root.variants ?? [], word);
@@ -395,13 +341,7 @@ export class SuggestionProvider {
     return null;
   }
 
-  /**
-   * Словарь для текущего контейнера.
-   *
-   * У анонимного объекта (`:`) свойства лежат в `containers` его владельца:
-   * колонка таблицы, строка обработчика, опция выпадающего списка. Иначе
-   * берётся обычный `nodes[parentKey]`.
-   */
+  // Словарь для текущего контейнера.
   contextNode(config, ctx) {
     if (ctx.anonymous) {
       return config.containers?.[ctx.ownerKey] || null;
@@ -412,7 +352,6 @@ export class SuggestionProvider {
     return null;
   }
 
-  /** Набранное значение целиком (для многословных значений и замены `= `). */
   valuePrefix(ctx, text, cursorOffset) {
     if (ctx.valueStart == null) return '';
     return text.slice(ctx.valueStart, cursorOffset);
@@ -436,18 +375,7 @@ export class SuggestionProvider {
     return i - lineStart;
   }
 
-  /**
-   * Ранжирование вариантов по набранному префиксу (не фильтрация).
-   *
-   * Фильтр оказался плохим UX: при вводе `з` в шапке формы оставались только
-   * `.заголовок*`, и посмотреть остальные свойства без стирания буквы было
-   * нельзя. Теперь список не сокращается — совпадения поднимаются наверх,
-   * остальные идут следом в исходном порядке словаря.
-   *
-   * Порядок: метка целиком → метка с префикса → алиас целиком → алиас с
-   * префикса → подстрока в метке → без совпадения. Совпадение ищется по
-   * метке и по `aliases`, регистр и `ё` нормализуются.
-   */
+  // Ранжирование вариантов по набранному префиксу (не фильтрация).
   matchVariants(variants, prefix) {
     if (!prefix) return variants;
 

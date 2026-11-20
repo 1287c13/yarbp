@@ -2,7 +2,6 @@ import { YarbpBasicRenderer } from '../shared/renderer.js';
 import { escText } from '../../utils/escape.js';
 import { YarbpJSONConverter } from './converter.js';
 
-/** `! как json` / `! as json` — JSON-документ. */
 export class JSONRenderer extends YarbpBasicRenderer {
   render() {
     const AST = this.parser.getAST();

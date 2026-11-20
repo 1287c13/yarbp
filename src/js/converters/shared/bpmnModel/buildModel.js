@@ -20,7 +20,6 @@ import {
   isFlowNode, isArtifact,
 } from './definitions.js';
 
-/** Номер строки по смещению в исходном тексте (для предупреждений). */
 function lineAt(source, offset) {
   if (!source || !Number.isFinite(offset)) return 0;
 
@@ -32,19 +31,12 @@ function lineAt(source, offset) {
   return line;
 }
 
-/** Предупреждение сборки: строка исходника + понятный текст (B-1). */
 function warn(ctx, node, message) {
   const start = node && node.position ? node.position.start : undefined;
   ctx.warnings.push({ line: lineAt(ctx.source, start), message });
 }
 
-/**
- * Значение-флаг из разметки.
- *
- * Лексер превращает литералы `да`/`нет` в boolean, поэтому проверять только
- * строку нельзя — иначе `.прерывающее нет` и `.по-умолчанию да` молча не
- * срабатывают.
- */
+// Значение-флаг из разметки.
 function isFlagOn(value) {
   return value === true || value === 'да' || value === 'yes';
 }
@@ -72,7 +64,6 @@ export function buildModel(ast, options = {}) {
     definitions.processes.push(buildProcess(pNode, ctx));
   }
 
-  // собираем артефакты со всех процессов в collaboration
   const allTextAnnotations = [];
   const allAssociations    = [];
   const allMessageFlows    = [];
@@ -116,12 +107,7 @@ export function buildModel(ast, options = {}) {
   return definitions;
 }
 
-/**
- * Проверки «а схема получилась осмысленной» (B-1).
- *
- * Конвертер и раньше молча выкидывал то, что не понял: здесь мы собираем это в
- * предупреждения со строками, чтобы редактор мог их показать.
- */
+// Проверки «а схема получилась осмысленной» (B-1).
 function validateModel(definitions, ctx) {
   for (const process of definitions.processes) {
     const starts = process.flowNodes.filter(node => node.tag === 'startEvent');
@@ -134,8 +120,7 @@ function validateModel(definitions, ctx) {
   }
 
   if (definitions.collaboration) {
-    // Кто в каком процессе: нужно, чтобы понять, соединяет ли message flow
-    // разные пулы (только так он валиден по BPMN).
+    // Кто в каком процессе: нужно, чтобы понять, соединяет ли message flow разные пулы (только так он валиден по BPMN).
     const ownerByNodeId = new Map();
     const collectOwners = (nodes, process) => {
       for (const node of nodes || []) {
@@ -165,7 +150,6 @@ function validateModel(definitions, ctx) {
   }
 }
 
-/** У каждого узла, кроме стартовых и boundary, должен быть входящий поток. */
 function checkIncoming(nodes, ctx) {
   for (const node of nodes || []) {
     if (node.tag !== 'startEvent' && node.tag !== 'boundaryEvent' && !node.incoming.length) {
@@ -178,16 +162,13 @@ function checkIncoming(nodes, ctx) {
   }
 }
 
-/* ------------------------------------------------------------------ */
 
 function buildProcess(node, ctx) {
   const process = new BpmnProcess();
-  // B-7: `.ид` у процесса нужен, чтобы на него можно было ссылаться из
-  // `задача .тип вызов .вызывает = <ид>`. Без `.ид` — как раньше, авто-id.
+  // B-7: `.ид` у процесса нужен, чтобы на него можно было ссылаться из `задача .тип вызов .вызывает = <ид>`.
   process.id = extractExplicitId(node) || ctx.idGen.next('Process');
   process.name = nodeName(node);
   // B-7: `.исполняемый да` → isExecutable, `.пул = <имя>` → имя пула-участника.
-  // Без ключей поведение прежнее, поэтому старые схемы не меняются.
   process.isExecutable = isFlagOn(childValue(node, 'исполняемый'));
   process.poolName = childValue(node, 'пул') || nodeName(node) || null;
   process.bounds = readBounds(node);
@@ -224,9 +205,6 @@ function buildProcess(node, ctx) {
   return process;
 }
 
-/* ================================================================== *
- *  Цепочка сиблингов
- * ================================================================== */
 
 function buildChainOfNodes(nodes, ctx, process, opts) {
   let head = null;
@@ -236,7 +214,6 @@ function buildChainOfNodes(nodes, ctx, process, opts) {
   for (const node of nodes) {
     if (!isFlowNode(node)) continue;
 
-    // Опечатка в ключе (`задачя`) или чужое слово: узел раньше исчезал молча.
     if (!KNOWN_NODE_KEYS.has(node.key)) {
       warn(ctx, node, 'неизвестный узел «' + node.key + '» — пропущен');
       continue;
@@ -267,9 +244,6 @@ function buildChainOfNodes(nodes, ctx, process, opts) {
   return { head, tails: openTails };
 }
 
-/* ================================================================== *
- *  Один узел
- * ================================================================== */
 
 function buildNode(node, ctx, process, opts) {
   switch (node.key) {
@@ -281,9 +255,6 @@ function buildNode(node, ctx, process, opts) {
   }
 }
 
-/* ------------------------------------------------------------------ *
- *  Событие
- * ------------------------------------------------------------------ */
 
 function buildEvent(node, ctx, process, opts) {
   const name       = nodeName(node);
@@ -292,7 +263,6 @@ function buildEvent(node, ctx, process, opts) {
   const typeValue  = childValue(node, 'тип');
   const direction  = childValue(node, 'направление');
 
-  // B-3: определение события (`сообщение`, `таймер`, `ошибка`, …).
   let definition = null;
   if (typeValue !== null) {
     definition = EVENT_DEFINITION_MAP[typeValue] || null;
@@ -307,7 +277,6 @@ function buildEvent(node, ctx, process, opts) {
   } else if (opts.isFirst && location !== LOCATION.INTERMEDIATE) {
     tag = 'startEvent';
   } else {
-    // Промежуточное: ловящее, если это явно сказано или вид события ловящий.
     const catching = direction === EVENT_DIRECTION.CATCH
       || (direction !== EVENT_DIRECTION.THROW && CATCH_EVENT_DEFINITIONS.has(definition));
     tag = catching ? 'intermediateCatchEvent' : 'intermediateThrowEvent';
@@ -356,9 +325,6 @@ function idPrefixForEvent(tag) {
   }
 }
 
-/* ------------------------------------------------------------------ *
- *  Задача
- * ------------------------------------------------------------------ */
 
 function buildTask(node, ctx, process, opts) {
   const name       = nodeName(node);
@@ -379,7 +345,6 @@ function buildTask(node, ctx, process, opts) {
   self.loopCharacteristics = readLoopCharacteristics(node);
 
   // B-7: вызов другого процесса — `callActivity` + `calledElement`.
-  // Ссылка идёт на `id` процесса из разметки (`.ид` у `процесс`).
   if (tag === 'callActivity') {
     const called = childValue(node, 'вызывает');
     if (called === null) {
@@ -432,15 +397,11 @@ function readLoopCharacteristics(node) {
   return null;
 }
 
-/* ------------------------------------------------------------------ *
- *  Артефакты задачи
- * ------------------------------------------------------------------ */
 
 function buildArtifacts(node, task, ctx, process, opts) {
   const artifacts = (node.children || []).filter(isArtifact);
   for (const art of artifacts) {
-    // Значение у артефакта обязательно, но оно может прийти и явным
-    // свойством (`.имя`, `.текст`) после `! разбор-сахара`.
+    // Значение у артефакта обязательно, но оно может прийти и явным свойством (`.имя`, `.текст`) после `! разбор-сахара`.
     if (nodeText(art) === '') {
       warn(ctx, art, 'у артефакта «' + art.key + '» нет значения — ' +
         'пишите «' + art.key + ' = <значение>»');
@@ -462,7 +423,6 @@ function buildComment(node, task, ctx, process) {
   const text = nodeText(node);
   const id = ctx.idGen.next('TextAnnotation');
   const ta = new BpmnTextAnnotation({ id, text });
-  // bounds посчитает BpmnDiGenerator после layout
 
   const assocId = ctx.idGen.next('Association');
   const assoc = new BpmnAssociation({
@@ -475,11 +435,7 @@ function buildComment(node, task, ctx, process) {
   process._pendingArtifacts.associations.push(assoc);
 }
 
-/**
- * Общий `dataObject` на имя: два `.данные Товар` в разных задачах — это один
- * объект данных и две ссылки на него (в BPMN `dataObjectReference` — отдельная
- * сущность со своим местом на схеме).
- */
+// Общий `dataObject` на имя: два `.данные Товар` в разных задачах — это один объект данных и две ссылки на него (в…
 function resolveDataObject(process, ctx, name) {
   const key = name || null;
   const existing = process.dataObjects.find(obj => (obj.name || null) === key);
@@ -512,7 +468,6 @@ function buildDataObject(node, task, ctx, process) {
   task.dataOutputAssocs.push(assoc);
 }
 
-/** `.данные-вход Товар` — задача читает данные (dataInputAssociation). */
 function buildDataInput(node, task, ctx, process) {
   const name = nodeName(node);
   const dataObjectId = resolveDataObject(process, ctx, name);
@@ -535,11 +490,9 @@ function buildDataInput(node, task, ctx, process) {
   task.dataInputAssocs.push(assoc);
 }
 
-/** `.группа = <имя>` — рамка группы вокруг задачи (B-7). */
 function buildGroup(node, task, ctx, process) {
   const name = nodeName(node);
 
-  // По BPMN у группы нет своего имени: подпись живёт в categoryValue.
   let category = process._category;
   if (!category) {
     category = new BpmnCategory(ctx.idGen.next('Category'));
@@ -593,16 +546,10 @@ function buildMessageFlow(node, task, ctx, process) {
   const mf = new BpmnMessageFlow({ id, sourceRef, targetRef });
   mf.position = node.position;
 
-  // По BPMN message flow соединяет **разные** пулы. Внутри одного пула нужен
-  // sequence flow, иначе схема формально невалидна (внешний просмотрщик рисует молча, а
-  // валидаторы и моделлер — нет). Проверить это можно только после сборки всех
-  // процессов, поэтому проверка живёт в validateModel.
+  // По BPMN message flow соединяет **разные** пулы.
   process._pendingArtifacts.messageFlows.push(mf);
 }
 
-/* ------------------------------------------------------------------ *
- *  Boundary
- * ------------------------------------------------------------------ */
 
 function buildBoundaryBranches(node, parentTask, ctx, process, opts) {
   const children = (node.children || []).filter(isFlowNode);
@@ -631,7 +578,6 @@ function buildBoundaryBranches(node, parentTask, ctx, process, opts) {
     boundary.position = boundaryNode.position;
     boundary.attachedToRef = parentTask.id;
 
-    // B-3: определение и «прерывающее» у boundary-события.
     const boundaryType = childValue(boundaryNode, 'тип');
     if (boundaryType !== null) {
       boundary.eventDefinition = EVENT_DEFINITION_MAP[boundaryType] || null;
@@ -665,9 +611,6 @@ function buildBoundaryBranches(node, parentTask, ctx, process, opts) {
   return branches;
 }
 
-/* ------------------------------------------------------------------ *
- *  Шлюз
- * ------------------------------------------------------------------ */
 
 function buildGateway(node, ctx, process, opts) {
   const name       = nodeName(node);
@@ -676,8 +619,6 @@ function buildGateway(node, ctx, process, opts) {
   const tag        = GATEWAY_TAG_MAP[typeValue] || DEFAULT_GATEWAY_TAG;
 
   // B-4: `параллельный`, `инклюзивный`, `событийный`; остальное — исключающий.
-  // D-24: `шлюз .тип параллельный = Слияние` — не опечатка типа, а перепутанный
-  // порядок: значение узла должно идти до атрибутов.
   if (typeValue !== null && /\S\s*=/.test(String(typeValue))) {
     warn(ctx, node,
       'в .тип попало «' + typeValue + '»: похоже, значение и атрибут перепутаны. ' +
@@ -721,7 +662,6 @@ function buildGateway(node, ctx, process, opts) {
     const flow = addSequenceFlow(fork, inner.head, ctx, opts.container || process);
     flow.name = branchName;
 
-    // B-4: условие на потоке и поток по умолчанию (`ветка = да .условие …`).
     const condition = childValue(branchNode, 'условие');
     if (condition !== null) flow.condition = String(condition);
 
@@ -753,9 +693,7 @@ function buildGateway(node, ctx, process, opts) {
   } else if (openTails.length === 1) {
     gatewayTail = openTails[0];
   } else if (tag === 'eventBasedGateway') {
-    // Событийный шлюз не сходится: ветки ведут в разные ловящие события, и
-    // продолжение идёт от КАЖДОЙ ветки. Раньше tail был null — следующий
-    // сиблинг оставался без входящего потока, то есть ветки обрывались.
+    // Событийный шлюз не сходится: ветки ведут в разные ловящие события, и продолжение идёт от КАЖДОЙ ветки.
     gatewayTail = openTails[openTails.length - 1];
     branchContinuations = openTails.slice(0, -1);
   } else {
@@ -781,8 +719,7 @@ function buildGateway(node, ctx, process, opts) {
       container: opts.container,
     });
     if (after.head) {
-      // Для событийного шлюза продолжаем от каждой ветки, для остальных —
-      // от общей точки слияния.
+      // Для событийного шлюза продолжаем от каждой ветки, для остальных — от общей точки слияния.
       const sources = branchContinuations.length ? openTails : [gatewayTail];
       for (const source of sources) {
         if (source) addSequenceFlow(source, after.head, ctx, opts.container || process);
@@ -798,9 +735,6 @@ function buildGateway(node, ctx, process, opts) {
   return { head: fork, tail: gatewayTail, branches: branchContinuations };
 }
 
-/* ------------------------------------------------------------------ *
- *  Подпроцесс
- * ------------------------------------------------------------------ */
 
 function buildSubProcess(node, ctx, process, opts) {
   const name       = nodeName(node);
@@ -831,14 +765,10 @@ function buildSubProcess(node, ctx, process, opts) {
   };
 }
 
-/* ------------------------------------------------------------------ *
- *  Утилиты
- * ------------------------------------------------------------------ */
 
 function registerNode(node, name, ctx, process, opts) {
   const container = (opts && opts.container) || process;
 
-  // Дубль `.ид` раньше молча перетирал предыдущий узел в карте идентификаторов.
   if (ctx.nodesById.has(node.id)) {
     warn(ctx, node, 'идентификатор «' + node.id + '» уже занят — узел перезаписан');
   }

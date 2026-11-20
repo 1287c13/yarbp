@@ -24,12 +24,7 @@ export const SIZES = Object.freeze({
   lane:           { width: 600, height: 250 },
 });
 
-/**
- * Ширина задачи подгоняется под подпись: внешний просмотрщик рисует текст с переносами, и на
- * фиксированных 100px «Ждать подтверждения» ломалось на «Ждать подтверждени я».
- * Оценка ширины символа — для 12px без засечек; ширину считаем только для задач
- * (у событий подпись под кружком, у шлюзов — над ромбом, их размеры стандартные).
- */
+// Ширина задачи подгоняется под подпись: внешний просмотрщик рисует текст с переносами, и на фиксированных 100px…
 export const LABEL_CHAR_WIDTH = 6.8;
 export const TASK_LABEL_PADDING = 24;
 
@@ -64,7 +59,6 @@ export const TASK_TAG_MAP = Object.freeze({
   'отправка-сообщения':  'sendTask',
   'получение-сообщения': 'receiveTask',
   'бизнес-правило':      'businessRuleTask',
-  /* B-7: вызов другого процесса (`.вызывает = <id процесса>`). */
   'вызов':               'callActivity',
 });
 export const DEFAULT_TASK_TAG = 'manualTask';
@@ -76,11 +70,7 @@ export const GATEWAY_TAG_MAP = Object.freeze({
 });
 export const DEFAULT_GATEWAY_TAG = 'exclusiveGateway';
 
-/**
- * Определения событий BPMN 2.0: `событие = X .тип <вид>`.
- *
- * Неизвестный вид — предупреждение сборки, а не молчание.
- */
+// Определения событий BPMN 2.0: `событие = X .тип <вид>`.
 export const EVENT_DEFINITION_MAP = Object.freeze({
   'сообщение':   'messageEventDefinition',
   'таймер':      'timerEventDefinition',
@@ -93,7 +83,6 @@ export const EVENT_DEFINITION_MAP = Object.freeze({
   'ссылка':      'linkEventDefinition',
 });
 
-/** Виды, которые ловят событие (для промежуточных — intermediateCatchEvent). */
 export const CATCH_EVENT_DEFINITIONS = Object.freeze(new Set([
   'messageEventDefinition',
   'timerEventDefinition',
@@ -101,7 +90,6 @@ export const CATCH_EVENT_DEFINITIONS = Object.freeze(new Set([
   'conditionalEventDefinition',
 ]));
 
-/** `.направление` у промежуточного события. */
 export const EVENT_DIRECTION = Object.freeze({
   CATCH: 'ловящее',
   THROW: 'бросающее',
@@ -119,14 +107,12 @@ export const LOOP = Object.freeze({
   STANDARD:   'цикл',
 });
 
-/** Оступы артефактов относительно родителя (временно, до автораскладки). */
 export const ARTIFACT_OFFSETS = Object.freeze({
   commentAbove:    32,
   dataObjectAbove: 30,
   dataStoreBelow:  30, // от нижней границы пула
 });
 
-/** Ключи, которые являются атрибутами узла, а не потоковыми детьми. */
 export const ATTRIBUTE_KEYS = Object.freeze(new Set([
   'ид',
   'тип',
@@ -141,18 +127,15 @@ export const ATTRIBUTE_KEYS = Object.freeze(new Set([
   'в-закр',
   'расположение',
   'повторение',
-  /* Спека BPMN (B-3/B-4): определения событий, boundary, потоки. */
   'направление',
   'прерывающее',
   'условие',
   'по-умолчанию',
-  /* B-7: процесс и вызов процесса. */
   'исполняемый',
   'пул',
   'вызывает',
 ]));
 
-/** Ключи — дочерние сущности (артефакты и связи). */
 export const ENTITY_KEYS = Object.freeze(new Set([
   'комментарий',
   'данные',
@@ -163,27 +146,15 @@ export const ENTITY_KEYS = Object.freeze(new Set([
   'связь',
 ]));
 
-/**
- * Всё, что конвертер знает как узел или служебный ключ.
- *
- * Нужен только для диагностики (B-1): если в потоковой позиции встретился
- * ключ не из этого набора, конвертер сообщает об этом, а не теряет узел молча.
- * `ветка` уже разбирается в шлюзе отдельно, `имя` читается у дорожек — они
- * здесь, чтобы не давать ложных предупреждений.
- */
+// Всё, что конвертер знает как узел или служебный ключ.
 export const KNOWN_NODE_KEYS = Object.freeze(new Set([
-  /* потоковые узлы */
   'событие', 'задача', 'шлюз', 'подпроцесс', 'ветка',
-  /* структура процесса и дорожки */
   'процесс', 'роли', 'роль',
-  /* атрибуты узла (читаются через childValue, потоковыми узлами не являются) */
   ...ATTRIBUTE_KEYS,
   'имя',
-  /* артефакты */
   ...ENTITY_KEYS,
 ]));
 
-/** Является ли узел потоковым ребёнком (порождает цепочку). */
 export function isFlowNode(node) {
   if (!node || node.nodeType !== 'MEANING') return false;
   if (!node.key) return false;
@@ -192,7 +163,6 @@ export function isFlowNode(node) {
   return true;
 }
 
-/** Является ли узел артефактом (комментарий, данные, база-данных, связь). */
 export function isArtifact(node) {
   if (!node || node.nodeType !== 'MEANING') return false;
   if (!node.key) return false;

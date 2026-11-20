@@ -7,13 +7,11 @@ export const TokenTypes = Object.freeze({
   SCOPE_IN: 'SCOPE_IN',
   SCOPE_OUT: 'SCOPE_OUT',
 
-  /* identifiers */
   OBJECT: 'KEY(OBJ)',
   ARRAY: 'KEY(ARR)',
   PRIMITIVE: 'KEY',
   TYPE: 'TYPE',
 
-  /* primitives */
   STRING: 'STRING',
   NUMBER: 'NUMBER',
   BOOL: 'BOOL',
@@ -63,7 +61,6 @@ class Scope {
     this.indent = indent;
     this.type = type;
 
-    /* Неявный объект внутри массива: решение принимается при закрытии scope. */
     this.deferred = false;
     this.scopeInPos = undefined;
     this.scopeStartIndex = undefined;
@@ -73,13 +70,7 @@ class Scope {
 }
 
 export class YarbpLexer {
-  /**
-   * Accepts raw text, produces a list of tokens.
-   * The lexer is smart, so it performs type annotation for identifiers and primitives.
-   * This is done for two reasons:
-   * - The YARBP Syntax allows defining these types on the fly without lookahead
-   * - The lexer has two consumers: the highlighter and the parser,
-   *    and this consumption is separated in time */
+  // Accepts raw text, produces a list of tokens.
 
   static states = Object.freeze({
     WAITING: 'WAITING',
@@ -113,13 +104,11 @@ export class YarbpLexer {
     VALUE_ENDED: 'VALUE_ENDED',
     NEXT_KEY_ENCOUNTERED: 'NEXT_KEY_ENCOUNTERED',
 
-    /* значение примитивного ключа на следующей строке */
     WAITING_FOR_NEXT_LINE_VALUE: 'WAITING_FOR_NEXT_LINE_VALUE',
     NEXT_LINE_VALUE_PENDING: 'NEXT_LINE_VALUE_PENDING',
     NEXT_LINE_VALUE_ENCOUNTERED: 'NEXT_LINE_VALUE_ENCOUNTERED',
     NEXT_LINE_VALUE_ABSENT: 'NEXT_LINE_VALUE_ABSENT',
 
-    /* фрагмент кода: ``` язык? сырой текст ``` */
     CODE_BLOCK_ENCOUNTERED: 'CODE_BLOCK_ENCOUNTERED',
 
     COMMENT_ENCOUNTERED: 'COMMENT_ENCOUNTERED',
@@ -141,7 +130,6 @@ export class YarbpLexer {
     '..': YarbpLexer.states.ARRAY_ENDED,
   });
 
-  /** Длина открывающего fence: 1 или 3 обратных апострофа (2 — не fence). */
   static codeFenceLengthAt(text, pos) {
     let count = 0;
     while (text[pos + count] === '`') count++;
@@ -189,7 +177,6 @@ export class YarbpLexer {
     this.openedScopes = undefined;
     this.prettyView = undefined;
 
-    /* Нефатальные замечания: golden-снимки их не видят, строка статуса — видит. */
     this.diagnostics = [];
     this.pendingPrimitive = null;
     this.lastPrimitive = null;
@@ -210,11 +197,7 @@ export class YarbpLexer {
   }
 
   setInitialState(text) {
-    /* Переводы строк приводим к `\n`: файл с CRLF (Windows) иначе приносит
-       `\r` вне грамматики — лексер помечал такие строки как UNPARSED, и
-       документ терял структуру (форма рендерилась пустой). В `<textarea>`
-       браузер тоже отдаёт только `\n`, поэтому позиции токенов остаются
-       согласованными с редактором. */
+    // Переводы строк приводим к `\n`: файл с CRLF (Windows) иначе приносит `\r` вне грамматики — лексер помечал такие…
     const source = String(text ?? '').replace(/\r\n?/g, '\n');
     this.text = source.at(-1) !== '\n' ? source + '\n' : source;
     this.state = YarbpLexer.states.WAITING;
@@ -242,8 +225,7 @@ export class YarbpLexer {
       this.state = this.defineState(char, pos);
       this.handleState(char, pos);
 
-      /* Фрагмент кода — лексический остров: обработчик перескакивает сразу
-         за закрывающие кавычки, не пропуская содержимое через автомат. */
+      // Фрагмент кода — лексический остров: обработчик перескакивает сразу за закрывающие кавычки, не пропуская содержимое…
       if (this.nextPos !== undefined) {
         pos = this.nextPos;
         this.nextPos = undefined;
@@ -282,7 +264,6 @@ export class YarbpLexer {
     try {
       this.rendererObserver.call();
     } catch (error) {
-      // Ошибка рендера не должна ломать токенизацию и обновление редактора.
       console.error('[lexer] renderer failed:', error);
     }
   }
@@ -390,12 +371,7 @@ export class YarbpLexer {
     if (token.type === TokenTypes.PREFIX ||
         token.start === token.end) return;
 
-    // Директива без тела (`! ` — имя ещё не набрано) состоит из одного
-    // префикса: `token.value` пуст, и сдвинуть начало на длину префикса
-    // нечем. Без этой ветки токен начинался бы с пробела после `!`, а сам
-    // `!` оставался бы вне директивы — подсветка флейвора, AST-позиция
-    // директивы и подсказки видели бы директиву без восклицательного знака
-    // (из-за чего вставка из автодополнения дублировала `!`).
+    // Директива без тела (`! ` — имя ещё не набрано) состоит из одного префикса: `token.value` пуст, и сдвинуть начало на…
     if (token.type === TokenTypes.DIRECTIVE && token.prefix && !token.value) {
       token.start -= token.prefix.length;
       token.end = token.start + token.prefix.length;
@@ -445,11 +421,7 @@ export class YarbpLexer {
     if (!promoted) this.addControlToken(TokenTypes.SCOPE_OUT, pos);
   };
 
-  /**
-   * Неявный объект внутри массива: пустой объект — это значение массива,
-   * объект с детьми — обычный объект. Решение принимается при закрытии scope,
-   * без отдельного прохода по токенам.
-   */
+  // Неявный объект внутри массива: пустой объект — это значение массива, объект с детьми — обычный объект.
   finalizeDeferredScope(scope, pos) {
     const object = scope.objectToken;
     const after = object ? this.tokens.slice(scope.objectIndex + 1) : [];
@@ -497,19 +469,16 @@ export class YarbpLexer {
     if (this.currentToken === '..' && char === '\n' && this.onlyAllowedTokens)
       return YarbpLexer.states.ARRAY_ENDED;
 
-    /* Значение примитива на следующей строке: ключ уже добавлен, ждём
-       значение. Пробелы/пустые строки копятся как обычный отступ. */
+    // Значение примитива на следующей строке: ключ уже добавлен, ждём значение.
     if (this.state === YarbpLexer.states.WAITING_FOR_NEXT_LINE_VALUE)
       return this.defineNextLineValueState(char, pos);
 
-    /* Фрагмент кода — лексический остров. Проверяем до обычных правил
-       значения, иначе ``` попадёт в IN_VALUE как обычный текст. */
+    // Фрагмент кода — лексический остров.
     if ((this.state === YarbpLexer.states.WAITING_FOR_VALUE
         || this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE)
         && char === '`' && this.shouldStartCodeBlock(pos))
       return YarbpLexer.states.CODE_BLOCK_ENCOUNTERED;
 
-    // Невалидный мусор, накопленный в WAITING, иначе молча потеряется.
     if (this.state === YarbpLexer.states.WAITING && char === '\n'
         && !YarbpLexer.tokenValidationRegexp.test(this.currentToken))
       return YarbpLexer.states.ERROR;
@@ -529,8 +498,7 @@ export class YarbpLexer {
     if (this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE && YarbpLexer.isSpaceChar(char))
       return YarbpLexer.states.WAITING_AFTER_NEWLINE;
 
-    // Комментарий вида `--!` должен проверяться до префикса `!`,
-    // иначе IMPORTANT превращается в директиву.
+    // Комментарий вида `--!` должен проверяться до префикса `!`, иначе IMPORTANT превращается в директиву.
     if (this.state !== YarbpLexer.states.IN_QUOTED_VALUE
          && (char === '-' || char === '!' || char === '/' || char === '?')
          && this.currentToken.slice(-2) === '--')
@@ -598,8 +566,6 @@ export class YarbpLexer {
     if (this.state === YarbpLexer.states.WAITING_AFTER_NEWLINE && !YarbpLexer.isSpaceChar(char)
         && !YarbpLexer.isPrefixChar(char)) {
       // `---`, `--?`, `--!`, `--/` — комментарий, а не неявный объект.
-      // Проверяем первые два дефиса, иначе комментарий успевает открыть
-      // пустой scope и в IR появляется ключ "".
       if (char === '-' &&
           (this.text[pos + 1] === '-' || this.currentToken.trim().endsWith('-')))
         return YarbpLexer.states.WAITING_AFTER_NEWLINE;
@@ -631,14 +597,7 @@ export class YarbpLexer {
     return this.state;
   };
 
-  /**
-   * Что стоит на следующей строке после примитивного ключа:
-   * значение, новый узел или конец документа.
-   *
-   * Значением считаются только однозначные начала: кавычка/скобка,
-   * три обратных кавычки, число, yes/no/да/нет/null. Bareword остаётся
-   * новым узлом (кейс 7_shorthand: `.c` + `d:e = f`).
-   */
+  // Что стоит на следующей строке после примитивного ключа: значение, новый узел или конец документа.
   defineNextLineValueState(char, pos) {
     const S = YarbpLexer.states;
 
@@ -657,17 +616,13 @@ export class YarbpLexer {
     return S.NEXT_LINE_VALUE_ABSENT;
   };
 
-  /** Число или литерал проекта (yes/no/да/нет/null), но не `--`-комментарий. */
   isScalarValueStart(pos) {
     const rest = this.text.slice(pos);
     if (/^-?\d/.test(rest) && !rest.startsWith('--')) return true;
     return /^(?:yes|no|да|нет|null)(?![\p{L}\p{N}_])/u.test(rest);
   };
 
-  /**
-   * Закрывающий fence: для ``` — где угодно, для одного ` — отдельной
-   * строкой (иначе обратный апостроф внутри кода закрыл бы блок раньше).
-   */
+  // Закрывающий fence: для ``` — где угодно, для одного ` — отдельной строкой (иначе обратный апостроф внутри кода…
   findClosingCodeFence(open, fenceLength) {
     if (fenceLength === 3) {
       return this.text.indexOf('```', open + 3);
@@ -701,17 +656,12 @@ export class YarbpLexer {
     return this.findClosingCodeFence(pos, 1) !== -1;
   };
 
-  /**
-   * Снимает структурный отступ самого fence с каждой строки содержимого.
-   * Внутренние отступы кода сохраняются относительно fence: так блок,
-   * сдвинутый вместе с макросом, эквивалентен блоку без сдвига.
-   */
+  // Снимает структурный отступ самого fence с каждой строки содержимого.
   dedentCodeBlockContent(content, open) {
     const lineStart = this.text.lastIndexOf('\n', open - 1) + 1;
     const prefix = this.text.slice(lineStart, open);
 
-    /* Fence после ключа в той же строке (`.код ```bsl`) структурного
-       отступа не задаёт. */
+    // Fence после ключа в той же строке (`.код ```bsl`) структурного отступа не задаёт.
     if (!/^[ \t]*$/.test(prefix)) return content;
 
     const indent = prefix.length;
@@ -730,10 +680,7 @@ export class YarbpLexer {
     switch (this.state) {
       case S.WAITING:
       case S.WAITING_AFTER_NEWLINE:
-        // Пустая строка ничего не значит: ни отступа, ни области. Раньше её
-        // `\n` попадал в накопитель, `calcTrailingSpaces` давал отступ 0 и
-        // текущий блок закрывался — из-за этого документ с пустой строкой
-        // терял структуру (B-0 в refactoring.md).
+        // Пустая строка ничего не значит: ни отступа, ни области.
         if (char === '\n' && this.currentToken.trim() === '') {
           this.currentToken = '';
           return;
@@ -755,8 +702,6 @@ export class YarbpLexer {
       case S.IN_QUOTED_VALUE:
         if (this.previousState !== S.IN_QUOTED_VALUE) {
           // Значение в начале новой строки — это следующий элемент массива.
-          // Закрываем deferred-scope предыдущего bareword, иначе оно станет
-          // его ребёнком (например, `g` + `'2'`).
           if (this.previousState === S.WAITING_AFTER_NEWLINE) {
             this.countCurrentIndent();
             this.generateScopeTokens(pos, TokenTypes.PRIMITIVE);
@@ -772,8 +717,7 @@ export class YarbpLexer {
         return;
 
       case S.WAITING_FOR_NEXT_LINE_VALUE:
-        // Пустая строка между ключом и значением допустима; отступ копится
-        // так же, как в WAITING_AFTER_NEWLINE, чтобы scope-токены не съехали.
+        // Пустая строка между ключом и значением допустима; отступ копится так же, как в WAITING_AFTER_NEWLINE, чтобы…
         if (char === '\n' && this.currentToken.trim() === '') {
           this.currentToken = '';
           return;
@@ -782,8 +726,7 @@ export class YarbpLexer {
         return;
 
       case S.NEXT_LINE_VALUE_PENDING:
-        // Ключ уже добавлен, после него были только пробелы до перевода
-        // строки. Решение «значение или пусто» принимает следующая строка.
+        // Ключ уже добавлен, после него были только пробелы до перевода строки.
         this.pendingPrimitive = {
           endPos: pos,
           keyStart: this.lastPrimitive?.keyStart ?? pos,
@@ -917,8 +860,7 @@ export class YarbpLexer {
         this.state = endState;
         this.handleState(char, pos);
       } else {
-        // Например `. ` или `.` + перевод строки: ключа нет.
-        // Помечаем ошибку, но не теряем остаток документа.
+        // Например `.
         this.error = 'empty key';
         this.state = YarbpLexer.states.ERROR;
         this.handleUnparsed(char);
@@ -938,8 +880,7 @@ export class YarbpLexer {
     this.addToken(TokenTypes.UNPARSED);
     this.currentToken = '';
     this.currentMatchPosition = undefined;
-    // После ошибки начинаем следующий значимый фрагмент как новую строку:
-    // так остаток документа не теряется.
+    // После ошибки начинаем следующий значимый фрагмент как новую строку: так остаток документа не теряется.
     this.state = YarbpLexer.states.WAITING_AFTER_NEWLINE;
   };
 
@@ -1001,10 +942,7 @@ export class YarbpLexer {
 
     if (this.error) return;
 
-    /* Пока не решили, есть ли значение на следующей строке, пустой VALUE
-       не добавляем: иначе значение со следующей строки станет отдельным
-       узлом. Для старых кейсов токен появится на том же месте при
-       finishPendingPrimitiveAsEmpty(). */
+    // Пока не решили, есть ли значение на следующей строке, пустой VALUE не добавляем: иначе значение со следующей строки…
     this.pendingPrimitive = { endPos: pos, keyStart, typed };
     this.lastPrimitive = null;
     this.state = YarbpLexer.states.WAITING_FOR_NEXT_LINE_VALUE;
@@ -1034,8 +972,7 @@ export class YarbpLexer {
 
     this.finishPendingPrimitiveAsEmpty();
 
-    /* Отступ относился к следующему узлу: возвращаем его, иначе
-       handlePrefixEncountered/handleImplicitObjectEncountered увидят 0. */
+    // Отступ относился к следующему узлу: возвращаем его, иначе handlePrefixEncountered/handleImplicitObjectEncountered…
     this.currentToken = indent;
     this.state = YarbpLexer.states.WAITING_AFTER_NEWLINE;
     this.state = this.defineState(char, pos);
@@ -1050,22 +987,13 @@ export class YarbpLexer {
     this.valueStartedOnNextLine = false;
     this.addToken(TokenTypes.ANY_VALUE, pending.endPos, '');
 
-    /* Пустые типизированные поля — легальные объявления (кейс 5). Для
-       остальных отсутствие значения показываем в строке статуса. */
+    // Пустые типизированные поля — легальные объявления (кейс 5).
     if (!pending.typed) {
       this.diagnostics.push({ message: 'expected value', start: pending.keyStart });
     }
   }
 
-  /**
-   * Фрагмент кода — лексический остров.
-   *
-   * Открывающие ``` и всё до закрывающих ``` не проходят через автомат:
-   * содержимое сохраняется как есть, язык берётся из первого слова после
-   * открывающих кавычек. Закрывающая строка может быть с отступом — её
-   * отступ и перевод строки перед ней в значение не входят; отступы самих
-   * строк кода сохраняются.
-   */
+  // Фрагмент кода — лексический остров.
   handleCodeBlock(pos) {
     const open = pos;
     const fenceLength = YarbpLexer.codeFenceLengthAt(this.text, open);
@@ -1084,7 +1012,6 @@ export class YarbpLexer {
     let contentEnd;
 
     if (firstNewline === -1 || close < firstNewline) {
-      /* ```код``` в одну строку: языка нет, содержимое между кавычками. */
       contentStart = open + fenceLength;
       contentEnd = close;
     } else {

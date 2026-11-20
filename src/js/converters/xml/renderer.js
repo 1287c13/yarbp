@@ -2,7 +2,6 @@ import { YarbpBasicRenderer } from '../shared/renderer.js';
 import { XMLHighlighter } from '../shared/XMLHighlighter.js';
 import { YarbpXMLConverter } from './converter.js';
 
-/** `! как xml` / `! as xml` — XML-документ. */
 export class XMLRenderer extends YarbpBasicRenderer {
   render() {
     const AST = this.parser.getAST();
