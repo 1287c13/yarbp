@@ -72,7 +72,7 @@ pointer-events: none; z-index: 1; margin: 0; border: none; }
    с флейвором (зелёный) и типами (фиолетовый). */
 .ide-code-ref,
 .ide-code-ref-source,
-.ide-code-macro { color: #e35301; }
+.ide-code-macro { color: #98542b; }
 /* Фрагмент кода: границы рисует основной проход, содержимое — отложенный. */
 .ide-code-codeblock { }
 .ide-code-fence { color: #6a737d; }
