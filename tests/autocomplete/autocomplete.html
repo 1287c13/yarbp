@@ -469,7 +469,7 @@ check('Alt: список раскрыт, а не пустая рамка', listV
   'popup height=' + Math.round(popup.getBoundingClientRect().height));
 check('в пустом документе предлагаются директивы',
   items.includes('! как') && items.includes('! импорт') &&
-  items.includes('! типизация-сахара') &&
+  items.includes('! разбор-сахара') &&
   items.includes('! отключить идентификаторы') && items.includes('! disable ids'),
   items.join(' | '));
 
@@ -482,6 +482,44 @@ await press(' ', { code: 'Space', ctrlKey: true }, 250);
 opened = await waitState('list');
 check('Ctrl+Space снова открывает меню', opened, menuState());
 await press('Escape', {}, 160);
+
+stage('scenario: no suggestions');
+/* ------------------------------------------------------------------ */
+/* 1c. Конвертер без словаря подсказок (`мермейд`, `json`, `openapi`): */
+/*     меню не всплывает вовсе. Исключения — пустой документ (проверен  */
+/*     выше) и строка директивы.                                       */
+/* ------------------------------------------------------------------ */
+editor.value = '! как мермейд\nпроцесс\n  .имя';
+editor.setSelectionRange(editor.value.length, editor.value.length);
+fireInput();
+await wait(300);
+check('без словаря: над текстом меню не открывается', !menuOpen(), menuState());
+
+await press('Alt', { altKey: true }, 250);
+check('без словаря: Alt не открывает меню в непустом документе',
+  !menuOpen(), menuState());
+
+editor.value = '! как мермейд\nпроцесс\n  .имя\n';
+editor.setSelectionRange(editor.value.length, editor.value.length);
+fireInput();
+await wait(300);
+check('без словаря: в начале пустой строки нет даже чипа-подсказки',
+  !menuOpen(), menuState());
+
+editor.value = '! как мермейд\nпроцесс\n  .имя\n! ';
+editor.setSelectionRange(editor.value.length, editor.value.length);
+fireInput();
+await wait(300);
+const directiveOpened = await waitState('list');
+items = labels();
+check('без словаря: внутри директивы меню директив работает',
+  directiveOpened && items.includes('как'), menuState() + ': ' + items.join(' | '));
+
+/* Дальше сценарий снова работает с пустым документом. */
+editor.value = '';
+editor.setSelectionRange(0, 0);
+fireInput();
+await wait(250);
 
 stage('scenario: undo');
 /* ------------------------------------------------------------------ */

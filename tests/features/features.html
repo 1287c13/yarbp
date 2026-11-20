@@ -730,6 +730,10 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
       /\.flavor-frame\s*\{[^}]*stroke:\s*#408055/i.test(cssText) &&
       /body\.dark \.flavor-frame\s*\{[^}]*stroke:\s*#39bd5f/i.test(cssText),
       'нет цвета контура .flavor-frame в editor.css');
+    check('рамки директив: линия тоньше прежней рамки',
+      /\.flavor-frame\s*\{[^}]*stroke-width:\s*0?\.75\b/i.test(cssText) &&
+      !/body\.dark \.flavor-frame\s*\{[^}]*stroke-width/i.test(cssText),
+      'ожидается stroke-width: 0.75 только в общем правиле .flavor-frame');
   } catch (error) {
     check('ссылки: CSS-цвета светлой и тёмной темы', false, String(error));
   }
@@ -931,6 +935,9 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
     const framesHost = layer.querySelector('.flavor-frames');
     const origin = framesHost.getBoundingClientRect();
+    /* Подложка начинается ровно с текста, а рамка отступает от него по
+       горизонтали — см. FRAME_PADDING_X в FlavorFrames.js. */
+    const padX = 2;
     const fillRects = span => Array.from(span.getClientRects())
       .filter(rect => rect.width || rect.height)
       .map(rect => ({
@@ -940,8 +947,8 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
         bottom: rect.bottom - origin.top,
       }));
     const unionBox = rects => ({
-      left: Math.min(...rects.map(rect => rect.left)),
-      right: Math.max(...rects.map(rect => rect.right)),
+      left: Math.min(...rects.map(rect => rect.left)) - padX,
+      right: Math.max(...rects.map(rect => rect.right)) + padX,
       top: Math.min(...rects.map(rect => rect.top)),
       bottom: Math.max(...rects.map(rect => rect.bottom)),
     });
@@ -950,17 +957,20 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
     const fills = flavors.map(fillRects);
     const frames = Array.from(layer.querySelectorAll('.flavor-frame'));
     /* Рамка — `<path>`, поэтому геометрия берётся из `getBBox`, а не из
-       `style.left/width`: у многоугольника этих полей нет. Вершины `d` считаем,
-       чтобы отличить ступеньку от прямоугольника. */
+       `style.left/width`: у многоугольника этих полей нет. Углы скруглены
+       дугами, поэтому вершин столько же, сколько команд `A`, а контуров —
+       сколько команд `M`. */
     const frameBoxes = frames.map(frame => {
       const box = frame.getBBox();
+      const data = frame.getAttribute('d');
       return {
         left: box.x,
         top: box.y,
         right: box.x + box.width,
         bottom: box.y + box.height,
-        vertices: (frame.getAttribute('d').match(/[ML]/g) || []).length,
-        contours: (frame.getAttribute('d').match(/M/g) || []).length,
+        vertices: (data.match(/A/g) || []).length,
+        contours: (data.match(/M/g) || []).length,
+        radii: (data.match(/A([\d.]+) /g) || []).map(item => parseFloat(item.slice(1))),
       };
     });
     const expected = [unionBox(fills[0].concat(fills[1])), unionBox(fills[2]), unionBox(fills[3])];
@@ -986,20 +996,47 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
         (fills[1][0].right - fills[1][0].left)) > 1 &&
       frameBoxes[0].vertices > 4,
       frameBoxes.length ? frameBoxes[0].vertices + ' вершин' : 'рамок нет');
+    check('рамки директив: рамка отступает от текста на 2px слева и справа',
+      frameBoxes.length === 3 && frameBoxes.every((box, index) => {
+        const rects = [fills[0].concat(fills[1]), fills[2], fills[3]][index];
+        const left = Math.min(...rects.map(rect => rect.left));
+        const right = Math.max(...rects.map(rect => rect.right));
+        return close(box.left, left - padX) && close(box.right, right + padX);
+      }),
+      JSON.stringify(frameBoxes.map(box => [box.left, box.right])));
+    check('рамки директив: углы скруглены дугами прежнего радиуса',
+      frameBoxes.length === 3 &&
+      frameBoxes.every(box => box.radii.length === box.vertices &&
+        box.radii.every(radius => radius > 0 && radius <= 5)) &&
+      frameBoxes[0].radii.includes(5),
+      JSON.stringify(frameBoxes.map(box => box.radii)));
     check('рамки директив: ступенька стоит на правых краях обеих строк',
       frameBoxes.length === 3 && (() => {
-        const corners = frames[0].getAttribute('d')
-          .match(/[ML][-\d.]+ [-\d.]+/g)
-          .map(item => item.slice(1).split(' ').map(Number));
-        const verticals = corners
-          .filter((point, index) => point[0] === corners[(index + 1) % corners.length][0])
+        /* Разбор `d` по командам: у скруглённой рамки вертикальная сторона —
+           это отрезок между концом одной дуги и началом `L` следующего угла,
+           поэтому мало взять одни `M`/`L`. */
+        const tokens = frames[0].getAttribute('d').match(/[A-Za-z]|-?\d+(?:\.\d+)?/g);
+        const points = [];
+        let index = 0;
+        while (index < tokens.length) {
+          const command = tokens[index++];
+          if (command === 'M' || command === 'L') {
+            points.push([Number(tokens[index++]), Number(tokens[index++])]);
+          } else if (command === 'A') {
+            index += 5;
+            points.push([Number(tokens[index++]), Number(tokens[index++])]);
+          }
+        }
+        const verticals = points
+          .filter((point, item) =>
+            item + 1 < points.length && point[0] === points[item + 1][0])
           .map(point => point[0]);
         const near = value => verticals.some(x => Math.abs(x - value) < 0.5);
         const widthOf = rect => rect.right - rect.left;
-        /* Вертикальные стороны: левый край (0) и два правых края строк — три
-           штуки. Общий прямоугольник дал бы две. */
+        /* Вертикальные стороны: левый край и два правых края строк — три штуки.
+           Общий прямоугольник дал бы две. */
         return verticals.length === 3 &&
-          near(widthOf(fills[0][0])) && near(widthOf(fills[1][0]));
+          near(widthOf(fills[0][0]) + padX) && near(widthOf(fills[1][0]) + padX);
       })(),
       frames.length ? frames[0].getAttribute('d') : 'рамок нет');
     check('рамки директив: общая рамка накрывает обе строки, одиночная — одну',
@@ -1013,7 +1050,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
       frameBoxes[2].top > frameBoxes[1].top,
       JSON.stringify(frameBoxes));
     check('рамки директив: рамка учитывает отступ директивы',
-      frameBoxes[2].left > 5 && Math.abs(frameBoxes[0].left) < 1,
+      frameBoxes[2].left > 5 && close(frameBoxes[0].left, -padX),
       JSON.stringify(frameBoxes.map(box => box.left)));
     check('рамки директив: текст слоя подсветки не изменился',
       layer.textContent === editor.value,
@@ -1029,6 +1066,9 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
     check('рамки директив: рамка красится цветом директивы',
       frames.length > 0 && view.getComputedStyle(frames[0]).stroke === 'rgb(64, 128, 85)',
       frames.length ? view.getComputedStyle(frames[0]).stroke : 'нет рамки');
+    check('рамки директив: толщина линии — 0.75px',
+      frames.length > 0 && view.getComputedStyle(frames[0]).strokeWidth === '0.75px',
+      frames.length ? view.getComputedStyle(frames[0]).strokeWidth : 'нет рамки');
 
     /* Алгоритм контура проверяется и на искусственных прямоугольниках: в
        документе геометрия зависит от шрифта, а ступенька и разрыв должны
@@ -1078,7 +1118,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
   /* ------------------------------------------------------------------ */
   const uiCode = join(
     '! как форма',
-    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    '! разбор-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
     'форма',
     '  группа#ops:плитка = Операции',
     '    табы#ops',
@@ -1166,7 +1206,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
   /* ------------------------------------------------------------------ */
   const maskCode = join(
     '! как форма',
-    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    '! разбор-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
     'форма#contact',
     '  .метод post',
     '  поле#телефон:телефон = Телефон / +7 (999) 123 45 67 / да',
@@ -1247,7 +1287,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
   /* ------------------------------------------------------------------ */
   const commentCode = join(
     '! как форма',
-    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    '! разбор-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
     'форма',
     '  группа#card:плитка = Карточка',
     '    -- служебный комментарий',
@@ -1334,7 +1374,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
   /* ------------------------------------------------------------------ */
   const actionCode = join(
     '! как форма',
-    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    '! разбор-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
     'форма',
     '  группа#ops:плитка = Операции',
     '    табы#ops',
@@ -1538,7 +1578,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
   /* Редактируемая таблица: строки, колонки и постфикс. */
   const tableCode = join(
     '! как форма',
-    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    '! разбор-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
     'форма',
     '  группа:таблица',
     '    поле#номер:строка = Номер',
@@ -1594,7 +1634,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
   tableHost.remove();
 
   /* ------------------------------------------------------------------ */
-  /* 14. L-2: типизация сахара — AST, свойства, ошибки                   */
+  /* 14. L-2: разбор сахара — AST, свойства, ошибки                   */
   /* ------------------------------------------------------------------ */
   const plain = (value) => {
     if (Array.isArray(value)) return value.map(plain);
@@ -1609,7 +1649,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const sugarA = build(join(
     '! as ast',
-    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный',
+    '! разбор-сахара(поле) лэйбл / плейсхолдер / обязательный',
     'поле = Имя / Введите имя / да'
   ));
   const sugarB = build(join(
@@ -1636,7 +1676,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const sugarSlash = build(join(
     '! as ast',
-    '! типизация-сахара(поле) имя // подсказка',
+    '! разбор-сахара(поле) имя // подсказка',
     'поле = Кол-во // шт.'
   ));
   const slashNode = child(sugarSlash.ast, 'поле');
@@ -1648,7 +1688,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
   for (const separator of [',', '|']) {
     const parsed = build(join(
       '! as ast',
-      '! типизация-сахара(поле) имя ' + separator + ' ид',
+      '! разбор-сахара(поле) имя ' + separator + ' ид',
       'поле = A ' + separator + ' B'
     ));
     const node = child(parsed.ast, 'поле');
@@ -1659,7 +1699,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const globalSugar = build(join(
     '! as ast',
-    '! типизация-сахара лэйбл / значение',
+    '! разбор-сахара лэйбл / значение',
     'поле = A / B',
     'опция = X / Y'
   ));
@@ -1674,8 +1714,8 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const specificVsGlobal = build(join(
     '! as ast',
-    '! типизация-сахара имя / ид',
-    '! типизация-сахара(поле) лэйбл / значение',
+    '! разбор-сахара имя / ид',
+    '! разбор-сахара(поле) лэйбл / значение',
     'поле = A / B',
     'опция = X / Y'
   ));
@@ -1691,8 +1731,8 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const sugarDuplicate = build(join(
     '! as ast',
-    '! типизация-сахара(поле) имя',
-    '! типизация-сахара(поле) имя / ид',
+    '! разбор-сахара(поле) имя',
+    '! разбор-сахара(поле) имя / ид',
     'поле = A / B'
   ));
   const duplicateNode = child(sugarDuplicate.ast, 'поле');
@@ -1704,7 +1744,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const sugarExtra = build(join(
     '! as ast',
-    '! типизация-сахара(поле) имя / ид',
+    '! разбор-сахара(поле) имя / ид',
     'поле = A / B / C'
   ));
   const extraNode = child(sugarExtra.ast, 'поле');
@@ -1716,7 +1756,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const sugarEmpty = build(join(
     '! as ast',
-    '! типизация-сахара(поле) имя / подсказка / обязательный',
+    '! разбор-сахара(поле) имя / подсказка / обязательный',
     'поле = Кол-во / / да'
   ));
   const sugarEmptyNode = child(sugarEmpty.ast, 'поле');
@@ -1728,7 +1768,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const sugarConflict = build(join(
     '! as ast',
-    '! типизация-сахара(поле) лэйбл',
+    '! разбор-сахара(поле) лэйбл',
     'поле = Из сахара',
     '  .лэйбл Явно'
   ));
@@ -1740,14 +1780,14 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const sugarMalformed = build(join(
     '! as ast',
-    '! типизация-сахара(поле) имя подсказка',
+    '! разбор-сахара(поле) имя подсказка',
     'поле = a b'
   ));
   const malformedNode = child(sugarMalformed.ast, 'поле');
   check('L-2: malformed-директива не распознана и не даёт диагностики',
     malformedNode?.value === 'a b' &&
     !child(malformedNode, 'имя') &&
-    !sugarMalformed.parser.lastDiagnostics.some(item => /типизация-сахара/.test(item.message)),
+    !sugarMalformed.parser.lastDiagnostics.some(item => /разбор-сахара/.test(item.message)),
     malformedNode ? JSON.stringify(plain(malformedNode)) : 'нет узла');
 
   /* `! ` — директива без тела (пользователь набрал `!` и пробел, имя ещё не
@@ -1806,13 +1846,13 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
     }));
 
   check('L-2: языковая директива не считается флейвором',
-    !YarbpFlavor.isFlavorDirective('типизация-сахара(поле) лэйбл') &&
+    !YarbpFlavor.isFlavorDirective('разбор-сахара(поле) лэйбл') &&
     YarbpFlavor.isFlavorDirective('как аст') &&
     YarbpFlavor.isFlavorDirective('as json'));
 
   const sugarUiA = build(join(
     '! как форма',
-    '! типизация-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
+    '! разбор-сахара(поле) лэйбл / плейсхолдер / обязательный / постфикс',
     'форма',
     '  поле = Имя / Введите имя / да / шт.'
   ));
@@ -1834,7 +1874,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const optionSugar = build(join(
     '! как форма',
-    '! типизация-сахара(опция) представление / значение',
+    '! разбор-сахара(опция) представление / значение',
     'форма',
     '  поле:выбор = Магазин',
     '    опция = Розница / shop-1'
@@ -1846,8 +1886,8 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
 
   const captionSugar = build(join(
     '! как форма',
-    '! типизация-сахара(кнопка) подпись',
-    '! типизация-сахара(надпись) текст',
+    '! разбор-сахара(кнопка) подпись',
+    '! разбор-сахара(надпись) текст',
     'форма',
     '  кнопка = Добавить',
     '    .навигация #tabs.список',
@@ -1972,7 +2012,7 @@ import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js
     '! импорт заказ из sugar'
   ), {
     sugar: join(
-      '! типизация-сахара(заказ) номер / статус',
+      '! разбор-сахара(заказ) номер / статус',
       'заказ = 42 / новый'
     )
   });

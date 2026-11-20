@@ -112,8 +112,11 @@ pointer-events: none; z-index: 1; margin: 0; border: none; }
   overflow: visible; }
 /* Рамка — контур зелёной подложки, а не её прямоугольник: у директивы из строк
    разной длины линия идёт ступенькой, а разрыв внутри (ссылка, подстановка)
-   остаётся незакрашенным. Отсюда `<path>`, а не блок с border. */
-.flavor-frame { fill: none; stroke: #408055; stroke-width: 1; }
+   остаётся незакрашенным. Отсюда `<path>`, а не блок с border. Ширина 0.75px:
+   контур в `<path>` центрируется на линии, и 1px выглядел толще прежнего
+   border'а. Углы скругляются дугами в геометрии (см. FlavorFrames.js). */
+.flavor-frame { fill: none; stroke: #408055; stroke-width: 0.75;
+  stroke-linejoin: round; }
 .comments { color: #806a40; background-color: #fff8dd; text-decoration: none; }
 .unparsed { text-decoration: underline wavy red; }
 

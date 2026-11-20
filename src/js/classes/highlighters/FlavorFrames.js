@@ -20,6 +20,12 @@
  * внутри директивы стоит чужая подсветка (ссылка, подстановка). Для этого
  * рамка — `<path>` в SVG, а не `<div>`: у многоугольника нет `left/width`.
  *
+ * Линия отступает от текста на 2px влево и вправо (подложка начинается ровно с
+ * текста, и линия по её краю прилипала к буквам), углы скругляются дугами того
+ * же радиуса, что был у прежнего `border-radius`, а толщина обводки тоньше
+ * прежней рамки: контур в `<path>` центрируется на линии, и 1px выглядел толще
+ * `border`'а.
+ *
  * Цена: один `querySelectorAll` и по одному замеру на фрагмент подсветки
  * (обычно 0–4 фрагмента на директиву) за перерисовку слоя. Документ без
  * директив не стоит ничего — работа не начинается. Классы текста (`flavor` и
@@ -34,6 +40,16 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** Допуск сравнения координат, взятых из одних и тех же замеров, в px. */
 const EPSILON = 0.01;
+
+/**
+ * Горизонтальный зазор между текстом и линией рамки, в px. Вертикальных
+ * отступов нет: строки директивы идут вплотную, и зазор разорвал бы общий
+ * контур на ступеньке.
+ */
+const FRAME_PADDING_X = 2;
+
+/** Радиус скругления углов — как у прежнего `border-radius: 5px`. */
+const CORNER_RADIUS = 5;
 
 /**
  * Текст между двумя фрагментами подсветки. Замеров не делает — только DOM.
@@ -218,25 +234,80 @@ function dropCollinearPoints(points) {
   return result;
 }
 
-/** `d` для `<path>`: контуры идут отдельными подпутями одного элемента. */
-function pathData(outlines) {
-  const round = value => Math.round(value * 100) / 100;
-  return outlines
-    .map(points => points
-      .map((point, index) => `${index === 0 ? 'M' : 'L'}${round(point[0])} ${round(point[1])}`)
-      .join(' ') + ' Z')
-    .join(' ');
+/** Длина отрезка между двумя точками контура. */
+function length(first, second) {
+  return Math.hypot(second[0] - first[0], second[1] - first[1]);
 }
 
-/** Прямоугольники подложки одной группы в координатах слоя рамок. */
+/**
+ * Команды обхода контура со скруглёнными углами.
+ *
+ * Каждый угол заменяется дугой: от точки на входящем ребре до точки на
+ * выходящем. Радиус прижимается к половине короткого из двух рёбер, иначе у
+ * ступеньки с крошечным шагом дуги налезли бы друг на друга и контур пошёл бы
+ * петлёй. Скругление повторяет прежний `border-radius: 5px` — прямые углы на
+ * ступеньке выглядят грубее и спорят со скруглениями остальных элементов.
+ */
+function roundedContour(points) {
+  const round = value => Math.round(value * 100) / 100;
+  const corners = points.map((point, index) => {
+    const previous = points[(index + points.length - 1) % points.length];
+    const next = points[(index + 1) % points.length];
+    const toPrevious = length(previous, point);
+    const toNext = length(point, next);
+    const radius = Math.min(CORNER_RADIUS, toPrevious / 2, toNext / 2);
+    if (!(radius > EPSILON)) return { entry: point, exit: point, radius: 0 };
+
+    /* Точки входа и выхода стоят на рёбрах по обе стороны угла: radius > 0
+       гарантирует, что оба ребра не вырождены. */
+    const entry = [
+      point[0] + (previous[0] - point[0]) / toPrevious * radius,
+      point[1] + (previous[1] - point[1]) / toPrevious * radius,
+    ];
+    const exit = [
+      point[0] + (next[0] - point[0]) / toNext * radius,
+      point[1] + (next[1] - point[1]) / toNext * radius,
+    ];
+    return { entry, exit, radius };
+  });
+
+  const commands = [`M${round(corners[0].exit[0])} ${round(corners[0].exit[1])}`];
+  const turn = index => {
+    const { entry, exit, radius } = corners[index];
+    commands.push(`L${round(entry[0])} ${round(entry[1])}`);
+    if (radius > EPSILON) {
+      commands.push(`A${round(radius)} ${round(radius)} 0 0 1 ` +
+        `${round(exit[0])} ${round(exit[1])}`);
+    } else {
+      commands.push(`L${round(exit[0])} ${round(exit[1])}`);
+    }
+  };
+
+  for (let index = 1; index < corners.length; index++) turn(index);
+  turn(0);
+  commands.push('Z');
+  return commands.join(' ');
+}
+
+/** `d` для `<path>`: контуры идут отдельными подпутями одного элемента. */
+function pathData(outlines) {
+  return outlines.map(roundedContour).join(' ');
+}
+
+/**
+ * Прямоугольники подложки одной группы в координатах слоя рамок.
+ *
+ * По горизонтали прямоугольники расширяются на `FRAME_PADDING_X`: подложка
+ * начинается ровно с текста, и линия по её краю прилипала бы к буквам.
+ */
 function flavorRects(group, origin) {
   const rects = [];
   for (const span of group) {
     for (const rect of Array.from(span.getClientRects())) {
       if (!rect.width && !rect.height) continue;
       rects.push({
-        left: rect.left - origin.left,
-        right: rect.right - origin.left,
+        left: rect.left - origin.left - FRAME_PADDING_X,
+        right: rect.right - origin.left + FRAME_PADDING_X,
         top: rect.top - origin.top,
         bottom: rect.bottom - origin.top,
       });

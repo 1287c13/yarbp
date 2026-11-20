@@ -440,7 +440,7 @@ function buildArtifacts(node, task, ctx, process, opts) {
   const artifacts = (node.children || []).filter(isArtifact);
   for (const art of artifacts) {
     // Значение у артефакта обязательно, но оно может прийти и явным
-    // свойством (`.имя`, `.текст`) после `! типизация-сахара`.
+    // свойством (`.имя`, `.текст`) после `! разбор-сахара`.
     if (nodeText(art) === '') {
       warn(ctx, art, 'у артефакта «' + art.key + '» нет значения — ' +
         'пишите «' + art.key + ' = <значение>»');

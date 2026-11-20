@@ -7,7 +7,7 @@ core/
   YarbpLexer.js        текст → токены
   YarbpParser.js       токены → AST (ключ, `#id` и тип — отдельные поля узла)
   macroPostprocess.js  раскрытие макросов после парсинга
-  languageDirectives.js `! типизация-сахара`, `! импорт` и
+  languageDirectives.js `! разбор-сахара`, `! импорт` и
                        `! отключить идентификаторы` / `! disable ids`
                        (AST до конвертеров)
 

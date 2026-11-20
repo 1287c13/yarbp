@@ -12,8 +12,8 @@
 
 const MEANING = 'MEANING';
 
-const SUGAR_RE = /^\s*типизация-сахара\s*\(\s*([^\s()]+)\s*\)\s*([\s\S]*)$/iu;
-const SUGAR_GLOBAL_RE = /^\s*типизация-сахара(?=\s|$)\s*([\s\S]+)$/iu;
+const SUGAR_RE = /^\s*разбор-сахара\s*\(\s*([^\s()]+)\s*\)\s*([\s\S]*)$/iu;
+const SUGAR_GLOBAL_RE = /^\s*разбор-сахара(?=\s|$)\s*([\s\S]+)$/iu;
 const IDS_OFF_RE = /^\s*(?:отключить[\s-]+идентификаторы|disable[\s-]+ids)\s*$/iu;
 const NAME_RE = /^[\p{L}\p{N}_-]+$/u;
 const PART_RE = /[\p{L}\p{N}_-]+|[^\s\p{L}\p{N}_-]+/gu;
@@ -98,9 +98,9 @@ function parseSugarNames(rest) {
 }
 
 /**
- * `типизация-сахара(<тег>) имя-1 / имя-2` → {tag, names, separator}.
+ * `разбор-сахара(<тег>) имя-1 / имя-2` → {tag, names, separator}.
  *
- * Без скобок (`типизация-сахара имя-1 / имя-2`) тег не указан: правило
+ * Без скобок (`разбор-сахара имя-1 / имя-2`) тег не указан: правило
  * применяется ко всем тегам (`tag: null`). Частное правило для тега важнее
  * глобального.
  */
@@ -171,7 +171,7 @@ function makeProperty(part, key, position, resolveType, resolveValue) {
 /**
  * Разворачивает объявленный сахар в явные свойства.
  *
- * `! типизация-сахара(тег) имя / ид` + `тег = 1 / 2` даёт узлу детей
+ * `! разбор-сахара(тег) имя / ид` + `тег = 1 / 2` даёт узлу детей
  * `.имя 1` и `.ид 2`, а `value` убирается. Без директивы ничего не меняется.
  *
  * @param {object} ast — AST парсера (ещё не заморожен)
@@ -204,7 +204,7 @@ export function applySugarTyping(ast, options = {}) {
     if (specs.has(spec.tag)) {
       const scope = spec.tag === null ? 'все теги' : 'тег «' + spec.tag + '»';
       diagnostics.push({
-        message: 'директива «типизация-сахара» для ' + scope +
+        message: 'директива «разбор-сахара» для ' + scope +
           ' объявлена повторно — используется последняя',
         start: directive.start,
       });
@@ -240,7 +240,7 @@ export function applySugarTyping(ast, options = {}) {
             parts.slice(spec.names.length).some(part => part.trim() !== '')) {
           diagnostics.push({
             message: 'сахар «' + node.key + '»: сегментов больше, чем имён в ' +
-              '«типизация-сахара» — лишние проигнорированы',
+              '«разбор-сахара» — лишние проигнорированы',
             start: position.start ?? 0,
           });
         }

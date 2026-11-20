@@ -34,60 +34,60 @@
     },
     {
       "type": "DIRECTIVE",
-      "value": "типизация-сахара(поле) имя / ид",
+      "value": "разбор-сахара(поле) имя / ид",
       "prefix": "!",
       "start": 30,
-      "end": 63,
+      "end": 60,
       "error": ""
     },
     {
       "type": "PREFIX",
       "value": "!",
-      "start": 64,
-      "end": 65,
+      "start": 61,
+      "end": 62,
       "error": ""
     },
     {
       "type": "DIRECTIVE",
       "value": "as lexer",
       "prefix": "!",
-      "start": 64,
-      "end": 74,
+      "start": 61,
+      "end": 71,
       "error": ""
     },
     {
       "type": "SCOPE_IN",
       "value": "",
-      "start": 75,
-      "end": 75,
+      "start": 72,
+      "end": 72,
       "error": ""
     },
     {
       "type": "KEY(OBJ)",
       "value": "поле",
-      "start": 75,
-      "end": 79,
+      "start": 72,
+      "end": 76,
       "error": ""
     },
     {
       "type": "VALUE",
       "value": "= Имя / a1",
-      "start": 81,
-      "end": 91,
+      "start": 78,
+      "end": 88,
       "error": ""
     },
     {
       "type": "SCOPE_OUT",
       "value": "",
-      "start": 90,
-      "end": 90,
+      "start": 87,
+      "end": 87,
       "error": ""
     },
     {
       "type": "END",
       "value": "",
-      "start": 90,
-      "end": 90,
+      "start": 87,
+      "end": 87,
       "error": ""
     }
   ],
@@ -106,11 +106,11 @@
       },
       {
         "nodeType": "DIRECTIVE",
-        "value": "типизация-сахара(поле) имя / ид",
+        "value": "разбор-сахара(поле) имя / ид",
         "prefix": "!",
         "position": {
           "start": 30,
-          "end": 63
+          "end": 60
         }
       },
       {
@@ -118,8 +118,8 @@
         "value": "as lexer",
         "prefix": "!",
         "position": {
-          "start": 64,
-          "end": 74
+          "start": 61,
+          "end": 71
         }
       }
     ],
@@ -130,8 +130,8 @@
         "valueType": "OBJECT",
         "prefix": "",
         "position": {
-          "start": 75,
-          "end": 79
+          "start": 72,
+          "end": 76
         },
         "children": [
           {
@@ -141,8 +141,8 @@
             "valueType": "STRING",
             "value": "Имя",
             "position": {
-              "start": 75,
-              "end": 79
+              "start": 72,
+              "end": 76
             }
           },
           {
@@ -152,8 +152,8 @@
             "valueType": "STRING",
             "value": "a1",
             "position": {
-              "start": 75,
-              "end": 79
+              "start": 72,
+              "end": 76
             }
           }
         ]
@@ -162,6 +162,6 @@
   },
   "render": {
     "kind": "lexer",
-    "text": "+-----------+---------------------------------+--------+-------+-----+-------+\n| type      | value                           | prefix | start | end | error |\n+-----------+---------------------------------+--------+-------+-----+-------+\n| START     |                                 |        | 0     | 0   |       |\n| PREFIX    | !                               |        | 0     | 1   |       |\n| DIRECTIVE | импорт форма из \"Форма ТСД\"     | !      | 0     | 29  |       |\n| PREFIX    | !                               |        | 30    | 31  |       |\n| DIRECTIVE | типизация-сахара(поле) имя / ид | !      | 30    | 63  |       |\n| PREFIX    | !                               |        | 64    | 65  |       |\n| DIRECTIVE | as lexer                        | !      | 64    | 74  |       |\n| SCOPE_IN  |                                 |        | 75    | 75  |       |\n| KEY(OBJ)  | поле                            |        | 75    | 79  |       |\n| VALUE     | = Имя / a1                      |        | 81    | 91  |       |\n| SCOPE_OUT |                                 |        | 90    | 90  |       |\n| END       |                                 |        | 90    | 90  |       |\n+-----------+---------------------------------+--------+-------+-----+-------+\n"
+    "text": "+-----------+------------------------------+--------+-------+-----+-------+\n| type      | value                        | prefix | start | end | error |\n+-----------+------------------------------+--------+-------+-----+-------+\n| START     |                              |        | 0     | 0   |       |\n| PREFIX    | !                            |        | 0     | 1   |       |\n| DIRECTIVE | импорт форма из \"Форма ТСД\"  | !      | 0     | 29  |       |\n| PREFIX    | !                            |        | 30    | 31  |       |\n| DIRECTIVE | разбор-сахара(поле) имя / ид | !      | 30    | 60  |       |\n| PREFIX    | !                            |        | 61    | 62  |       |\n| DIRECTIVE | as lexer                     | !      | 61    | 71  |       |\n| SCOPE_IN  |                              |        | 72    | 72  |       |\n| KEY(OBJ)  | поле                         |        | 72    | 76  |       |\n| VALUE     | = Имя / a1                   |        | 78    | 88  |       |\n| SCOPE_OUT |                              |        | 87    | 87  |       |\n| END       |                              |        | 87    | 87  |       |\n+-----------+------------------------------+--------+-------+-----+-------+\n"
   }
 }
