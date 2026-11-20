@@ -106,8 +106,14 @@ pointer-events: none; z-index: 1; margin: 0; border: none; }
    рамки ехали вместе с текстом. */
 .flavor-frames { position: absolute; top: 15px; left: 0; right: 0; height: 0;
   margin-left: calc(15px + var(--editor-gutter, 0px)); pointer-events: none; }
-.flavor-frame { position: absolute; border: 1px solid #408055;
-  border-radius: 5px; }
+/* Полотно рамок: собственный размер не нужен — контуры рисуются за его
+   пределами (`overflow: visible`), координаты в `d` уже в пикселях слоя. */
+.flavor-frame-svg { position: absolute; left: 0; top: 0; width: 1px; height: 1px;
+  overflow: visible; }
+/* Рамка — контур зелёной подложки, а не её прямоугольник: у директивы из строк
+   разной длины линия идёт ступенькой, а разрыв внутри (ссылка, подстановка)
+   остаётся незакрашенным. Отсюда `<path>`, а не блок с border. */
+.flavor-frame { fill: none; stroke: #408055; stroke-width: 1; }
 .comments { color: #806a40; background-color: #fff8dd; text-decoration: none; }
 .unparsed { text-decoration: underline wavy red; }
 
@@ -227,7 +233,7 @@ body.dark .important { background-color: #d3c042; color: #2f281b; }
 body.dark .removed { color: #727272; }
 
 body.dark .flavor { background-color: #2e3826; color: #39bd5f; }
-body.dark .flavor-frame { border-color: #39bd5f; }
+body.dark .flavor-frame { stroke: #39bd5f; }
 
 body.dark .ide-code-obj { color: #dbe5e7; font-weight: bolder; text-decoration: none; }
 body.dark .ide-code-key { color: #cbd7da; font-weight: bolder; text-decoration: none; }

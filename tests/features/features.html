@@ -39,6 +39,7 @@ import { UIRuntime } from '../../src/js/classes/ui/UIRuntime.js';
 import { HTMLExporter } from '../../src/js/classes/HTMLExporter.js';
 import { FileManager } from '../../src/js/modules/FileManager.js';
 import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
+import { unionOutlines } from '../../src/js/classes/highlighters/FlavorFrames.js';
 
   const resultBox = document.getElementById('result');
   const lines = [];
@@ -725,6 +726,10 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
       /body\.dark \.code-input::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*#3d3d3d/i.test(cssText) &&
       /body\.dark\s*\{[^}]*scrollbar-color:\s*#3d3d3d/i.test(cssText),
       'нет тёмного ползунка скролла в editor.css');
+    check('рамки директив: контур красится в цвет директивы (обе темы)',
+      /\.flavor-frame\s*\{[^}]*stroke:\s*#408055/i.test(cssText) &&
+      /body\.dark \.flavor-frame\s*\{[^}]*stroke:\s*#39bd5f/i.test(cssText),
+      'нет цвета контура .flavor-frame в editor.css');
   } catch (error) {
     check('ссылки: CSS-цвета светлой и тёмной темы', false, String(error));
   }
@@ -924,40 +929,127 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
     editor.dispatchEvent(new view.Event('input', { bubbles: true }));
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    const frameBoxes = Array.from(layer.querySelectorAll('.flavor-frame')).map(frame => ({
-      left: parseFloat(frame.style.left),
-      top: parseFloat(frame.style.top),
-      height: parseFloat(frame.style.height),
-    }));
-    /* 12px × 1.5 — высота строки в `.highlight-layer`; рамка добавляет по 2px
-       зазора сверху и снизу. */
-    const lineHeight = 18;
+    const framesHost = layer.querySelector('.flavor-frames');
+    const origin = framesHost.getBoundingClientRect();
+    const fillRects = span => Array.from(span.getClientRects())
+      .filter(rect => rect.width || rect.height)
+      .map(rect => ({
+        left: rect.left - origin.left,
+        right: rect.right - origin.left,
+        top: rect.top - origin.top,
+        bottom: rect.bottom - origin.top,
+      }));
+    const unionBox = rects => ({
+      left: Math.min(...rects.map(rect => rect.left)),
+      right: Math.max(...rects.map(rect => rect.right)),
+      top: Math.min(...rects.map(rect => rect.top)),
+      bottom: Math.max(...rects.map(rect => rect.bottom)),
+    });
 
-    check('рамки директив: у соседних строк одна общая рамка',
-      frameBoxes.length === 3 && frameBoxes[0].height > lineHeight * 1.5,
+    const flavors = Array.from(layer.querySelectorAll('.flavor'));
+    const fills = flavors.map(fillRects);
+    const frames = Array.from(layer.querySelectorAll('.flavor-frame'));
+    /* Рамка — `<path>`, поэтому геометрия берётся из `getBBox`, а не из
+       `style.left/width`: у многоугольника этих полей нет. Вершины `d` считаем,
+       чтобы отличить ступеньку от прямоугольника. */
+    const frameBoxes = frames.map(frame => {
+      const box = frame.getBBox();
+      return {
+        left: box.x,
+        top: box.y,
+        right: box.x + box.width,
+        bottom: box.y + box.height,
+        vertices: (frame.getAttribute('d').match(/[ML]/g) || []).length,
+        contours: (frame.getAttribute('d').match(/M/g) || []).length,
+      };
+    });
+    const expected = [unionBox(fills[0].concat(fills[1])), unionBox(fills[2]), unionBox(fills[3])];
+    const close = (first, second) => Math.abs(first - second) < 1;
+    const sameBox = (first, second) =>
+      close(first.left, second.left) && close(first.right, second.right) &&
+      close(first.top, second.top) && close(first.bottom, second.bottom);
+    const lineHeight = fills[0][0].bottom - fills[0][0].top;
+
+    check('рамки директив: у соседних строк одна общая рамка, остальные — свои',
+      frameBoxes.length === 3 && frames.every(frame => frame.tagName.toLowerCase() === 'path'),
       JSON.stringify(frameBoxes));
+    check('рамки директив: подложка соседних строк слита в один контур',
+      frameBoxes.length === 3 && frameBoxes.every(box => box.contours === 1),
+      JSON.stringify(frameBoxes.map(box => box.contours)));
+    check('рамки директив: рамка идёт по краю заливки, а не по её прямоугольнику',
+      frameBoxes.length === 3 &&
+      frameBoxes.every((box, index) => sameBox(box, expected[index])),
+      JSON.stringify({ frames: frameBoxes, expected }));
+    check('рамки директив: у строк разной длины рамка ступенькой (многоугольник)',
+      frameBoxes.length === 3 &&
+      Math.abs((fills[0][0].right - fills[0][0].left) -
+        (fills[1][0].right - fills[1][0].left)) > 1 &&
+      frameBoxes[0].vertices > 4,
+      frameBoxes.length ? frameBoxes[0].vertices + ' вершин' : 'рамок нет');
+    check('рамки директив: ступенька стоит на правых краях обеих строк',
+      frameBoxes.length === 3 && (() => {
+        const corners = frames[0].getAttribute('d')
+          .match(/[ML][-\d.]+ [-\d.]+/g)
+          .map(item => item.slice(1).split(' ').map(Number));
+        const verticals = corners
+          .filter((point, index) => point[0] === corners[(index + 1) % corners.length][0])
+          .map(point => point[0]);
+        const near = value => verticals.some(x => Math.abs(x - value) < 0.5);
+        const widthOf = rect => rect.right - rect.left;
+        /* Вертикальные стороны: левый край (0) и два правых края строк — три
+           штуки. Общий прямоугольник дал бы две. */
+        return verticals.length === 3 &&
+          near(widthOf(fills[0][0])) && near(widthOf(fills[1][0]));
+      })(),
+      frames.length ? frames[0].getAttribute('d') : 'рамок нет');
     check('рамки директив: общая рамка накрывает обе строки, одиночная — одну',
-      Math.abs(frameBoxes[0].height - (lineHeight * 2 + 4)) < 1.5 &&
-      Math.abs(frameBoxes[1].height - (lineHeight + 4)) < 1.5 &&
-      Math.abs(frameBoxes[2].height - (lineHeight + 4)) < 1.5,
+      frameBoxes.length === 3 &&
+      frameBoxes[0].bottom - frameBoxes[0].top > lineHeight * 1.5 &&
+      close(frameBoxes[1].bottom - frameBoxes[1].top, lineHeight) &&
+      close(frameBoxes[2].bottom - frameBoxes[2].top, lineHeight),
       JSON.stringify(frameBoxes));
     check('рамки директив: директивы через текст — разные рамки',
       frameBoxes[1].top > frameBoxes[0].top &&
       frameBoxes[2].top > frameBoxes[1].top,
       JSON.stringify(frameBoxes));
     check('рамки директив: рамка учитывает отступ директивы',
-      frameBoxes[2].left > 5 && Math.abs(frameBoxes[0].left + 2) < 1,
+      frameBoxes[2].left > 5 && Math.abs(frameBoxes[0].left) < 1,
       JSON.stringify(frameBoxes.map(box => box.left)));
     check('рамки директив: текст слоя подсветки не изменился',
       layer.textContent === editor.value,
       layer.textContent.length + ' / ' + editor.value.length);
     check('рамки директив: в рамках нет текста (только декор)',
-      Array.from(layer.querySelectorAll('.flavor-frame'))
-        .every(frame => frame.textContent === ''));
+      frames.every(frame => frame.textContent === ''));
+    check('рамки директив: полотно рамок не обрезает контуры',
+      !!framesHost.firstElementChild &&
+      view.getComputedStyle(framesHost.firstElementChild).overflow === 'visible',
+      framesHost.firstElementChild
+        ? view.getComputedStyle(framesHost.firstElementChild).overflow
+        : 'нет полотна');
+    check('рамки директив: рамка красится цветом директивы',
+      frames.length > 0 && view.getComputedStyle(frames[0]).stroke === 'rgb(64, 128, 85)',
+      frames.length ? view.getComputedStyle(frames[0]).stroke : 'нет рамки');
+
+    /* Алгоритм контура проверяется и на искусственных прямоугольниках: в
+       документе геометрия зависит от шрифта, а ступенька и разрыв должны
+       строиться всегда. */
+    const stacked = unionOutlines([
+      { left: 0, right: 40, top: 0, bottom: 18 },
+      { left: 0, right: 60, top: 18, bottom: 36 },
+    ]);
+    check('рамки директив: контур объединения — ступенька из шести вершин',
+      stacked.length === 1 && stacked[0].length === 6,
+      JSON.stringify(stacked));
+    const gapped = unionOutlines([
+      { left: 0, right: 10, top: 0, bottom: 18 },
+      { left: 30, right: 40, top: 0, bottom: 18 },
+    ]);
+    check('рамки директив: разрыв в подложке — два отдельных контура',
+      gapped.length === 2 && gapped.every(outline => outline.length === 4),
+      JSON.stringify(gapped));
 
     /* Желобок номеров строк увеличивает левый отступ текста. Слой рамок должен
        стоять на начале текста, иначе рамки уедут в сторону от директив. */
-    const framesHost = layer.querySelector('.flavor-frames');
     const layerPadding = parseFloat(view.getComputedStyle(layer).paddingLeft);
     const framesLeft = framesHost
       ? framesHost.getBoundingClientRect().left - layer.getBoundingClientRect().left +
@@ -1936,12 +2028,12 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   /* Предопределённый пример UI-формы: стартовый файл и папка «Примеры»  */
   /* ------------------------------------------------------------------ */
   const exampleData = new FileManager('yarbp_features_examples')._getDefaultData();
-  const orderExample = exampleData.files.find(file => file.slug === 'ui-order-form');
-  check('UI: пример формы заказа есть в «Примерах»',
-    !!orderExample && !!orderExample.isBuiltin,
-    orderExample ? orderExample.name : 'нет примера');
-  check('UI: пример формы заказа открывается сразу',
-    !!orderExample && exampleData.activeFileId === orderExample.id,
+  const formExample = exampleData.files.find(file => file.slug === 'ui-order-form');
+  check('UI: пример формы есть в «Примерах»',
+    !!formExample && !!formExample.isBuiltin,
+    formExample ? formExample.name : 'нет примера');
+  check('UI: пример формы открывается сразу',
+    !!formExample && exampleData.activeFileId === formExample.id,
     String(exampleData.activeFileId));
 
   const exampleManager = new FileManager('yarbp_features_examples_link');
@@ -1955,7 +2047,7 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   let exampleHtml = '';
   let exampleError = '';
   try {
-    const exampleParsed = build(orderExample ? orderExample.content : '');
+    const exampleParsed = build(formExample ? formExample.content : '');
     exampleIr = exampleGenerator.convert(exampleParsed.ast);
     exampleHtml = exampleGenerator.generateHTML(exampleParsed.ast);
   } catch (error) {
@@ -1963,7 +2055,7 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   }
 
   const exampleDiagnostics = exampleIr ? exampleIr.diagnostics : [];
-  check('UI: пример формы заказа разбирается без замечаний',
+  check('UI: пример формы разбирается без замечаний',
     !!exampleIr && exampleDiagnostics.length === 0,
     exampleError || exampleDiagnostics
       .map(item => item.code + ': ' + item.text).join('; '));
