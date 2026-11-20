@@ -786,6 +786,75 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
     await new Promise(resolve => setTimeout(resolve, 2500));
     check('фоновый BPMN: рендерер отрисовал схему',
       doc.getElementById('render-textarea').value.includes('bpmn:definitions'));
+
+    /* Рамки директив: соседние строки-директивы получают одну общую рамку,
+       разделённые текстом — каждая свою. Рамки живут отдельным слоем, поэтому
+       разметка подсветки и текст слоя не меняются. */
+    editor.value = join(
+      '! как json',
+      '! as xml',
+      '',
+      '.ключ значение',
+      '  ! как аст',
+      '..массив',
+      '  ! как json'
+    );
+    editor.focus();
+    editor.setSelectionRange(0, 0);
+    editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const frameBoxes = Array.from(layer.querySelectorAll('.flavor-frame')).map(frame => ({
+      left: parseFloat(frame.style.left),
+      top: parseFloat(frame.style.top),
+      height: parseFloat(frame.style.height),
+    }));
+    /* 12px × 1.5 — высота строки в `.highlight-layer`; рамка добавляет по 2px
+       зазора сверху и снизу. */
+    const lineHeight = 18;
+
+    check('рамки директив: у соседних строк одна общая рамка',
+      frameBoxes.length === 3 && frameBoxes[0].height > lineHeight * 1.5,
+      JSON.stringify(frameBoxes));
+    check('рамки директив: общая рамка накрывает обе строки, одиночная — одну',
+      Math.abs(frameBoxes[0].height - (lineHeight * 2 + 4)) < 1.5 &&
+      Math.abs(frameBoxes[1].height - (lineHeight + 4)) < 1.5 &&
+      Math.abs(frameBoxes[2].height - (lineHeight + 4)) < 1.5,
+      JSON.stringify(frameBoxes));
+    check('рамки директив: директивы через текст — разные рамки',
+      frameBoxes[1].top > frameBoxes[0].top &&
+      frameBoxes[2].top > frameBoxes[1].top,
+      JSON.stringify(frameBoxes));
+    check('рамки директив: рамка учитывает отступ директивы',
+      frameBoxes[2].left > 5 && Math.abs(frameBoxes[0].left + 2) < 1,
+      JSON.stringify(frameBoxes.map(box => box.left)));
+    check('рамки директив: текст слоя подсветки не изменился',
+      layer.textContent === editor.value,
+      layer.textContent.length + ' / ' + editor.value.length);
+    check('рамки директив: в рамках нет текста (только декор)',
+      Array.from(layer.querySelectorAll('.flavor-frame'))
+        .every(frame => frame.textContent === ''));
+
+    /* Желобок номеров строк увеличивает левый отступ текста. Слой рамок должен
+       стоять на начале текста, иначе рамки уедут в сторону от директив. */
+    const framesHost = layer.querySelector('.flavor-frames');
+    const layerPadding = parseFloat(view.getComputedStyle(layer).paddingLeft);
+    const framesLeft = framesHost
+      ? framesHost.getBoundingClientRect().left - layer.getBoundingClientRect().left +
+        layer.scrollLeft
+      : NaN;
+    check('рамки директив: слой рамок привязан к началу текста с желобком',
+      !!framesHost && Math.abs(framesLeft - layerPadding) < 1,
+      framesLeft + ' / ' + layerPadding);
+
+    /* Без директив рамок нет вовсе — документ не платит за них. */
+    editor.value = join('.ключ значение', '..массив');
+    editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    check('рамки директив: в документе без директив рамок нет',
+      layer.querySelectorAll('.flavor-frame').length === 0 &&
+      !layer.querySelector('.flavor-frames'),
+      layer.innerHTML.slice(0, 80));
   }
 
   appFrame.remove();

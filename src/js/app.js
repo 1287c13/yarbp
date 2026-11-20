@@ -3,6 +3,7 @@ import { YarbpLexer, TokenTypes } from './core/YarbpLexer.js';
 import { YarbpParser } from './core/YarbpParser.js';
 import { YarbpHighlighter } from './classes/highlighters/YarbpHighlighter.js';
 import { CodeBlockHighlightPass } from './classes/highlighters/CodeBlockHighlightPass.js';
+import { drawFlavorFrames } from './classes/highlighters/FlavorFrames.js';
 import { FileManager } from './modules/FileManager.js';
 import { toggleLineComments } from './modules/CommentToggler.js';
 
@@ -471,6 +472,10 @@ function updateViews() {
   YarbpAppGlobals.highlighter.tokens = YarbpAppGlobals.lexer.tokens;
   highlightDiv.innerHTML = YarbpAppGlobals.highlighter.highlight();
 
+  /* Рамки директив: соседние строки получают одну общую рамку. Разметку
+     подсветки это не меняет — рамки живут отдельным слоем. */
+  drawFlavorFrames(highlightDiv);
+
   /* Подсветка встроенных языков — отдельным отложенным проходом. */
   YarbpAppGlobals.codeBlockHighlightPass.schedule(
     code, YarbpAppGlobals.lexer.tokens);
@@ -859,6 +864,10 @@ YarbpAppGlobals.indentGuides = new IndentGuides(
   textarea, document.getElementById('code-editor-container')
 );
 YarbpAppGlobals.indentGuides.init();
+
+/* Веб-шрифт приезжает после первой отрисовки и меняет метрики текста, а с ними
+   и геометрию рамок директив. Пересчитываем один раз, когда шрифты готовы. */
+document.fonts?.ready.then(() => drawFlavorFrames(highlightDiv));
 
 // Инициализация файлового менеджера
 const fileManagerContainer = document.getElementById('file-manager-container');

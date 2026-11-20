@@ -91,8 +91,20 @@ pointer-events: none; z-index: 1; margin: 0; border: none; }
 .ide-code-body .code-bsl-com { color: #008000; }
 .ide-code-body .code-bsl-pre { color: #963200; }
 .special-symbols { color: #bec3c6; text-decoration: none; }
+/* Подложка директивы. Рамку рисует отдельный слой (FlavorFrames.js): у
+   соседних строк-директив она общая, поэтому `outline` на самом span не
+   годится — на стыке двух строк получались две рамки и «двойная» линия.
+   Вертикальный padding закрывает межстрочный просвет (на высоту строки он не
+   влияет), и подложки соседних директив сливаются в одно пятно. */
 .flavor { background-color: #ddffe9; color: #408055; border: none;
-  outline: 1px solid #408055; outline-offset: 2px; border-radius: 5px;}
+  padding-top: 2px; padding-bottom: 2px; }
+/* Слой рамок директив. Начало координат — начало текста в слое подсветки:
+   отсюда смещение на внутренние отступы и на желобок номеров строк, чтобы
+   рамки ехали вместе с текстом. */
+.flavor-frames { position: absolute; top: 15px; left: 0; right: 0; height: 0;
+  margin-left: calc(15px + var(--editor-gutter, 0px)); pointer-events: none; }
+.flavor-frame { position: absolute; border: 1px solid #408055;
+  border-radius: 5px; }
 .comments { color: #806a40; background-color: #fff8dd; text-decoration: none; }
 .unparsed { text-decoration: underline wavy red; }
 
@@ -211,7 +223,8 @@ body.dark .todo { background-color: #2d2d2d; color: #9aff00; }
 body.dark .important { background-color: #d3c042; color: #2f281b; }
 body.dark .removed { color: #727272; }
 
-body.dark .flavor { background-color: #2e3826; color: #39bd5f; outline: 1px solid #39bd5f; }
+body.dark .flavor { background-color: #2e3826; color: #39bd5f; }
+body.dark .flavor-frame { border-color: #39bd5f; }
 
 body.dark .ide-code-obj { color: #dbe5e7; font-weight: bolder; text-decoration: none; }
 body.dark .ide-code-key { color: #cbd7da; font-weight: bolder; text-decoration: none; }
