@@ -320,6 +320,12 @@ let rendererLoadGeneration = 0;
 let pendingRendererName = null;
 let flavorPrefetchStarted = false;
 
+/* Табуляция — это отступ, а не ввод. После неё меню подсказок не открываем:
+   пользователь, скорее всего, будет табулировать дальше, и следующий Tab
+   принял бы подсказку вместо отступа. Флаг снимает ровно один проход
+   подсказок — тот, который вызван `input` от самой табуляции. */
+let skipSuggestionsOnce = false;
+
 /**
  * Фоновая догрузка остальных флейворов. Запускается только после того, как
  * выбранный флейвор уже отрисован: первый экран не ждёт BPMN/FlexForms/OpenAPI.
@@ -416,9 +422,24 @@ function scheduleUpdateViews() {
   }, 100);
 }
 
+/**
+ * Проход подсказок, вызванный табуляцией, пропускается: меню закрывается и не
+ * открывается заново. Флаг одноразовый — следующий ввод подсказывает как обычно.
+ */
+function tabbedSuggestionsSkipped() {
+  if (!skipSuggestionsOnce) return false;
+  skipSuggestionsOnce = false;
+  return true;
+}
+
 /** Подсказки зависят от каретки, поэтому планируются и при неизменном тексте. */
 function scheduleSuggestions(flavor, ast) {
   YarbpAppGlobals.suggestionTicker.schedule(() => {
+    if (tabbedSuggestionsSkipped()) {
+      YarbpAppGlobals.suggestionUI.hide();
+      return;
+    }
+
     const result = YarbpAppGlobals.suggestionProvider.update({
       tokens: YarbpAppGlobals.lexer.tokens,
       ast,
@@ -715,7 +736,21 @@ if (textarea) {
     }
   };
 
+  /**
+   * Отступ — не ввод, поэтому меню после Tab не открывается: закрываем его
+   * сразу (чип в начале строки иначе висел бы до следующего прохода) и гасим
+   * подсказки, вызванные `input` от самой табуляции.
+   */
+  const tabKeepsMenuClosed = () => {
+    YarbpAppGlobals.suggestionUI.hide();
+    skipSuggestionsOnce = true;
+  };
+
   textarea.addEventListener('keydown', (e) => {
+    // Запрет после Tab одноразовый и живёт до следующей клавиши: любая другая
+    // клавиша — это уже осознанный ввод, и подсказки снова обычные.
+    if (e.key !== 'Tab') skipSuggestionsOnce = false;
+
     if (YarbpAppGlobals.suggestionUI.handleKey(e)) return;
 
     // Alt и Ctrl+Space — принудительный вызов подсказок. В начале строки
@@ -792,6 +827,7 @@ if (textarea) {
         textarea.setSelectionRange(caret, caret);
       }
 
+      tabKeepsMenuClosed();
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
@@ -831,6 +867,7 @@ if (textarea) {
         }
       }
 
+      tabKeepsMenuClosed();
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
   });

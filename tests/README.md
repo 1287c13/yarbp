@@ -27,7 +27,7 @@ python tests/run_all.py --json report.json --junit report.xml
 | `lexer/` | golden-снимки токенов, AST и рендера на кейсах из `notes/cases` | `python yarbp/tests/lexer/run_tests.py` |
 | `converters/` | smoke-тесты конвертеров и golden BPMN | `python yarbp/tests/converters/run_tests.py` |
 | `features/` | новые возможности DSL, `! разбор-сахара`, `! импорт`, подсветка и подсказки | `python yarbp/tests/features/run_tests.py` |
-| `autocomplete/` | сценарный UI-тест подсказок: Tab/Alt/Escape, отмена подстановки по `Ctrl+Z`, выравнивание отступа, ранжирование, доки, полная разметка ТСД | `python yarbp/tests/autocomplete/run_tests.py` |
+| `autocomplete/` | сценарный UI-тест подсказок: Tab/Alt/Escape, меню не открывается после `Tab` и у конвертеров без словаря, отмена подстановки по `Ctrl+Z`, выравнивание отступа, ранжирование, доки, полная разметка ТСД | `python yarbp/tests/autocomplete/run_tests.py` |
 | `files/` | файлы, резолвер импорта, localStorage, ошибки редактора, паритет предпросмотра | `python yarbp/tests/files/run_tests.py` |
 | `security/` | экранирование, CSP, изоляция iframe-предпросмотра | `python yarbp/tests/security/run_tests.py` |
 | `flexforms/` | флейвор «форма-ТСД», пример и браузерный дым | `python yarbp/tests/flexforms/run_tests.py` |

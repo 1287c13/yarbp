@@ -88,6 +88,10 @@ const popup = ui.root;
 let pendingUpdateFrame = 0;
 let lastAST = null;
 
+/* Тот же флаг, что в app.js: Tab — отступ, а не ввод, поэтому проход подсказок,
+   вызванный табуляцией, пропускается; любая другая клавиша флаг снимает. */
+let skipSuggestionsOnce = false;
+
 function currentFlavor() {
   const directive = lexer.tokens.find(token =>
     token.type === TokenTypes.DIRECTIVE &&
@@ -97,6 +101,12 @@ function currentFlavor() {
 
 function scheduleSuggestions(flavor, ast, force = false) {
   ticker.schedule(() => {
+    if (skipSuggestionsOnce) {
+      skipSuggestionsOnce = false;
+      ui.hide();
+      return;
+    }
+
     const result = provider.update({
       tokens: lexer.tokens,
       ast,
@@ -179,6 +189,8 @@ function undoEdit() {
 }
 
 editor.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') skipSuggestionsOnce = false;
+
   if (ui.handleKey(e)) return;
 
   const isAlt = e.key === 'Alt' && !e.shiftKey && !e.ctrlKey && !e.metaKey;
@@ -220,6 +232,9 @@ editor.addEventListener('keydown', (e) => {
       editor.setSelectionRange(caret, caret);
     }
 
+    /* Отступ — не ввод: меню закрываем и гасим подсказки от этого `input`. */
+    ui.hide();
+    skipSuggestionsOnce = true;
     fireInput();
   } else if (e.key === 'Tab' && e.shiftKey) {
     e.preventDefault();
@@ -240,6 +255,9 @@ editor.addEventListener('keydown', (e) => {
       editor.setSelectionRange(target, target);
     }
 
+    /* Shift+Tab — тоже отступ, только в обратную сторону. */
+    ui.hide();
+    skipSuggestionsOnce = true;
     fireInput();
   }
 });
@@ -514,6 +532,73 @@ const directiveOpened = await waitState('list');
 items = labels();
 check('без словаря: внутри директивы меню директив работает',
   directiveOpened && items.includes('как'), menuState() + ': ' + items.join(' | '));
+
+/* Дальше сценарий снова работает с пустым документом. */
+editor.value = '';
+editor.setSelectionRange(0, 0);
+fireInput();
+await wait(250);
+
+stage('scenario: tab');
+/* ------------------------------------------------------------------ */
+/* 1e. Табуляция — отступ, а не ввод: после Tab меню не открывается,   */
+/*     иначе следующий Tab принял бы подсказку вместо отступа.         */
+/* ------------------------------------------------------------------ */
+/* Список директив на строке `! `: закрыт Escape, Tab делает отступ,
+   и список не должен всплыть заново. */
+editor.value = '! как форма-тсд\nформа\n! ';
+editor.setSelectionRange(editor.value.length, editor.value.length);
+fireInput();
+const tabListOpened = await waitState('list');
+check('tab: на строке «! » открыт список директив',
+  tabListOpened && labels().includes('как'),
+  menuState() + ': ' + labels().slice(0, 5).join(' | '));
+
+await press('Escape', {}, 160);
+check('tab: Escape закрыл список', !menuOpen(), menuState());
+
+await press('Tab', {}, 0);
+check('tab: Tab сразу закрывает меню, не дожидаясь прохода подсказок',
+  !menuOpen(), menuState());
+check('tab: Tab сделал отступ', editor.value.endsWith('\n!   '),
+  JSON.stringify(editor.value.slice(-6)));
+
+await wait(300);
+check('tab: список не вернулся после прохода подсказок',
+  !menuOpen(), menuState());
+
+await press('Tab', {}, 0);
+await wait(300);
+check('tab: второй Tab — снова отступ, а не выбор варианта',
+  editor.value.endsWith('\n!     '), JSON.stringify(editor.value.slice(-8)));
+check('tab: после второго Tab меню закрыто', !menuOpen(), menuState());
+
+/* Контроль: на той же позиции обычный ввод список открывает — значит,
+   подсказки тут есть, и гасит их именно табуляция. */
+await type('к', 260);
+check('tab: контроль — обычная буква возвращает список',
+  menuState() === 'list', menuState());
+
+/* Пустая строка с отступом: чип-подсказка тоже не появляется после Tab. */
+editor.value = '! как форма-тсд\nформа\n  ';
+editor.setSelectionRange(editor.value.length, editor.value.length);
+fireInput();
+await wait(300);
+const hintBeforeTab = menuState();
+check('tab: в начале строки с отступом меню подсказок открыто',
+  hintBeforeTab !== 'closed', hintBeforeTab);
+
+await press('Tab', {}, 0);
+check('tab: после Tab чипа-подсказки нет', !menuOpen(), menuState());
+await wait(300);
+check('tab: чип не вернулся после прохода подсказок', !menuOpen(), menuState());
+
+/* Shift+Tab — тоже отступ: меню не открывается и при снятии отступа. */
+await press('Tab', { shiftKey: true }, 0);
+await wait(300);
+check('tab: Shift+Tab убрал отступ и не открыл меню',
+  editor.value.endsWith('\n  ') && !menuOpen(),
+  menuState() + ' ' + JSON.stringify(editor.value.slice(-6)));
 
 /* Дальше сценарий снова работает с пустым документом. */
 editor.value = '';
