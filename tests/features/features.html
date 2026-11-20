@@ -1047,6 +1047,61 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
     !sugarMalformed.parser.lastDiagnostics.some(item => /типизация-сахара/.test(item.message)),
     malformedNode ? JSON.stringify(plain(malformedNode)) : 'нет узла');
 
+  /* `! ` — директива без тела (пользователь набрал `!` и пробел, имя ещё не
+     введено). Восклицательный знак обязан остаться её частью: иначе токен
+     начинается с пробела, подсветка флейвора рисуется без `!`, позиция
+     директивы в AST съезжает на символ вправо (ломается признак «нулевой
+     отступ»), а подсказки начинают замену уже после `!` и вставляют второй. */
+  const emptyDirective = build('! ');
+  const emptyDirectiveToken = emptyDirective.tokens
+    .find(token => token.type === TokenTypes.DIRECTIVE);
+  const emptyDirectiveHtml = new YarbpHighlighter(
+    '! \n', emptyDirective.tokens).highlight();
+  check('L-2: директива без тела («! ») включает восклицательный знак',
+    !!emptyDirectiveToken &&
+    emptyDirectiveToken.start === 0 && emptyDirectiveToken.end === 1 &&
+    emptyDirectiveToken.value === '' && emptyDirectiveToken.prefix === '!' &&
+    emptyDirective.ast?.directives?.[0]?.position.start === 0 &&
+    emptyDirectiveHtml.startsWith('<span class="flavor">!</span>'),
+    JSON.stringify({
+      token: emptyDirectiveToken,
+      html: emptyDirectiveHtml,
+      ast: emptyDirective.ast?.directives,
+    }));
+
+  const indentedDirective = build('  ! ');
+  const indentedDirectiveToken = indentedDirective.tokens
+    .find(token => token.type === TokenTypes.DIRECTIVE);
+  check('L-2: отступ перед «! » остаётся вне директивы',
+    !!indentedDirectiveToken &&
+    indentedDirectiveToken.start === 2 && indentedDirectiveToken.end === 3,
+    JSON.stringify(indentedDirectiveToken));
+
+  const fullDirective = build('! как аст');
+  const fullDirectiveToken = fullDirective.tokens
+    .find(token => token.type === TokenTypes.DIRECTIVE);
+  check('L-2: директива с телом по-прежнему начинается с «!»',
+    !!fullDirectiveToken &&
+    fullDirectiveToken.start === 0 && fullDirectiveToken.end === 9 &&
+    fullDirectiveToken.value === 'как аст',
+    JSON.stringify(fullDirectiveToken));
+
+  const emptyDirectiveProvider = new SuggestionProvider();
+  const emptyDirectiveContext = emptyDirectiveProvider.update({
+    tokens: emptyDirective.tokens,
+    ast: emptyDirective.ast,
+    cursorOffset: 2,
+    text: '! ',
+    flavor: null,
+  });
+  check('L-2: подсказка после «! » заменяет строку вместе с «!»',
+    emptyDirectiveContext?.replaceFrom === 0 &&
+    emptyDirectiveContext?.suggestions?.[0]?.insert === '! как ',
+    JSON.stringify(emptyDirectiveContext && {
+      replaceFrom: emptyDirectiveContext.replaceFrom,
+      insert: emptyDirectiveContext.suggestions?.[0]?.insert,
+    }));
+
   check('L-2: языковая директива не считается флейвором',
     !YarbpFlavor.isFlavorDirective('типизация-сахара(поле) лэйбл') &&
     YarbpFlavor.isFlavorDirective('как аст') &&

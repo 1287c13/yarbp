@@ -384,6 +384,18 @@ export class YarbpLexer {
     if (token.type === TokenTypes.PREFIX ||
         token.start === token.end) return;
 
+    // Директива без тела (`! ` — имя ещё не набрано) состоит из одного
+    // префикса: `token.value` пуст, и сдвинуть начало на длину префикса
+    // нечем. Без этой ветки токен начинался бы с пробела после `!`, а сам
+    // `!` оставался бы вне директивы — подсветка флейвора, AST-позиция
+    // директивы и подсказки видели бы директиву без восклицательного знака
+    // (из-за чего вставка из автодополнения дублировала `!`).
+    if (token.type === TokenTypes.DIRECTIVE && token.prefix && !token.value) {
+      token.start -= token.prefix.length;
+      token.end = token.start + token.prefix.length;
+      return;
+    }
+
     let text = token.prefix + token.value;
     const leadingSpaces = calcLeadingSpaces(text);
     const trailingSpaces = calcTrailingSpaces(text);
