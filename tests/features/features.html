@@ -553,32 +553,51 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
     '  .другое значение'
   );
   const macroLinkHost = highlightedHost(macroLinkCode);
-  const macroParams = linkText(...macroLinkHost.querySelectorAll('.ide-code-macro-param'));
 
   check('макрос: объявление @имя-макроса покрашено',
     linkText(...macroLinkHost.querySelectorAll('.ide-code-macro')).join(' ') === '@макро',
     macroLinkHost.innerHTML.slice(0, 160));
-  check('макрос: параметр, переданный по имени, покрашен',
-    macroParams.includes('(( имя ))'), JSON.stringify(macroParams));
-  check('макрос: параметр, закрытый позиционно, покрашен',
-    macroParams.includes('(( первый ))'), JSON.stringify(macroParams));
-  check('макрос: непереданный параметр не красится',
-    !macroParams.includes('(( лишний ))'), JSON.stringify(macroParams));
+  check('макрос: места подстановки в теле не красятся',
+    macroLinkHost.querySelectorAll('.ide-code-ref').length === 0 &&
+    macroLinkHost.querySelectorAll('.ide-code-macro-param').length === 0,
+    JSON.stringify(linkText(...macroLinkHost.querySelectorAll('.ide-code-ref'))));
   check('макрос: текст подсветки не изменился',
     macroLinkHost.textContent === macroLinkCode);
+
+  /* Ссылка внутри тела макроса не красится, даже если ключ верхнего уровня с
+     таким именем есть; та же ссылка вне макроса — красится вместе с ключом. */
+  const macroSourceCode = join(
+    '! as ast',
+    ':конфиг',
+    '  .а 1',
+    '@макро = (( конфиг ))',
+    '  .поле (( конфиг ))',
+    'пример',
+    '  .настройки (( конфиг ))'
+  );
+  const macroSourceHost = highlightedHost(macroSourceCode);
+  check('макрос: подстановка внутри тела не красится даже с найденным ключом',
+    linkText(...macroSourceHost.querySelectorAll('.ide-code-ref')).join(' ') === '(( конфиг ))',
+    JSON.stringify(linkText(...macroSourceHost.querySelectorAll('.ide-code-ref'))));
+  check('ссылки: ключ, подставленный вне макроса, покрашен',
+    linkText(...macroSourceHost.querySelectorAll('.ide-code-ref-source')).join(' ') === 'конфиг',
+    JSON.stringify(linkText(...macroSourceHost.querySelectorAll('.ide-code-ref-source'))));
 
   const unusedMacroHost = highlightedHost(join('! as ast', '@пустой', '  .поле 1'));
   check('макрос: объявление красится и без вызовов',
     linkText(...unusedMacroHost.querySelectorAll('.ide-code-macro')).join(' ') === '@пустой' &&
-    unusedMacroHost.querySelectorAll('.ide-code-macro-param').length === 0,
+    unusedMacroHost.querySelectorAll('.ide-code-ref').length === 0,
     unusedMacroHost.innerHTML.slice(0, 160));
 
   try {
     const cssText = await (await fetch('../../src/css/editor.css')).text();
     check('ссылки: CSS-цвета светлой и тёмной темы',
-      /\.ide-code-ref[^{]*\{[^}]*color:\s*#c05621/i.test(cssText) &&
+      /\.ide-code-ref[^{]*\{[^}]*color:\s*#e35301/i.test(cssText) &&
       /body\.dark \.ide-code-ref[^{]*\{[^}]*color:\s*#f0c674/i.test(cssText),
       'нет цвета ссылок в editor.css');
+    check('ссылки: класса для параметров макроса в CSS больше нет',
+      !cssText.includes('ide-code-macro-param'),
+      'в editor.css остался .ide-code-macro-param');
     check('фрагмент кода: на тёмной теме нет подложки',
       !/body\.dark \.ide-code-codeblock[^{]*\{[^}]*background/i.test(cssText),
       'подложка .ide-code-codeblock в тёмной теме осталась');

@@ -13,10 +13,10 @@ import { TokenTypes } from '../../core/YarbpLexer.js';
  *   источник: это визуальная пара к ссылке (обычно ключ после подстановки
  *   уходит из вывода);
  * - объявление `@имя-макроса` красится всегда;
- * - `(( параметр ))` внутри тела макроса красится, только если хоть один
- *   вызов этого макроса передаёт такой параметр. Безымянная передача
- *   (аргумент, чьего имени нет в теле) закрывает свободные скобки по
- *   порядку — ровно как позиционная подстановка в `substitute()`.
+ * - внутри определения макроса места подстановки не красятся вообще: в теле
+ *   макроса их заведомо много и они там ожидаемы, цвет превращается в шум.
+ *   Цвет остаётся признаком «вещь верхнего уровня реально используется
+ *   ссылкой или вызовом».
  *
  * Модуль сознательно не берёт AST: у узлов парсера `position` указывает на
  * ключ, а не на значение, плюс после раскрытия макросов и импорта в дереве
@@ -28,8 +28,7 @@ import { TokenTypes } from '../../core/YarbpLexer.js';
 export const LinkCSSClasses = Object.freeze({
   REFERENCE: 'ide-code-ref',            // (( имя )) с найденным ключом
   SOURCE: 'ide-code-ref-source',        // ключ верхнего уровня, ушедший в ссылку
-  MACRO: 'ide-code-macro',              // объявление @макроса
-  PARAM: 'ide-code-macro-param'         // (( параметр )) внутри макроса
+  MACRO: 'ide-code-macro'               // объявление @макроса
 });
 
 /** Имена совпадают с регулярками `macroPostprocess.js` (unicode-имена). */
@@ -42,9 +41,6 @@ const KEY_TYPES = new Set([
   TokenTypes.ARRAY,
   TokenTypes.PRIMITIVE
 ]);
-
-/* Тип токена, который задаёт ключ уровня парсера (и, значит, имя аргумента). */
-const SCOPE_OWNER_TYPES = new Set([TokenTypes.OBJECT, TokenTypes.ARRAY]);
 
 /**
  * Рамки = уровни обхода парсера: `SCOPE_IN`/`SCOPE_OUT` лексер ставит ровно
@@ -114,30 +110,6 @@ function enclosingMacroName(frame, definitions) {
   return name;
 }
 
-/**
- * Ключи-аргументы вызова: дети узла вызова. Это ключи самой рамки вызова и
- * владельцы вложенных рамок — парсер складывает в `children` и то, и другое.
- * Вложенная рамка считается аргументом, только если её уровень назван
- * объектом или массивом: безымянная обёртка ключом не становится.
- */
-function callArguments(call) {
-  const frame = call.frame;
-  if (!frame) return [];
-
-  const args = [];
-  for (const item of frame.keys) {
-    if (item.index > call.index) args.push({ index: item.index, value: item.token.value });
-  }
-  for (const child of frame.children) {
-    if (!child.owner || child.ownerIndex < call.index) continue;
-    if (!SCOPE_OWNER_TYPES.has(child.owner.type)) continue;
-    args.push({ index: child.ownerIndex, value: child.owner.value });
-  }
-
-  return args.sort((a, b) => a.index - b.index).map(item => item.value);
-}
-
-
 export function collectLinkRanges(tokens, sourceText) {
   if (!Array.isArray(tokens) || tokens.length === 0) return [];
   if (typeof sourceText !== 'string' || sourceText === '') return [];
@@ -148,7 +120,6 @@ export function collectLinkRanges(tokens, sourceText) {
    * это рамки без родителя. */
   const definitions = new Map();
   const declarations = [];
-  const calls = [];
 
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];
@@ -160,24 +131,14 @@ export function collectLinkRanges(tokens, sourceText) {
     if (frame && frame.parent === null) definitions.set(name, token);
   }
 
-  for (let index = 0; index < tokens.length; index++) {
-    const token = tokens[index];
-    if (token.type !== TokenTypes.OBJECT || token.value.startsWith('@')) continue;
-
-    const match = token.value.match(MACRO_CALL);
-    if (!match) continue;
-    const name = match[2] || match[1];
-    if (definitions.has(name)) calls.push({ name, index, frame: frameOf[index] });
-  }
-
   const isMacroCall = (token) => {
     if (token.type !== TokenTypes.OBJECT) return false;
     const match = token.value.match(MACRO_CALL);
     return Boolean(match && definitions.has(match[2] || match[1]));
   };
 
-  /* Ключи-источники: то, что может закрыть `(( имя ))`. Внутри тела
-   * макроса источников нет — там действуют только параметры. */
+  /* Ключи-источники: то, что может закрыть `(( имя ))`. Внутри определения
+   * макроса источников нет: там подстановки закрываются параметрами. */
   const sources = new Map();
   for (const frame of frames) {
     if (enclosingMacroName(frame, definitions)) continue;
@@ -196,9 +157,9 @@ export function collectLinkRanges(tokens, sourceText) {
   }
 
   /* Вхождения `(( … ))`: значения — единственное место, где работает
-   * подстановка. `CODE_BLOCK` — остров, его не трогаем. */
+   * подстановка. `CODE_BLOCK` — остров, его не трогаем. Внутри определения
+   * макроса подстановки не собираем: там они ожидаемы и цвет стал бы шумом. */
   const references = [];
-  const macroParams = new Map();
 
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];
@@ -206,53 +167,19 @@ export function collectLinkRanges(tokens, sourceText) {
 
     const text = sourceText.slice(token.start, token.end);
     if (!text.includes('((')) continue;
-
-    const macroName = enclosingMacroName(frameOf[index], definitions);
+    if (enclosingMacroName(frameOf[index], definitions)) continue;
 
     for (const match of text.matchAll(PLACEHOLDER)) {
       const start = token.start + match.index;
-      const end = start + match[0].length;
-      const entry = { name: match[1], start, end };
-
-      if (!macroName) {
-        references.push(entry);
-        continue;
-      }
-
-      if (!macroParams.has(macroName)) macroParams.set(macroName, []);
-      macroParams.get(macroName).push(entry);
+      references.push({ name: match[1], start, end: start + match[0].length });
     }
   }
 
-  /* Какие параметры макроса реально закрываются вызовами. */
-  const usedParams = new Set();
-  for (const call of calls) {
-    const body = macroParams.get(call.name);
-    if (!body || body.length === 0) continue;
-
-    const bodyNames = new Set(body.map(entry => entry.name));
-    const args = callArguments(call);
-    const named = new Set(args.filter(name => bodyNames.has(name)));
-    const positional = args.filter(name => !bodyNames.has(name));
-
-    let positionalIndex = 0;
-    for (const entry of body) {
-      if (named.has(entry.name)) {
-        usedParams.add(call.name + '\u0000' + entry.name);
-        continue;
-      }
-      if (positionalIndex < positional.length) {
-        positionalIndex++;
-        usedParams.add(call.name + '\u0000' + entry.name);
-      }
-    }
-  }
-
-  return buildRanges(references, sources, declarations, macroParams, usedParams);
+  return buildRanges(references, sources, declarations);
 }
 
-/** Итоговый список диапазонов: ссылка + её источник, объявления, параметры. */
-function buildRanges(references, sources, declarations, macroParams, usedParams) {
+/** Итоговый список диапазонов: ссылка + её источник и объявления макросов. */
+function buildRanges(references, sources, declarations) {
   const ranges = [];
 
   for (const reference of references) {
@@ -281,17 +208,6 @@ function buildRanges(references, sources, declarations, macroParams, usedParams)
       end: token.end,
       className: LinkCSSClasses.MACRO
     });
-  }
-
-  for (const [macroName, entries] of macroParams) {
-    for (const entry of entries) {
-      if (!usedParams.has(macroName + '\u0000' + entry.name)) continue;
-      ranges.push({
-        start: entry.start,
-        end: entry.end,
-        className: LinkCSSClasses.PARAM
-      });
-    }
   }
 
   return ranges
