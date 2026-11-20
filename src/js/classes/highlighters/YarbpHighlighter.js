@@ -123,8 +123,10 @@ export class YarbpHighlighter {
 
   /**
    * Один диапазон токена: либо обычный `<span>`, либо нарезка по вложенным
-   * ссылкам. Классы не вкладываются (внешний токен уже накрыл символы), а
-   * суммируются: `ide-code-val ide-code-ref`.
+   * ссылкам. Обычно классы не вкладываются (внешний токен уже накрыл
+   * символы), а суммируются: `ide-code-val ide-code-ref`. Исключение —
+   * диапазон с `standalone` (`#id`): он красится только своим классом, иначе
+   * наследует жирность ключа и слипается с ним.
    */
   renderRange(code, token, className, links) {
     if (token.type === TokenTypes.CODE_BLOCK) {
@@ -151,8 +153,10 @@ export class YarbpHighlighter {
       if (link.start > position) {
         result += YarbpHighlighter.span(className, code.slice(position, link.start));
       }
-      result += YarbpHighlighter.span(
-        className + ' ' + link.className, code.slice(link.start, link.end));
+      const classes = link.standalone
+        ? link.className
+        : className + ' ' + link.className;
+      result += YarbpHighlighter.span(classes, code.slice(link.start, link.end));
       position = link.end;
     }
 

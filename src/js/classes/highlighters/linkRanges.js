@@ -16,7 +16,9 @@ import { idsDisabled } from '../../core/languageDirectives.js';
  *   уходит из вывода);
  * - объявление `@имя-макроса` красится всегда;
  * - `#id` в ключе красится цветом ссылок: это тоже ссылка, к узлу
- *   адресуются `.навигация`, `.проверить` и другие свойства;
+ *   адресуются `.навигация`, `.проверить` и другие свойства. Класс ключа id
+ *   не наследует (`standalone`): ключ объекта — жирный, а ссылка жирной быть
+ *   не должна — иначе id визуально слипается с самим ключом;
  * - внутри определения макроса места подстановки не красятся вообще: в теле
  *   макроса их заведомо много и они там ожидаемы, цвет превращается в шум.
  *   Цвет остаётся признаком «вещь верхнего уровня реально используется
@@ -159,13 +161,15 @@ export function collectLinkRanges(tokens, sourceText) {
 
       const prefixLength = token.prefix ? token.prefix.length : 0;
       /* Парсер выносит `#id` из ключа в поле `id`, поэтому подстановка ищет
-         имя до `#`. При выключенных идентификаторах ключ остаётся целым. */
+         имя до `#`. При выключенных идентификаторах ключ остаётся целым.
+         Границы — только имя: `#id` красится отдельно (у него свой класс),
+         и диапазон-источник не должен перекрывать его своей жирностью. */
       const name = idsOff ? token.value : token.value.split('#')[0];
       if (!name) continue;
 
       sources.set(name, {
         start: token.start + prefixLength,
-        end: token.end
+        end: Math.min(token.end, token.start + prefixLength + name.length)
       });
     }
   }
@@ -215,14 +219,17 @@ function collectIdRanges(tokens, sourceText) {
     ranges.push({
       start: token.start + hash,
       end: token.end,
-      className: LinkCSSClasses.ID
+      className: LinkCSSClasses.ID,
+      /* id не наследует класс токена: ключ объекта жирный, а ссылка — нет. */
+      standalone: true
     });
   }
 
   return ranges;
 }
 
-/** Итоговый список диапазонов: ссылка + её источник, объявления и id узлов. */
+/** Итоговый список диапазонов: ссылка + её источник, объявления и id узлов
+ * (`standalone` — кусок красится только своим классом, без класса токена). */
 function buildRanges(references, sources, declarations, ids = []) {
   const ranges = [];
 

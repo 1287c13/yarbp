@@ -672,6 +672,30 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
   check('id: текст подсветки не изменился',
     idHighlightHost.textContent === idHighlightCode);
 
+  const idSpanClasses = [...idHighlightHost.querySelectorAll('.ide-code-id')]
+    .map(node => node.className);
+  check('id: #id не наследует класс ключа (obj/prop) и не жирный',
+    idSpanClasses.length === 2 &&
+    idSpanClasses.every(className => className.trim() === 'ide-code-id'),
+    JSON.stringify(idSpanClasses));
+
+  /* Ключ с id как источник ссылки: красится только имя, id остаётся ссылкой. */
+  const idSourceHost = highlightedHost(join(
+    '! as ast',
+    ':конфиг#main',
+    '  .а 1',
+    'пример',
+    '  .поле (( конфиг ))'
+  ));
+  check('id: ключ-источник кончается до `#`, id красится отдельно',
+    linkText(...idSourceHost.querySelectorAll('.ide-code-ref-source')).join(' ') ===
+      'конфиг' &&
+    linkText(...idSourceHost.querySelectorAll('.ide-code-id')).join(' ') === '#main',
+    JSON.stringify([
+      linkText(...idSourceHost.querySelectorAll('.ide-code-ref-source')),
+      linkText(...idSourceHost.querySelectorAll('.ide-code-id'))
+    ]));
+
   const idsOffHighlightHost = highlightedHost(join(
     '! as ast',
     '! отключить идентификаторы',
