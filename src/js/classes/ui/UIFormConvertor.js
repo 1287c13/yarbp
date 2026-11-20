@@ -596,12 +596,17 @@ export class UIFormConvertor {
   /**
    * `поле#итог:целое` → { key: 'поле', type: 'целое', id: 'итог', ref: false }.
    * `:поле#итог` помечается как ссылка (`ref`).
+   *
+   * Парсер выносит `#id` в поле узла `id`, поэтому ключ обычно уже без `#`.
+   * Хвост после `#` остаётся запасным путём — для `! отключить идентификаторы`
+   * и для узлов, собранных до появления поля.
    */
   splitKey(node) {
     const raw = String((node && node.key) || '').trim();
     const hash = raw.indexOf('#');
     const head = hash >= 0 ? raw.slice(0, hash) : raw;
-    const id = hash >= 0 ? raw.slice(hash + 1).trim() : '';
+    const tailId = hash >= 0 ? raw.slice(hash + 1).trim() : '';
+    const id = String((node && node.id) || tailId).trim();
     const colon = head.indexOf(':');
     const key = colon >= 0 ? head.slice(0, colon) : head;
     const inline = colon >= 0 ? head.slice(colon + 1) : '';

@@ -469,7 +469,8 @@ check('Alt: список раскрыт, а не пустая рамка', listV
   'popup height=' + Math.round(popup.getBoundingClientRect().height));
 check('в пустом документе предлагаются директивы',
   items.includes('! как') && items.includes('! импорт') &&
-  items.includes('! типизация-сахара'),
+  items.includes('! типизация-сахара') &&
+  items.includes('! отключить идентификаторы') && items.includes('! disable ids'),
   items.join(' | '));
 
 await press('Escape', {}, 160);
@@ -560,14 +561,14 @@ await type('!');
 opened = await waitState('list');
 items = labels();
 check('после «!» список директив обновлён', opened, menuState());
-check('в списке после «!» четыре директивы', items.length === 4,
+check('в списке после «!» шесть директив', items.length === 6,
   items.join(' | '));
 
 await type('к');
 await wait(300);
 items = labels();
 check('ввод «к» поднимает директиву «как», не сужая список',
-  items.length === 4 && items[0] === 'как', items.join(' | '));
+  items.length === 6 && items[0] === 'как', items.join(' | '));
 
 await press('Tab', {}, 250);
 expectText('директива вставлена целиком', '! как ');
@@ -627,8 +628,8 @@ await type('! ');
 opened = await waitState('list');
 items = labels();
 check('после «! » открыт список директив', opened, menuState());
-check('после «! » четыре директивы, «как» первая',
-  items.length === 4 && items[0].replace(/^!\s*/, '') === 'как',
+check('после «! » шесть директив, «как» первая',
+  items.length === 6 && items[0].replace(/^!\s*/, '') === 'как',
   items.join(' | '));
 
 await press('Tab', {}, 250);

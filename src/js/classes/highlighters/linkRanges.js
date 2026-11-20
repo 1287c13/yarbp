@@ -1,7 +1,9 @@
 import { TokenTypes } from '../../core/YarbpLexer.js';
+import { idsDisabled } from '../../core/languageDirectives.js';
 
 /**
- * Ссылки и макросы, которые фактически сработали при сборке AST.
+ * Ссылки, макросы и идентификаторы узлов, которые фактически сработали при
+ * сборке AST.
  *
  * Подсвечивать «просто похожие» конструкции бессмысленно: цвет должен
  * отвечать на вопрос «что из этого реально на что-то сослалось». Поэтому
@@ -13,6 +15,8 @@ import { TokenTypes } from '../../core/YarbpLexer.js';
  *   источник: это визуальная пара к ссылке (обычно ключ после подстановки
  *   уходит из вывода);
  * - объявление `@имя-макроса` красится всегда;
+ * - `#id` в ключе красится цветом ссылок: это тоже ссылка, к узлу
+ *   адресуются `.навигация`, `.проверить` и другие свойства;
  * - внутри определения макроса места подстановки не красятся вообще: в теле
  *   макроса их заведомо много и они там ожидаемы, цвет превращается в шум.
  *   Цвет остаётся признаком «вещь верхнего уровня реально используется
@@ -28,7 +32,8 @@ import { TokenTypes } from '../../core/YarbpLexer.js';
 export const LinkCSSClasses = Object.freeze({
   REFERENCE: 'ide-code-ref',            // (( имя )) с найденным ключом
   SOURCE: 'ide-code-ref-source',        // ключ верхнего уровня, ушедший в ссылку
-  MACRO: 'ide-code-macro'               // объявление @макроса
+  MACRO: 'ide-code-macro',              // объявление @макроса
+  ID: 'ide-code-id'                     // идентификатор узла `#id` в ключе
 });
 
 /** Имена совпадают с регулярками `macroPostprocess.js` (unicode-имена). */
@@ -116,6 +121,10 @@ export function collectLinkRanges(tokens, sourceText) {
 
   const { frameOf, frames } = buildFrames(tokens);
 
+  /* `! отключить идентификаторы` возвращает `#` в ключ: тогда id не красим и
+   * не режем из имён-источников — ровно как парсер. */
+  const idsOff = idsDisabled(tokens, sourceText);
+
   /* Объявления макросов: `ast.children` верхнего уровня у постпроцессора —
    * это рамки без родителя. */
   const definitions = new Map();
@@ -149,7 +158,12 @@ export function collectLinkRanges(tokens, sourceText) {
       if (!isZeroLevel(sourceText, token)) continue;
 
       const prefixLength = token.prefix ? token.prefix.length : 0;
-      sources.set(token.value, {
+      /* Парсер выносит `#id` из ключа в поле `id`, поэтому подстановка ищет
+         имя до `#`. При выключенных идентификаторах ключ остаётся целым. */
+      const name = idsOff ? token.value : token.value.split('#')[0];
+      if (!name) continue;
+
+      sources.set(name, {
         start: token.start + prefixLength,
         end: token.end
       });
@@ -175,11 +189,41 @@ export function collectLinkRanges(tokens, sourceText) {
     }
   }
 
-  return buildRanges(references, sources, declarations);
+  return buildRanges(
+    references, sources, declarations,
+    idsOff ? [] : collectIdRanges(tokens, sourceText));
 }
 
-/** Итоговый список диапазонов: ссылка + её источник и объявления макросов. */
-function buildRanges(references, sources, declarations) {
+/**
+ * Идентификаторы узлов: `поле#итог` → диапазон `#итог`.
+ *
+ * Лексер оставляет `#` внутри значения ключа (тип уже отрезан), а парсер делит
+ * ключ на `key` и `id`. Границы берём от конца токена: id — всегда хвост
+ * значения, поэтому позиции совпадают даже после обрезки пробелов. Ключи без
+ * левой части (`#итог`) идентификатором не считаются — как и в парсере.
+ */
+function collectIdRanges(tokens, sourceText) {
+  const ranges = [];
+
+  for (const token of tokens) {
+    if (!KEY_TYPES.has(token.type)) continue;
+
+    const text = sourceText.slice(token.start, token.end);
+    const hash = text.indexOf('#');
+    if (hash <= 0 || hash === text.length - 1) continue;
+
+    ranges.push({
+      start: token.start + hash,
+      end: token.end,
+      className: LinkCSSClasses.ID
+    });
+  }
+
+  return ranges;
+}
+
+/** Итоговый список диапазонов: ссылка + её источник, объявления и id узлов. */
+function buildRanges(references, sources, declarations, ids = []) {
   const ranges = [];
 
   for (const reference of references) {
@@ -209,6 +253,11 @@ function buildRanges(references, sources, declarations) {
       className: LinkCSSClasses.MACRO
     });
   }
+
+  /* id идут последними: сортировка в конце поставит их после широкого
+     диапазона-источника, и подсветка токена выберет источник (см.
+     `YarbpHighlighter.renderRange`: вложенные диапазоны не вкладываются). */
+  ids.forEach(range => ranges.push(range));
 
   return ranges
     .filter(range => Number.isFinite(range.start) && Number.isFinite(range.end))

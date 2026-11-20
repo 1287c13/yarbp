@@ -14,6 +14,7 @@ const MEANING = 'MEANING';
 
 const SUGAR_RE = /^\s*типизация-сахара\s*\(\s*([^\s()]+)\s*\)\s*([\s\S]*)$/iu;
 const SUGAR_GLOBAL_RE = /^\s*типизация-сахара(?=\s|$)\s*([\s\S]+)$/iu;
+const IDS_OFF_RE = /^\s*(?:отключить[\s-]+идентификаторы|disable[\s-]+ids)\s*$/iu;
 const NAME_RE = /^[\p{L}\p{N}_-]+$/u;
 const PART_RE = /[\p{L}\p{N}_-]+|[^\s\p{L}\p{N}_-]+/gu;
 
@@ -37,6 +38,29 @@ export function collectDirectives(tokens, sourceText = '') {
       end: token.end,
       atRoot: isRootDirective(sourceText, token.start),
     }));
+}
+
+/**
+ * `! отключить идентификаторы` / `! disable ids` → true.
+ *
+ * Директива возвращает прежнее поведение парсера: `#id` в ключе остаётся
+ * частью ключа (`поле#итог`), а не отдельным полем узла `id`. Формат строгий:
+ * только эти две фразы, лишние слова и пустое значение директивой не считаются.
+ */
+export function parseIdsDirective(value) {
+  return IDS_OFF_RE.test(String(value ?? ''));
+}
+
+/**
+ * Отключены ли идентификаторы узлов (`#id`) в документе.
+ *
+ * Как и остальные языковые директивы, работает только на нулевом отступе.
+ * Подсветка (`linkRanges.js`) спрашивает эту же функцию, поэтому цвет `#id` и
+ * разбор AST не расходятся.
+ */
+export function idsDisabled(tokens, sourceText = '') {
+  return collectDirectives(tokens, sourceText)
+    .some(directive => directive.atRoot && parseIdsDirective(directive.value));
 }
 
 /**
@@ -118,7 +142,11 @@ export function splitSugarValue(value, separator) {
   return parts;
 }
 
-/** Тег без вида (`:`) и id (`#`): `поле#количество:число` → `поле`. */
+/**
+ * Тег без вида (`:`). Обычно id уже вынесен парсером в поле `id`, но при
+ * `! отключить идентификаторы` `#` остаётся в ключе — тогда режем и его:
+ * `поле#количество` → `поле`.
+ */
 export function baseKey(key) {
   if (key === undefined || key === null) return '';
   return String(key).split(/[:#]/, 1)[0];

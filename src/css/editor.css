@@ -65,14 +65,17 @@ pointer-events: none; z-index: 1; margin: 0; border: none; }
 .ide-code-val { color: #335272; text-decoration: none; }
 .ide-code-type { color: #b800d5; text-decoration: none; }
 /* Ссылки и макросы: то, что фактически сработало при сборке AST —
-   подстановка `(( имя ))` вне макроса, её ключ-источник и объявление
-   `@макрос` (linkRanges.js). Внутри тела макроса подстановки не красятся:
-   их там заведомо много и они ожидаемы, цвет был бы шумом.
+   подстановка `(( имя ))` вне макроса, её ключ-источник, объявление
+   `@макрос` (linkRanges.js) и идентификатор узла `#id` из ключа.
+   Внутри тела макроса подстановки не красятся: их там заведомо много и они
+   ожидаемы, цвет был бы шумом.
    Оранжевый — единственный тёплый цвет схемы: ссылка видна, но не спорит
-   с флейвором (зелёный) и типами (фиолетовый). */
+   с флейвором (зелёный) и типами (фиолетовый). Id — тоже ссылка
+   (`.навигация`, `.проверить`), поэтому цвет общий. */
 .ide-code-ref,
 .ide-code-ref-source,
-.ide-code-macro { color: #98542b; }
+.ide-code-macro,
+.ide-code-id { color: #98542b; }
 /* Фрагмент кода: границы рисует основной проход, содержимое — отложенный. */
 .ide-code-codeblock { }
 .ide-code-fence { color: #6a737d; }
@@ -232,10 +235,11 @@ body.dark .ide-code-prop { color: #99c7ff; text-decoration: none; }
 body.dark .ide-code-val { color: #c3cdd0; text-decoration: none;  }
 body.dark .ide-code-type { color: #b997de; text-decoration: none; }
 /* Тёмная тема: тот же смысл ссылки, но тёплый золотой — чтобы не путать с
-   фиолетовыми типами (`#b997de`) и жёлтым `scope-in`. */
+   фиолетовыми типами (`#b997de`) и жёлтым `scope-in`. Id узла — там же. */
 body.dark .ide-code-ref,
 body.dark .ide-code-ref-source,
-body.dark .ide-code-macro { color: #f0c674; }
+body.dark .ide-code-macro,
+body.dark .ide-code-id { color: #f0c674; }
 /* Фрагмент кода на тёмной теме идёт без подложки: плашка поверх и без того
    тёмного кода утяжеляет блок. Границы рисуют сами fence-строки. */
 body.dark .ide-code-fence { color: #8b949e; }

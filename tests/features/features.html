@@ -143,6 +143,75 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
     !!child(macro.ast, 'id') && child(macro.ast, 'id').value === 'root',
     JSON.stringify(child(macro.ast, 'id')));
   /* ------------------------------------------------------------------ */
+  /* 1b. Идентификатор узла `#id`                                        */
+  /* ------------------------------------------------------------------ */
+  const ID_CODE = join(
+    '! as ast',
+    ':группа#order:форма',
+    '  .поле#итог:целое 5',
+    '  ..табы#список',
+    '    :таб#первый .подпись Список'
+  );
+  const idParsed = build(ID_CODE);
+  const idGroup = child(idParsed.ast, 'группа');
+  const idField = child(idGroup, 'поле');
+  const idTabs = child(idGroup, 'табы');
+  const idTab = child(idTabs, 'таб');
+
+  check('#id: ключ, id и тип — поля одного узла',
+    !!idGroup && idGroup.key === 'группа' && idGroup.id === 'order' &&
+    idGroup.type === 'форма',
+    idGroup ? JSON.stringify({ key: idGroup.key, id: idGroup.id, type: idGroup.type })
+      : 'нет узла');
+  check('#id: примитив получает id, ключ, тип и значение',
+    !!idField && idField.key === 'поле' && idField.id === 'итог' &&
+    idField.type === 'целое' && idField.value === 5,
+    idField ? JSON.stringify({ key: idField.key, id: idField.id,
+      type: idField.type, value: idField.value }) : 'нет узла');
+  check('#id: работает у массива и у элемента массива',
+    !!idTabs && idTabs.id === 'список' && idTabs.valueType === valueTypes.ARRAY &&
+    !!idTab && idTab.id === 'первый' && idTab.key === 'таб',
+    JSON.stringify({ tabs: idTabs && idTabs.id, tab: idTab && idTab.id }));
+  check('#id: ключ больше не содержит решётку',
+    [idGroup, idField, idTabs, idTab].every(node => node && !String(node.key).includes('#')),
+    JSON.stringify([idGroup, idField, idTabs, idTab].map(node => node && node.key)));
+
+  const ID_PARTIAL = build(join('! as ast', 'поле# .а 1', '#итог .б 2'));
+  check('#id: пустая половина — не идентификатор',
+    children(ID_PARTIAL.ast).every(node => node.id === undefined) &&
+    !!child(ID_PARTIAL.ast, 'поле#') && !!child(ID_PARTIAL.ast, '#итог'),
+    JSON.stringify(children(ID_PARTIAL.ast).map(node => [node.key, node.id])));
+
+  const IDS_OFF = join('! as ast', '! отключить идентификаторы', '.поле#итог:целое 5');
+  const idsOff = build(IDS_OFF);
+  check('! отключить идентификаторы: id остаётся частью ключа',
+    !!child(idsOff.ast, 'поле#итог') &&
+    child(idsOff.ast, 'поле#итог').id === undefined &&
+    child(idsOff.ast, 'поле#итог').type === 'целое',
+    JSON.stringify(children(idsOff.ast).map(node => [node.key, node.id])));
+
+  const IDS_OFF_EN = build(join('! as ast', '! disable ids', '.поле#итог 5'));
+  check('! disable ids: англоязычный аналог отключает id',
+    !!child(IDS_OFF_EN.ast, 'поле#итог') &&
+    child(IDS_OFF_EN.ast, 'поле#итог').id === undefined,
+    JSON.stringify(children(IDS_OFF_EN.ast).map(node => [node.key, node.id])));
+
+  const IDS_OFF_LATE = build(join('! as ast', '.поле#итог 5', '! отключить идентификаторы'));
+  check('идентификаторы: директива действует на весь документ',
+    !!child(IDS_OFF_LATE.ast, 'поле#итог') &&
+    child(IDS_OFF_LATE.ast, 'поле#итог').id === undefined,
+    JSON.stringify(children(IDS_OFF_LATE.ast).map(node => [node.key, node.id])));
+
+  /* Поле `id` — не только для конвертеров: UI-форма берёт имя элемента из id. */
+  const idFormHost = document.createElement('div');
+  idFormHost.innerHTML = new UIGenerator(false).generateHTML(
+    build(join('! как форма', 'форма#f', '  поле#итог 5')).ast);
+  const idFormField = idFormHost.querySelector('[data-element-path="итог"]');
+  check('UI: id узла становится именем элемента формы',
+    !!idFormField,
+    idFormHost.innerHTML.slice(0, 200));
+
+  /* ------------------------------------------------------------------ */
   /* 2. Фрагмент кода                                                    */
   /* ------------------------------------------------------------------ */
   const CODE = join(
@@ -590,12 +659,38 @@ import { YarbpFlavor } from '../../src/js/classes/YarbpFlavor.js';
     unusedMacroHost.querySelectorAll('.ide-code-ref').length === 0,
     unusedMacroHost.innerHTML.slice(0, 160));
 
+  const idHighlightCode = join(
+    '! as ast',
+    ':группа#order:форма',
+    '  .поле#итог:целое 5'
+  );
+  const idHighlightHost = highlightedHost(idHighlightCode);
+  check('id: #id подсвечен цветом ссылок',
+    linkText(...idHighlightHost.querySelectorAll('.ide-code-id')).join(' ') ===
+      '#order #итог',
+    JSON.stringify(linkText(...idHighlightHost.querySelectorAll('.ide-code-id'))));
+  check('id: текст подсветки не изменился',
+    idHighlightHost.textContent === idHighlightCode);
+
+  const idsOffHighlightHost = highlightedHost(join(
+    '! as ast',
+    '! отключить идентификаторы',
+    '.поле#итог 5'
+  ));
+  check('id: при отключённых идентификаторах #id не красится',
+    idsOffHighlightHost.querySelectorAll('.ide-code-id').length === 0,
+    idsOffHighlightHost.innerHTML.slice(0, 200));
+
   try {
     const cssText = await (await fetch('../../src/css/editor.css')).text();
     check('ссылки: CSS-цвета светлой и тёмной темы',
       /\.ide-code-ref[^{]*\{[^}]*color:\s*#98542b/i.test(cssText) &&
       /body\.dark \.ide-code-ref[^{]*\{[^}]*color:\s*#f0c674/i.test(cssText),
       'нет цвета ссылок в editor.css');
+    check('id: цвет #id тот же, что у ссылок (светлая и тёмная тема)',
+      /\.ide-code-id[^{]*\{[^}]*color:\s*#98542b/i.test(cssText) &&
+      /body\.dark \.ide-code-id[^{]*\{[^}]*color:\s*#f0c674/i.test(cssText),
+      'нет цвета .ide-code-id в editor.css');
     check('ссылки: класса для параметров макроса в CSS больше нет',
       !cssText.includes('ide-code-macro-param'),
       'в editor.css остался .ide-code-macro-param');

@@ -4,6 +4,10 @@ export const COMMON_DIRECTIVES = {
     { label: 'as',  insert: 'as ',  doc: 'Value "as" — here you choose the converter' },
     { label: 'импорт', insert: 'импорт ', doc: 'Импорт объекта из файла: импорт <объект> из <файл>' },
     { label: 'типизация-сахара', insert: 'типизация-сахара($0) ', doc: 'Имена свойств и разделитель для сахара: типизация-сахара(<тег>) имя / имя' },
+    { label: 'отключить идентификаторы', insert: 'отключить идентификаторы',
+      doc: '`#id` в ключе остаётся частью ключа, а не полем id узла' },
+    { label: 'disable ids', insert: 'disable ids',
+      doc: 'Keep `#id` inside the key instead of the node id field' },
   ],
   values: {
     'как': {
@@ -60,5 +64,9 @@ export const DOCUMENT_DIRECTIVES = {
     { label: '! импорт', insert: '! импорт ', doc: 'Импортировать объект из другого файла' },
     { label: '! типизация-сахара', insert: '! типизация-сахара($0) ',
       doc: 'Имена свойств и разделитель для сахара: ! типизация-сахара(<тег>) имя / имя' },
+    { label: '! отключить идентификаторы', insert: '! отключить идентификаторы',
+      doc: '`#id` в ключе остаётся частью ключа, а не полем id узла' },
+    { label: '! disable ids', insert: '! disable ids',
+      doc: 'Keep `#id` inside the key instead of the node id field' },
   ],
 };

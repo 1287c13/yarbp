@@ -1,7 +1,7 @@
 import { YarbpLexer, TokenTypes } from './YarbpLexer.js';
 import { splitWithEscaping, dedentMultilineString } from '../utils/utils.js'
 import { expandMacros } from './macroPostprocess.js'
-import { applySugarTyping, applyImports } from './languageDirectives.js'
+import { applySugarTyping, applyImports, idsDisabled } from './languageDirectives.js'
 
 export const nodeTypes = Object.freeze({
   ROOT: 'ROOT',           /* single general root for document*/
@@ -27,6 +27,7 @@ class ASTNode {
   static attrs = Object.freeze({
     nodeType: 'parsedTokenType',  /* enum nodeTypes */
     key: 'key',                   /* node name if not anonymous */
+    id: 'id',                     /* node identifier from `#id` in the key */
     value: 'value',               /* node value used for primitives only else children are value */
     valueType: 'valueType',       /* enum valueTypes */
     language: 'language',         /* язык фрагмента кода (valueTypes.CODE) */
@@ -85,6 +86,9 @@ export class YarbpParser {
     this.tokens = [];
     this.idx = 0;
     this.AST = { };
+    /* `! отключить идентификаторы` выключает вынос `#id` в поле `id`.
+       Значение ставит `getAST()` перед обходом токенов. */
+    this.idsEnabled = true;
     // Кэш AST: за один пересчёт его просят дважды (подсказки и рендерер).
     this.cachedTokens = null;
     this.cachedAST = null;
@@ -100,6 +104,25 @@ export class YarbpParser {
        В AST не попадают, чтобы не менять golden-снимки и контракт конвертеров. */
     this.lastDiagnostics = [];
   };
+
+  /**
+   * Ключ узла и его идентификатор: `поле#итог` → `{key: 'поле', id: 'итог'}`.
+   *
+   * Разделитель — первый `#` в ключе. Пустые половины (`#итог`, `поле#`)
+   * идентификатором не считаются: ключ остаётся как есть, чтобы такие
+   * документы разбирались по-старому. При `! отключить идентификаторы`
+   * (`this.idsEnabled === false`) `#` тоже остаётся частью ключа.
+   *
+   * @returns {{key: string, id?: string}}
+   */
+  keyProps(value) {
+    const text = String(value ?? '');
+    const hash = this.idsEnabled ? text.indexOf('#') : -1;
+
+    if (hash <= 0 || hash === text.length - 1) return { key: text };
+
+    return { key: text.slice(0, hash), id: text.slice(hash + 1) };
+  }
 
   /** sequential processing of tokens and recursive calls to create a tree */
   traverse(root) {
@@ -139,7 +162,9 @@ export class YarbpParser {
           [TokenTypes.ARRAY]: valueTypes.ARRAY};
 
         root.nodeType = nodeTypes.MEANING;
-        root.key = token.value;
+        const keyProps = this.keyProps(token.value);
+        root.key = keyProps.key;
+        if (keyProps.id) root.id = keyProps.id;
         root.valueType = typeMap[token.type];
         root.prefix = token.prefix || '';
         root.position = { start: token.start, end: token.end };
@@ -148,12 +173,16 @@ export class YarbpParser {
       /** if a key for primitive value - start constructing a new node (key-value pair) */
       if (token.type === TokenTypes.PRIMITIVE) {
 
-        valueInConstructing = new ASTNode({
+        const keyProps = this.keyProps(token.value);
+        const nodeProps = {
           nodeType: nodeTypes.MEANING,
-          key: token.value,
+          key: keyProps.key,
           prefix: '.',
           position: { start: token.start, end: token.end }
-        });
+        };
+        if (keyProps.id) nodeProps.id = keyProps.id;
+
+        valueInConstructing = new ASTNode(nodeProps);
         isNestedKeyMet = true;
       } else
 
@@ -376,6 +405,11 @@ export class YarbpParser {
 
     this.idx = 0;
     this.AST = { root: new ASTNode({ nodeType: nodeTypes.ROOT }) };
+
+    /* `! отключить идентификаторы` / `! disable ids` — языковая директива:
+       решает, станет ли `#id` полем узла или останется частью ключа. Читаем до
+       обхода: директива действует на весь документ, где бы она ни стояла. */
+    this.idsEnabled = !idsDisabled(this.lexer?.tokens || [], this.lexer?.text || '');
 
     const ast = this.traverse(this.AST.root);
 
