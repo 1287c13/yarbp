@@ -52,6 +52,7 @@ classes/
 modules/
   FileManager.js         файлы, примеры, localStorage, импорт/экспорт
   CommentToggler.js      Ctrl+/ — комментирование строк
+  LineMover.js           Ctrl+Shift+↑/↓ — перенос строки или блока строк
 ```
 
 Направление зависимостей: `app.js` → `converters/registry.js` /

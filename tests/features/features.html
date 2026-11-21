@@ -1135,6 +1135,94 @@ import { unionOutlines, framePath } from '../../src/js/classes/highlighters/Flav
       !!popup && popup.hidden === true,
       popup ? String(popup.hidden) : 'нет popup');
 
+    /* Ctrl/Cmd+Shift+↑/↓: перенос строки или выделенного блока. */
+    const pressMove = async (key) => {
+      const event = new view.KeyboardEvent('keydown', {
+        key,
+        code: key,
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true
+      });
+      editor.dispatchEvent(event);
+      await new Promise(resolve => setTimeout(resolve, 60));
+      return event;
+    };
+
+    editor.value = 'one\ntwo\nthree';
+    editor.focus();
+    editor.setSelectionRange(5, 5);
+    editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+
+    const moveUpEvent = await pressMove('ArrowUp');
+    check('строки: Ctrl+Shift+↑ переносит текущую строку вверх',
+      editor.value === 'two\none\nthree', JSON.stringify(editor.value));
+    check('строки: Ctrl+Shift+↑ отменяет нативное поведение',
+      moveUpEvent.defaultPrevented);
+    check('строки: каретка остаётся в той же колонке после переноса вверх',
+      editor.selectionStart === 1 && editor.selectionEnd === 1,
+      editor.selectionStart + ':' + editor.selectionEnd);
+
+    await pressMove('ArrowDown');
+    check('строки: Ctrl+Shift+↓ возвращает строку на место',
+      editor.value === 'one\ntwo\nthree' &&
+      editor.selectionStart === 5 && editor.selectionEnd === 5,
+      JSON.stringify(editor.value) + ' @ ' +
+      editor.selectionStart + ':' + editor.selectionEnd);
+
+    editor.value = 'a\nb\nc\nd';
+    editor.focus();
+    editor.setSelectionRange(2, 6);
+    editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+
+    await pressMove('ArrowUp');
+    check('строки: выделенный блок переносится вверх целиком',
+      editor.value === 'b\nc\na\nd' &&
+      editor.selectionStart === 0 && editor.selectionEnd === 3 &&
+      editor.value.slice(editor.selectionStart, editor.selectionEnd) === 'b\nc',
+      JSON.stringify(editor.value) + ' / ' +
+      editor.selectionStart + ':' + editor.selectionEnd);
+
+    await pressMove('ArrowDown');
+    check('строки: выделенный блок возвращается вниз с сохранением выделения',
+      editor.value === 'a\nb\nc\nd' &&
+      editor.selectionStart === 2 && editor.selectionEnd === 5 &&
+      editor.value.slice(editor.selectionStart, editor.selectionEnd) === 'b\nc',
+      JSON.stringify(editor.value) + ' / ' +
+      editor.selectionStart + ':' + editor.selectionEnd);
+
+    editor.value = 'a\nb\nc';
+    editor.focus();
+    editor.setSelectionRange(2, 4);
+    editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+    await pressMove('ArrowUp');
+    check('строки: конец выделения в начале следующей строки не захватывает её',
+      editor.value === 'b\na\nc' &&
+      editor.selectionStart === 0 && editor.selectionEnd === 1 &&
+      editor.value.slice(editor.selectionStart, editor.selectionEnd) === 'b',
+      JSON.stringify(editor.value) + ' / ' +
+      editor.selectionStart + ':' + editor.selectionEnd);
+
+    editor.value = 'one\ntwo';
+    editor.focus();
+    editor.setSelectionRange(0, 0);
+    editor.dispatchEvent(new view.Event('input', { bubbles: true }));
+    const firstLineUp = await pressMove('ArrowUp');
+    check('строки: первая строка не уезжает выше документа',
+      editor.value === 'one\ntwo' && editor.selectionStart === 0,
+      JSON.stringify(editor.value));
+    check('строки: на границе Ctrl+Shift+↑ всё равно отменяет нативное поведение',
+      firstLineUp.defaultPrevented);
+
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+    await pressMove('ArrowDown');
+    check('строки: последняя строка не уезжает ниже документа',
+      editor.value === 'one\ntwo' &&
+      editor.selectionStart === editor.value.length &&
+      editor.selectionEnd === editor.value.length,
+      JSON.stringify(editor.value));
+
     editor.value = join(
       '! как бпмн',
       'процесс = П',

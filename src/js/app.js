@@ -6,6 +6,7 @@ import { CodeBlockHighlightPass } from './classes/highlighters/CodeBlockHighligh
 import { drawFlavorFrames } from './classes/highlighters/FlavorFrames.js';
 import { FileManager } from './modules/FileManager.js';
 import { toggleLineComments } from './modules/CommentToggler.js';
+import { moveLines } from './modules/LineMover.js';
 
 import { SuggestionProvider } from './suggestions/SuggestionProvider.js';
 import { SuggestionUI } from './suggestions/SuggestionUI.js';
@@ -718,6 +719,22 @@ if (textarea) {
   textarea.addEventListener('keydown', (e) => {
     // Запрет после Tab одноразовый и живёт до следующей клавиши: любая другая клавиша — это уже осознанный ввод, и…
     if (e.key !== 'Tab') skipSuggestionsOnce = false;
+
+    // Ctrl/Cmd+Shift+↑/↓ — перенос текущей строки или выделенного блока.
+    // Обрабатываем до меню подсказок: иначе ArrowUp/ArrowDown достанутся ему.
+    const isMoveLines = (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey &&
+      (e.key === 'ArrowUp' || e.key === 'ArrowDown');
+
+    if (isMoveLines) {
+      e.preventDefault();
+      YarbpAppGlobals.suggestionUI.hide();
+
+      if (moveLines(textarea, e.key === 'ArrowUp' ? 'up' : 'down')) {
+        skipSuggestionsOnce = true;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return;
+    }
 
     if (YarbpAppGlobals.suggestionUI.handleKey(e)) return;
 
