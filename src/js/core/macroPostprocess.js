@@ -249,6 +249,14 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
       param && param.key && !namedNames.has(param.key));
     let positionalIndex = 0;
 
+    const takeParam = (name) => {
+      let param = params.get(name);
+      if (!param && positionalIndex < availablePositional.length) {
+        param = availablePositional[positionalIndex++];
+      }
+      return param;
+    };
+
     const stack = [{ node: body, parent: null, index: -1, isProcessed: false }];
     const resultMap = new Map();
 
@@ -259,9 +267,26 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
       if (isProcessed) {
         let newNode = clone(node);
         // У объектного узла значение может быть шорткатом: `@макро = (( имя ))`.
+        // Подставляем и именованный, и позиционный аргумент, иначе шорткат
+        // остаётся плейсхолдером и сахар получает `(( имя ))` вместо значения.
         if (node.valueType !== 'CODE' && typeof node.value === 'string'
             && isPurePlaceholder(node.value)) {
-          newNode.value = replaceInString(node.value, params);
+          const name = getPlaceholderName(node.value);
+          const param = takeParam(name);
+          if (param) {
+            if (param.valueType === 'CODE') {
+              newNode.valueType = 'CODE';
+              newNode.value = param.value;
+              newNode.language = param.language ?? null;
+            } else if (param.valueType === 'OBJECT' || param.valueType === 'ARRAY') {
+              newNode.valueType = param.valueType;
+              newNode.prefix = param.prefix || newNode.prefix;
+              delete newNode.value;
+              newNode.children = (param.children || []).map(clone);
+            } else {
+              newNode.value = String(param.value ?? '');
+            }
+          }
         }
         if (node.children && Array.isArray(node.children)) {
           const newChildren = [];
@@ -283,13 +308,7 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
         const val = node.value;
         if (isPurePlaceholder(val)) {
           const name = getPlaceholderName(val);
-          let param = params.get(name);
-
-          /* Нет именованного аргумента — берём следующий свободный
-             аргумент вызова (позиционная подстановка в массив). */
-          if (!param && positionalIndex < availablePositional.length) {
-            param = availablePositional[positionalIndex++];
-          }
+          const param = takeParam(name);
 
           if (param) {
             if (param.valueType === 'CODE') {

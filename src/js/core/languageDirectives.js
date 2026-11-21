@@ -165,7 +165,8 @@ export function applySugarTyping(ast, options = {}) {
     // Синтетические свойства этого прохода не разворачиваем повторно: иначе глобальное правило применяется к самому себе…
     if (synthetic.has(node)) return;
 
-    const sugarValue = typeof node.value === 'string' &&
+    const sugarValue = node.valueType !== 'CODE' &&
+      typeof node.value === 'string' &&
       (node.prefix !== '.' || node.value.startsWith('='));
 
     if (node.nodeType === MEANING && sugarValue) {

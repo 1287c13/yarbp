@@ -143,6 +143,65 @@ import { unionOutlines, framePath } from '../../src/js/classes/highlighters/Flav
   check('макросы: ключ нулевого уровня с тем же именем не подменяет параметр',
     !!child(macro.ast, 'id') && child(macro.ast, 'id').value === 'root',
     JSON.stringify(child(macro.ast, 'id')));
+
+  /* Макрос + сахар: шорткат объекта получает позиционный аргумент,
+     а код-фрагменты не должны разворачиваться сахаром. */
+  const MACRO_SUGAR = join(
+    '! as json',
+    '! разбор-сахара id / type / value / details',
+    '',
+    '@макро =  (( имя ))',
+    '  .наследуемое что то наследуемое',
+    '  ..обработчики',
+    '          (( обработчики ))',
+    '',
+    'объект(макро)',
+    '  ..обработчики',
+    '    (( обработчик-1 ))',
+    '    (( обработчик-2 ))',
+    '  .свойства-строкой 1 / \'bool\' / да / null',
+    '',
+    '.обработчик-1',
+    '```bsl',
+    'Сообщить("Привет!");',
+    '```',
+    '',
+    '.обработчик-2',
+    '`js',
+    "console.log('hey!');",
+    '`'
+  );
+  const macroSugar = build(MACRO_SUGAR);
+  const sugarObject = child(macroSugar.ast, 'объект');
+  const sugarHandlers = child(sugarObject, 'обработчики');
+
+  check('макрос + сахар: обработчики остались CODE-фрагментами',
+    !!sugarHandlers && children(sugarHandlers).length === 2 &&
+    children(sugarHandlers).every(node => node.valueType === valueTypes.CODE),
+    sugarHandlers ? JSON.stringify(children(sugarHandlers).map(node => node.valueType)) : 'нет массива');
+  check('макрос + сахар: код обработчиков не потерян',
+    !!sugarHandlers &&
+    String(children(sugarHandlers)[0].value).includes('Сообщить') &&
+    String(children(sugarHandlers)[1].value).includes("console.log('hey!')"),
+    sugarHandlers ? JSON.stringify(children(sugarHandlers).map(node => node.value)) : 'нет массива');
+  check('макрос + сахар: позиционный аргумент разобран в id/type/value/details',
+    !!sugarObject &&
+    child(sugarObject, 'id')?.value === 1 &&
+    child(sugarObject, 'type')?.value === 'bool' &&
+    child(sugarObject, 'value')?.value === true &&
+    child(sugarObject, 'details')?.value === null,
+    sugarObject ? JSON.stringify(children(sugarObject).map(node => [node.key, node.value])) : 'нет объекта');
+  const macroSugarJson = new YarbpJSONConverter(macroSugar.ast).convert();
+  check('макрос + сахар: JSON содержит код и разобранный сахар',
+    !!macroSugarJson.объект &&
+    macroSugarJson.объект.обработчики.length === 2 &&
+    macroSugarJson.объект.обработчики[0].includes('Сообщить') &&
+    macroSugarJson.объект.id === 1 &&
+    macroSugarJson.объект.type === 'bool' &&
+    macroSugarJson.объект.value === true &&
+    macroSugarJson.объект.details === null,
+    JSON.stringify(macroSugarJson));
+
   /* ------------------------------------------------------------------ */
   /* 1b. Идентификатор узла `#id`                                        */
   /* ------------------------------------------------------------------ */
