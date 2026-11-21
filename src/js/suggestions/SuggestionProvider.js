@@ -20,10 +20,12 @@ export class SuggestionProvider {
     const source = text ?? '';
     if (this.isInsideCodeBlock(tokens, cursorOffset)) return null;
 
+    const language = this.detectLanguage(tokens, source);
+
     // Уже распознанная директива: подсказки по директивам работают при любом конвертере, в том числе без собственного словаря.
     const directive = this.findDirectiveAt(tokens, cursorOffset, source);
     if (directive) {
-      return this.resolveDirectiveContext(directive, cursorOffset, source);
+      return this.resolveDirectiveContext(directive, cursorOffset, source, language);
     }
 
     const config = flavor?.flavorData?.suggestions;
@@ -32,23 +34,40 @@ export class SuggestionProvider {
     const lineStart = source.lastIndexOf('\n', cursorOffset - 1) + 1;
     const lineBefore = source.slice(lineStart, cursorOffset);
     if (/^\s*!/.test(lineBefore)) {
-      return this.resolveDocumentContext(cursorOffset, source, force);
+      return this.resolveDocumentContext(cursorOffset, source, force, language);
     }
 
     // У конвертера нет словаря контекстных подсказок (`json`, `xml`, `ast`, `openapi`, `мермейд`, …).
     if (!config) {
       if (!this.isAtEmptyFileStart(source, cursorOffset)) return null;
-      return this.resolveDocumentContext(cursorOffset, source, force);
+      return this.resolveDocumentContext(cursorOffset, source, force, language);
     }
 
     if (ast) {
-      return this.resolveFlavorContext(ast, cursorOffset, source, config, force);
+      return this.resolveFlavorContext(ast, cursorOffset, source, config, force, language);
     }
 
     // AST не собрался — контекст недоступен.
     if (!this.isAtEmptyFileStart(source, cursorOffset)) return null;
 
-    return this.resolveDocumentContext(cursorOffset, source, force);
+    return this.resolveDocumentContext(cursorOffset, source, force, language);
+  }
+
+  /**
+   * Язык выбранной директивы: `! как …` — русский, `! as …` — английский.
+   * Смотрим токены, затем текст: подсказки должны работать и до того, как
+   * app.js успел пересобрать flavor.
+   */
+  detectLanguage(tokens, text) {
+    for (const token of tokens || []) {
+      if (token.type !== TokenTypes.DIRECTIVE) continue;
+      const match = String(token.value ?? '').match(/^\s*(as|как)(?=[\s\-_]|$)/i);
+      if (match) return match[1].toLowerCase() === 'as' ? 'en' : 'ru';
+    }
+
+    const match = String(text ?? '').match(/^\s*!\s*(as|как)(?=[\s\-_]|$)/im);
+    if (!match) return null;
+    return match[1].toLowerCase() === 'as' ? 'en' : 'ru';
   }
 
   // В документе нет ничего, кроме пробельных символов.
@@ -102,7 +121,7 @@ export class SuggestionProvider {
     return i;
   }
 
-  resolveDirectiveContext(token, cursorOffset, text) {
+  resolveDirectiveContext(token, cursorOffset, text, language = null) {
     const valueStart = this.directiveValueStart(token, text);
     const valueUpToCursor = text.slice(valueStart, cursorOffset);
     const parts = valueUpToCursor.split(' ').filter(Boolean);
@@ -114,7 +133,7 @@ export class SuggestionProvider {
 
     if (parts.length === 0 || (parts.length === 1 && !endsWithSpace)) {
       const prefix = parts[0] ?? '';
-      const variants = this.matchVariants(COMMON_DIRECTIVES.names, prefix);
+      const variants = this.matchVariants(COMMON_DIRECTIVES.names, prefix, language);
       if (!variants.length) return null;
 
       // Пользователь мог набрать `!к` без пробела.
@@ -132,15 +151,21 @@ export class SuggestionProvider {
     }
 
     const directiveName = parts[0];
-    if (directiveName.toLowerCase() === 'импорт') {
+    const directiveKey = directiveName.toLowerCase();
+    if (directiveKey === 'импорт') {
       return this.resolveImportDirectiveContext(token, cursorOffset, text);
     }
 
-    const entry = COMMON_DIRECTIVES.values[directiveName];
+    const entry = COMMON_DIRECTIVES.values[directiveKey];
     if (!entry) return null;
 
+    const entryLanguage = directiveKey === 'as'
+      ? 'en'
+      : directiveKey === 'как'
+        ? 'ru'
+        : language;
     const prefix = endsWithSpace ? '' : (parts[parts.length - 1] ?? '');
-    const variants = this.matchVariants(entry.variants, prefix);
+    const variants = this.matchVariants(entry.variants, prefix, entryLanguage);
     if (!variants.length) return null;
 
     return {
@@ -191,7 +216,7 @@ export class SuggestionProvider {
     };
   }
 
-  resolveDocumentContext(cursorOffset, text, force) {
+  resolveDocumentContext(cursorOffset, text, force, language = null) {
     const lineStart = text.lastIndexOf('\n', cursorOffset - 1) + 1;
     const lineBefore = text.slice(lineStart, cursorOffset);
     const isLineStart = !lineBefore.trim();
@@ -211,7 +236,7 @@ export class SuggestionProvider {
     if (!force && !/^\s*!/.test(lineBefore)) return null;
 
     const { from, word } = this.currentWord(text, cursorOffset);
-    const variants = this.matchVariants(DOCUMENT_DIRECTIVES.variants, word);
+    const variants = this.matchVariants(DOCUMENT_DIRECTIVES.variants, word, language);
     if (!variants.length) return null;
 
     // Варианты этой ветки включают `!` («! как»).
@@ -229,7 +254,7 @@ export class SuggestionProvider {
   }
 
 
-  resolveFlavorContext(ast, cursorOffset, text, config, force) {
+  resolveFlavorContext(ast, cursorOffset, text, config, force, language = null) {
     const ctx = resolveContext(ast, cursorOffset, text);
     if (!ctx) return null;
 
@@ -259,7 +284,7 @@ export class SuggestionProvider {
         const wholeValue = childNode.replace !== false && !childNode.quantifier;
         const prefix = wholeValue ? this.valuePrefix(ctx, text, cursorOffset) : word;
         const replaceFrom = wholeValue ? (ctx.valueStart ?? from) : from;
-        const filtered = this.matchVariants(childNode.variants ?? [], prefix);
+        const filtered = this.matchVariants(childNode.variants ?? [], prefix, language);
         if (!filtered.length) return null;
         return {
           suggestions: filtered,
@@ -284,7 +309,7 @@ export class SuggestionProvider {
         const wholeValue = valueEntry.replace !== false && !valueEntry.quantifier;
         const prefix = wholeValue ? raw : word;
         const replaceFrom = wholeValue ? (ctx.valueStart ?? from) : from;
-        const filtered = this.matchVariants(valueEntry.variants ?? [], prefix);
+        const filtered = this.matchVariants(valueEntry.variants ?? [], prefix, language);
         if (!filtered.length) return null;
 
         return {
@@ -301,7 +326,7 @@ export class SuggestionProvider {
     }
 
     if (ctx.slot === 'key' && node) {
-      const filtered = this.matchVariants(node.variants ?? [], word);
+      const filtered = this.matchVariants(node.variants ?? [], word, language);
       if (!filtered.length) return null;
 
       // Внутри строки-объекта (`:`) новый `:` — это соседняя строка, а не вложенная.
@@ -326,7 +351,7 @@ export class SuggestionProvider {
 
     if (ctx.slot === 'key' && !ctx.anonymous && ctx.parentKey === null &&
         config.root) {
-      const filtered = this.matchVariants(config.root.variants ?? [], word);
+      const filtered = this.matchVariants(config.root.variants ?? [], word, language);
       if (!filtered.length) return null;
       return {
         suggestions: filtered,
@@ -375,12 +400,48 @@ export class SuggestionProvider {
     return i - lineStart;
   }
 
-  // Ранжирование вариантов по набранному префиксу (не фильтрация).
-  matchVariants(variants, prefix) {
-    if (!prefix) return variants;
+  // Язык/алфавит подсказки: `en` для латиницы, `ru` для кириллицы.
+  scriptOf(value) {
+    const text = String(value ?? '');
+    const first = text.match(/[A-Za-zА-Яа-яЁё]/);
+    if (!first) return null;
+    return /[A-Za-z]/.test(first[0]) ? 'en' : 'ru';
+  }
+
+  variantMatchesScript(variant, language) {
+    if (!variant || !language) return true;
+    if (variant.language === 'both' || variant.language === language) return true;
+
+    // Алфавит определяем по видимой подписи и алиасам, а не по `insert`:
+    // вставка может содержать латинский код (`js`, `$0`) у русского ключа.
+    const values = [variant.label, ...(variant.aliases || [])];
+    const scripts = values.map(value => this.scriptOf(value)).filter(Boolean);
+    if (scripts.length) return scripts.includes(language);
+
+    // Пунктуация (`:`, `.`, `..`) и технические вставки без букв нужны в любом языке.
+    const insertScript = this.scriptOf(variant.insert);
+    return !insertScript || insertScript === language;
+  }
+
+  // Ранжирование вариантов по набранному префиксу (не фильтрация по подстроке).
+  // Алфавит — дешёвый фильтр: словари небольшие, O(n) на список в пределах
+  // десятков элементов. Если в словаре нет вариантов нужного алфавита
+  // (например, контекстные ключи пока только русские), показываем исходный
+  // список, чтобы подсказки не пропали совсем.
+  matchVariants(variants, prefix, language = null) {
+    // Выбранный `как`/`as` задаёт язык; до выбора — алфавит набранного префикса.
+    const script = language || this.scriptOf(prefix);
+    let source = variants;
+
+    if (script) {
+      const filtered = variants.filter(variant => this.variantMatchesScript(variant, script));
+      if (filtered.length) source = filtered;
+    }
+
+    if (!prefix) return source;
 
     const p = this.normalize(prefix);
-    const scored = variants.map((variant, index) => {
+    const scored = source.map((variant, index) => {
       const label = this.normalize(variant.label);
       const aliases = (variant.aliases || []).map(alias => this.normalize(alias));
 

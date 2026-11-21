@@ -488,7 +488,8 @@ check('Alt: список раскрыт, а не пустая рамка', listV
 check('в пустом документе предлагаются директивы',
   items.includes('! как') && items.includes('! импорт') &&
   items.includes('! разбор-сахара') &&
-  items.includes('! отключить идентификаторы') && items.includes('! disable ids'),
+  items.includes('! отключить идентификаторы') && items.includes('! disable ids') &&
+  items[0] === '! как' && items[1] === '! as',
   items.join(' | '));
 
 await press('Escape', {}, 160);
@@ -703,8 +704,11 @@ check('в списке после «!» шесть директив', items.leng
 await type('к');
 await wait(300);
 items = labels();
-check('ввод «к» поднимает директиву «как», не сужая список',
-  items.length === 6 && items[0] === 'как', items.join(' | '));
+check('ввод «к» оставляет только кириллические директивы и поднимает «как»',
+  items.length === 4 && items[0] === 'как' &&
+  items.includes('импорт') && items.includes('разбор-сахара') &&
+  items.includes('отключить идентификаторы') && !items.includes('as'),
+  items.join(' | '));
 
 await press('Tab', {}, 250);
 expectText('директива вставлена целиком', '! как ');
@@ -732,6 +736,40 @@ check('уточнение «орма-т» ставит «форма-тсд» п�
 await press('Tab', {}, 250);
 expectText('конвертер вставлен с переводом строки',
   '! как форма-тсд\n');
+
+/* Выбранный английский вариант должен переключить подсказки на латиницу. */
+editor.value = '';
+editor.setSelectionRange(0, 0);
+fireInput();
+await wait(220);
+await type('! as ');
+opened = await waitState('list');
+await waitLabels('json');
+items = labels();
+check('после «! as » предложены английские конвертеры',
+  opened && items.includes('json') && items.includes('xml') &&
+  !items.includes('джейсон') && !items.includes('хмл') &&
+  items.every(item => !/[А-Яа-яЁё]/.test(item)),
+  menuState() + ': ' + items.join(' | '));
+
+/* Латиница в начале документа оставляет только латинские директивы. */
+editor.value = '';
+editor.setSelectionRange(0, 0);
+fireInput();
+await wait(220);
+await type('! a');
+await waitLabels('! as');
+items = labels();
+const latinDirectives = items.map(item => item.replace(/^!\s*/, ''));
+check('латинский префикс фильтрует русские директивы',
+  latinDirectives.includes('as') && latinDirectives.includes('disable ids') &&
+  !latinDirectives.includes('как') && !latinDirectives.includes('импорт'),
+  menuState() + ': ' + items.join(' | '));
+
+editor.value = '! как форма-тсд\n';
+editor.setSelectionRange(editor.value.length, editor.value.length);
+fireInput();
+await wait(220);
 
 await expectHint('строка после директивы');
 await press('Tab', {}, 180);
