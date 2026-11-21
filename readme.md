@@ -1621,47 +1621,13 @@ JS-прогоны через `quickjs` удалены — проект и тес
 
 ### Архитектура
 
-#### Компоненты
+#### Целевая схема компонентов
 
-Актуальная схема. Исторические картинки `components.png`/`seq.png` остались в
-`notes/design/render_examples/`, но код уже другой — ниже то, что есть сейчас.
+![компоненты](notes/design/render_examples/components.png)
 
-```mermaid
-flowchart TB
-  U[Пользователь] --> APP[index.html + app.js]
+#### Сиквенс текущей реализации редактора
 
-  APP --> FM[FileManager<br/>localStorage, примеры, импорт/экспорт]
-  APP --> LEX[YarbpLexer]
-  LEX --> HL[YarbpHighlighter<br/>подсветка, linkRanges]
-  LEX --> PAR[YarbpParser]
-  PAR --> MAC[macroPostprocess]
-  PAR --> DIR[languageDirectives]
-  MAC --> AST[AST<br/>deepFreeze]
-  DIR --> AST
-  LEX --> SUG[SuggestionProvider + SuggestionUI]
-  AST --> SUG
-  SUG --> DOM[DOM редактора]
-
-  AST --> REG[registry.js<br/>YarbpFlavor]
-  REG --> CONV[converters/*<br/>json, xml, protobuf, ui, xpm, bpmn,<br/>openapi, json-schema, mermaid, flexforms]
-  CONV --> SH[converters/shared]
-  CONV --> REND[renderer.js<br/>панель результата]
-  REND --> DOM
-  APP --> PREV[preview/host.html<br/>iframe для FlexForms]
-  REND --> PREV
-  REND --> EXP[выгрузки<br/>HTML / JSON / BPMN / мок-сервер]
-  FM --> LS[(localStorage)]
-  FM --> FILES[.yarbp и проект JSON]
-```
-
-Ключевые свойства:
-
-- сборки нет: `src/` — поставка, запускается через HTTP-сервер;
-- выбранный конвертер грузится первым (`loadRenderer`), остальные —
-  последовательно в фоне после первого рендера (`prefetchFlavors`);
-- UI, XPM, BPMN, FlexForms, OpenAPI, JSON Schema и Mermaid — ленивые;
-- `core/` не зависит от DOM и конвертеров, конвертеры не импортируют чужие
-  каталоги (только `shared/`).
+![сиквенс](notes/design/render_examples/seq.png)
 
 #### Структура конвертеров
 
@@ -1685,49 +1651,148 @@ converters/<id>/
 переезда старых путей: [`src/js/converters/README.md`](src/js/converters/README.md).
 
 
-#### Последовательность
+<details>
+<summary>Исходники PlantUML</summary>
 
-```mermaid
-sequenceDiagram
-    actor U as Пользователь
-    participant A as app.js
-    participant F as FileManager
-    participant L as YarbpLexer
-    participant P as YarbpParser
-    participant H as YarbpHighlighter
-    participant R as registry / YarbpFlavor
-    participant C as converter / renderer
-    participant D as DOM / панель
+```plantuml
+@startuml
+!include <C4/C4_Container>
 
-    U->>A: открыть index.html
-    A->>F: init(...)
-    F->>F: активный файл (?example / localStorage / default)
-    F-->>A: текст
-    A->>L: setInitialState + tokenize
-    L-->>A: tokens
-    A->>P: getAST()
-    P->>P: macroPostprocess + languageDirectives
-    P-->>A: AST (deepFreeze)
-    A->>H: highlight()
-    H-->>A: HTML подсветки
-    A->>R: первая директива ! как
-    R-->>A: flavorData
-    A->>C: loadRenderer() — выбранный первым
-    C-->>A: renderer
-    A->>C: render(AST)
-    C-->>D: HTML/XML/SVG/форма
-    Note over A,C: после первого рендера + load + idle
-    A->>R: prefetchFlavors({ exclude })
-    R->>C: остальные loadRenderer() по одному
+skinparam ranksep 10
 
-    U->>A: input
-    A->>L: tokenize
-    A->>P: getAST()
-    A->>H: highlight
-    A->>C: render(AST)
-    A->>F: автосохранение / localStorage
+actor Пользователь
+
+component "Текст" as Text
+component "Лексер" as Lexer
+component "AST Парсер" as ASTParser
+
+package "Конверторы" <<Контейнер>> {
+    component "json" as JSONVanilla
+    component "json5-strict" as JSON5Strict
+    component "json5-friendly" as JSON5Friendly
+    component "XML" as XML
+    component "BPMN" as BPMN
+    component "UI-mockup-SVG" as SVG
+    component "UI-mockup-HTML" as HTML
+    component "flex-form" as FlexForm
+    component "Protobuf" as Protobuf
+}
+
+component "Подсветка (Highlighter)" as Highlighter
+component "DOM" as DOM
+component "SuggestionProvider" as SuggestionProvider
+
+Пользователь --> Text : вводит текст
+Text --> Lexer : передаём текст
+Lexer --> ASTParser : токены
+Lexer --> Highlighter
+ASTParser --> "Конверторы" : AST
+
+Highlighter --> DOM : оборачивает токены в классы и рендерит DOM
+DOM --> SuggestionProvider : flavor (контекст привязанный к директивам конвертера)
+SuggestionProvider --> Пользователь : контекстные подсказки,\nдокументация
+"Конверторы" --> DOM : "рендер целевого представления"
+
+@enduml
 ```
 
+```plantuml
+@startuml
+!theme plain
+actor User
+participant "App" as App
+participant "YarbpLexer" as Lexer
+participant "YarbpHighlighter" as Highlighter
+participant "YarbpFlavor" as Flavor
+participant "Renderer" as Renderer
+participant "Ticker" as Ticker
+participant "YarbpParser" as Parser
+
+User -> App ++: запуск приложения
+App -> App: создание лексера, \nпарсера, хайлайтера и тикера\nв контексте приложения
+
+App -> Lexer: setInitialState()
+activate Lexer
+deactivate Lexer
+
+User -> App: ввод текста
+
+deactivate Lexer
+
+App -> Lexer: tokenize(text)
+activate Lexer
+Lexer -> Lexer: формирование (полное \nили инкрементальное)\ntokens
+deactivate Lexer
+
+App -> Highlighter: highlight(text, tokens)
+activate Highlighter
+Highlighter <--> Lexer: чтение токенов \n(доступ через \nконтекст приложения)
+Highlighter -> Highlighter: генерация\nподсветки
+Highlighter --> App: HTML для подсветки
+App --> User: отображение подсветки
+deactivate Highlighter
+
+App -> Lexer: findFirstDirective()
+activate Lexer
+Lexer --> App: directiveToken
+deactivate Lexer
+
+alt директива найдена
+    App -> Flavor: new YarbpFlavor(directiveValue)
+    activate Flavor
+    Flavor -> Flavor: getFlavorData()
+    Flavor --> App: flavorData \n(содержит класс рендерера)
+    deactivate Flavor
+
+    alt флейвор изменился или отсутствует
+        App -> Renderer: создать или обновить \nэкземпляр рендерера
+        activate Renderer
+        Renderer --> App: renderer instance
+        deactivate Renderer
+
+        App -> Lexer: setObserver(renderer)
+        activate Lexer
+        Lexer -> Lexer: сохранить ссылку \nна renderer
+        Lexer --> App: ok
+        deactivate Lexer
+
+        App -> App: запомнить текущий флейвор и рендерер
+    else флейвор не изменился
+        App -> App: использовать существующий рендерер
+    end
+end
+
+activate Lexer
+...  ...
+Lexer -> Lexer ++ : при изменении tokens\nили внешнем вызове \nnotifyObservers()
+Lexer -> Renderer --++: call()
+
+alt тяжёлый рендеринг
+
+    Renderer -> Renderer: scheduleRender()\n(установить таймер, \nвзвести флаг)
+    ...  ...
+    Ticker -> Renderer : tick()
+
+end
+      Renderer -> Parser ++ : getAST()
+      Parser <--> Lexer : получить tokens
+      Parser -> Parser : generateAST()
+      Parser --> Renderer : вернуть AST
+
+    Renderer -> Renderer: performRender()
+
+Renderer -> Renderer: обновить представление
+Renderer --> App: HTML рендер
+deactivate Renderer
+deactivate Lexer
+
+App --> User: отображение обновлённого вывода
+deactivate App
+
+@enduml
+```
+
+</details>
 
 ---
 
