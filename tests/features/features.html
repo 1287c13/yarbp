@@ -144,7 +144,7 @@ import { unionOutlines, framePath } from '../../src/js/classes/highlighters/Flav
     !!child(macro.ast, 'id') && child(macro.ast, 'id').value === 'root',
     JSON.stringify(child(macro.ast, 'id')));
 
-  /* Макрос + сахар: шорткат объекта получает позиционный аргумент,
+  /* Макрос + сахар: шорткат объекта получает аргумент строго по имени,
      а код-фрагменты не должны разворачиваться сахаром. */
   const MACRO_SUGAR = join(
     '! as json',
@@ -159,7 +159,7 @@ import { unionOutlines, framePath } from '../../src/js/classes/highlighters/Flav
     '  ..обработчики',
     '    (( обработчик-1 ))',
     '    (( обработчик-2 ))',
-    '  .свойства-строкой 1 / \'bool\' / да / null',
+    '  .имя 1 / \'bool\' / да / null',
     '',
     '.обработчик-1',
     '```bsl',
@@ -184,7 +184,7 @@ import { unionOutlines, framePath } from '../../src/js/classes/highlighters/Flav
     String(children(sugarHandlers)[0].value).includes('Сообщить') &&
     String(children(sugarHandlers)[1].value).includes("console.log('hey!')"),
     sugarHandlers ? JSON.stringify(children(sugarHandlers).map(node => node.value)) : 'нет массива');
-  check('макрос + сахар: позиционный аргумент разобран в id/type/value/details',
+  check('макрос + сахар: именованный аргумент разобран в id/type/value/details',
     !!sugarObject &&
     child(sugarObject, 'id')?.value === 1 &&
     child(sugarObject, 'type')?.value === 'bool' &&
@@ -201,6 +201,87 @@ import { unionOutlines, framePath } from '../../src/js/classes/highlighters/Flav
     macroSugarJson.объект.value === true &&
     macroSugarJson.объект.details === null,
     JSON.stringify(macroSugarJson));
+
+  /* Анонимный объект: `:(макро)` даёт массив объектов без ключа. */
+  const MACRO_ANON = join(
+    '! as json',
+    '! разбор-сахара id / type / value / details',
+    '',
+    '@переиспользуемый-объект = (( свойства-строкой ))',
+    '  .наследуемое что то наследуемое',
+    '  ..обработчики',
+    '    (( обработчики ))',
+    '',
+    ':(переиспользуемый-объект)',
+    '  ..обработчики',
+    '    (( обработчик-1 ))',
+    '    ```js',
+    '    (() => {})();',
+    '    ```',
+    '  .свойства-строкой 1 / \'bool\' / да / null',
+    '',
+    ':(переиспользуемый-объект)',
+    '  ..обработчики',
+    '    (( обработчик-2 ))',
+    '  .свойства-строкой 2 / \'bool\' / нет / \'some details\'',
+    '',
+    '.обработчик-1',
+    '```bsl',
+    'Сообщить("Привет!");',
+    '```',
+    '',
+    '.обработчик-2',
+    '`js',
+    "console.log('hey!');",
+    '`'
+  );
+  const macroAnon = build(MACRO_ANON);
+  const macroAnonJson = new YarbpJSONConverter(macroAnon.ast).convert();
+
+  check('анонимный макрос: получился массив из двух объектов',
+    Array.isArray(macroAnonJson) && macroAnonJson.length === 2 &&
+    macroAnonJson.every(item => item && typeof item === 'object' && !Array.isArray(item)),
+    JSON.stringify(macroAnonJson).slice(0, 300));
+  check('анонимный макрос: первый объект собрал код и сахар',
+    !!macroAnonJson[0] &&
+    macroAnonJson[0].обработчики.length === 2 &&
+    macroAnonJson[0].обработчики[0].includes('Сообщить') &&
+    macroAnonJson[0].обработчики[1].includes('(() => {})();') &&
+    macroAnonJson[0].id === 1 &&
+    macroAnonJson[0].value === true,
+    JSON.stringify(macroAnonJson[0]));
+  check('анонимный макрос: второй объект собрал код и сахар',
+    !!macroAnonJson[1] &&
+    macroAnonJson[1].обработчики.length === 1 &&
+    macroAnonJson[1].обработчики[0].includes("console.log('hey!')") &&
+    macroAnonJson[1].id === 2 &&
+    macroAnonJson[1].value === false &&
+    macroAnonJson[1].details === 'some details',
+    JSON.stringify(macroAnonJson[1]));
+
+  /* Строгая подстановка: `(( имя ))` не получает первый попавшийся аргумент. */
+  const MACRO_NO_ALIAS = join(
+    '! as json',
+    '! разбор-сахара id / type / value / details',
+    '',
+    '@м = (( имя ))',
+    '  .наследуемое что то наследуемое',
+    '',
+    ':(м)',
+    '  .свойства-строкой 1 / \'bool\' / да / null'
+  );
+  const noAlias = build(MACRO_NO_ALIAS);
+  const noAliasJson = new YarbpJSONConverter(noAlias.ast).convert();
+  const noAliasItem = Array.isArray(noAliasJson) ? noAliasJson[0] : noAliasJson;
+
+  check('строгая подстановка: имя не берётся позиционно',
+    !!noAliasItem && noAliasItem.id === undefined &&
+    noAliasItem['свойства-строкой'] === "1 / 'bool' / да / null",
+    JSON.stringify(noAliasJson));
+  check('строгая подстановка: отсутствие аргумента видно в диагностике',
+    noAlias.parser.lastDiagnostics.some(item =>
+      /нет аргумента «имя»/.test(item.message)),
+    JSON.stringify(noAlias.parser.lastDiagnostics));
 
   /* ------------------------------------------------------------------ */
   /* 1b. Идентификатор узла `#id`                                        */

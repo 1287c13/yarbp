@@ -11,7 +11,7 @@ export const LinkCSSClasses = Object.freeze({
 });
 
 const MACRO_DEFINITION = /^@[\p{L}\p{N}_-]+$/u;
-const MACRO_CALL = /^([\p{L}\p{N}_-]+)(?:\(([\p{L}\p{N}_-]+)\))?$/u;
+const MACRO_CALL = /^(?:([\p{L}\p{N}_-]+)\(([\p{L}\p{N}_-]+)\)|\(([\p{L}\p{N}_-]+)\)|([\p{L}\p{N}_-]+))$/u;
 const PLACEHOLDER = /\(\(\s*([^\s()]+)\s*\)\)/g;
 
 const KEY_TYPES = new Set([
@@ -107,7 +107,8 @@ export function collectLinkRanges(tokens, sourceText) {
   const isMacroCall = (token) => {
     if (token.type !== TokenTypes.OBJECT) return false;
     const match = token.value.match(MACRO_CALL);
-    return Boolean(match && definitions.has(match[2] || match[1]));
+    if (!match) return false;
+    return definitions.has(match[2] || match[3] || match[4]);
   };
 
   // Ключи-источники: то, что может закрыть `(( имя ))`.

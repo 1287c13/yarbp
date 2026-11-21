@@ -10,10 +10,11 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
     return m ? m[1] : null;
   };
 
-  const replaceInString = (str, params) => {
+  const replaceInString = (str, params, consumed) => {
     return str.replace(/\(\(\s*([^\s()]+)\s*\)\)/g, (match, name) => {
       const val = params.get(name);
       if (val && (val.valueType === 'STRING' || val.valueType === 'NUMBER')) {
+        consumed?.add(name);
         return String(val.value);
       }
       return match;
@@ -22,9 +23,10 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
 
   // Определение: @a.
   const macroDefRegex = /^@([\p{L}\p{N}_-]+)$/u;
-  const macroCallRegex = /^([\p{L}\p{N}_-]+)(?:\(([\p{L}\p{N}_-]+)\))?$/u;
+  // `имя(макрос)`, `(макрос)` — анонимный объект, `макрос` — без переименования.
+  const macroCallRegex = /^(?:([\p{L}\p{N}_-]+)\(([\p{L}\p{N}_-]+)\)|\(([\p{L}\p{N}_-]+)\)|([\p{L}\p{N}_-]+))$/u;
 
-  const getMacroName = (match) => match ? (match[2] || match[1]) : null;
+  const getMacroName = (match) => match ? (match[2] || match[3] || match[4]) : null;
 
   const macros = new Map();
   const otherRoot = [];
@@ -231,34 +233,15 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
     if (processed !== REMOVE) rootChildren.push(processed);
   }
 
-  function substitute(body, params, positional = []) {
-    // Имена, встречающиеся в теле, закреплены за одноимёнными аргументами.
-    const namedNames = new Set();
-    const collectNames = (node) => {
-      if (!node || node.nodeType !== 'MEANING') return;
-      if (node.valueType !== 'CODE' && typeof node.value === 'string') {
-        for (const match of node.value.matchAll(placeholderRegex)) {
-          namedNames.add(match[1]);
-        }
-      }
-      for (const child of node.children || []) collectNames(child);
-    };
-    collectNames(body);
-
-    const availablePositional = positional.filter(param =>
-      param && param.key && !namedNames.has(param.key));
-    let positionalIndex = 0;
-
-    const takeParam = (name) => {
-      let param = params.get(name);
-      if (!param && positionalIndex < availablePositional.length) {
-        param = availablePositional[positionalIndex++];
-      }
-      return param;
-    };
-
+  function substitute(body, params, consumed = new Set(), missing = new Set()) {
     const stack = [{ node: body, parent: null, index: -1, isProcessed: false }];
     const resultMap = new Map();
+
+    const takeParam = (name) => {
+      const param = params.get(name);
+      if (param) consumed.add(name);
+      return param;
+    };
 
     while (stack.length) {
       const { node, parent, index, isProcessed } = stack.pop();
@@ -267,8 +250,8 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
       if (isProcessed) {
         let newNode = clone(node);
         // У объектного узла значение может быть шорткатом: `@макро = (( имя ))`.
-        // Подставляем и именованный, и позиционный аргумент, иначе шорткат
-        // остаётся плейсхолдером и сахар получает `(( имя ))` вместо значения.
+        // Подставляем только аргумент с тем же именем; без него шорткат снимаем,
+        // чтобы сахар не получил `(( имя ))` вместо значения.
         if (node.valueType !== 'CODE' && typeof node.value === 'string'
             && isPurePlaceholder(node.value)) {
           const name = getPlaceholderName(node.value);
@@ -286,7 +269,14 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
             } else {
               newNode.value = String(param.value ?? '');
             }
+          } else {
+            delete newNode.value;
+            if (name) missing.add(name);
           }
+        }
+        if (node.valueType !== 'CODE' && typeof node.value === 'string'
+            && !isPurePlaceholder(node.value) && node.value.includes('((')) {
+          newNode.value = replaceInString(newNode.value, params, consumed);
         }
         if (node.children && Array.isArray(node.children)) {
           const newChildren = [];
@@ -335,7 +325,7 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
           continue;
         }
         if (val.includes('((')) {
-          const newVal = replaceInString(val, params);
+          const newVal = replaceInString(val, params, consumed);
           const newNode = clone(node);
           newNode.value = newVal;
           resultMap.set(node, newNode);
@@ -353,9 +343,12 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
       } else {
         let result = node;
         if (node.valueType !== 'CODE' && typeof node.value === 'string'
-            && isPurePlaceholder(node.value)) {
-          result = clone(node);
-          result.value = replaceInString(result.value, params);
+            && node.value.includes('((')) {
+          const newValue = replaceInString(node.value, params, consumed);
+          if (newValue !== node.value) {
+            result = clone(node);
+            result.value = newValue;
+          }
         }
         resultMap.set(node, result);
       }
@@ -369,7 +362,8 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
     if (!callMatch) return clone(callNode);
 
     const macroName = getMacroName(callMatch);
-    const inherited = callMatch[2] ? callMatch[1] : null;
+    const anonymous = Boolean(callMatch[3]);
+    const inherited = callMatch[2] ? callMatch[1] : (anonymous ? '' : null);
     const macroDef = macros.get(macroName);
     if (!macroDef) return clone(callNode);
 
@@ -380,12 +374,25 @@ export function expandMacros(ast, diagnostics = [], sourceText = '') {
       }
     }
     const bodyClone = clone(macroDef.body);
-    const result = substitute(bodyClone, params, Array.from(params.values()));
+    const consumed = new Set();
+    const missing = new Set();
+    const result = substitute(bodyClone, params, consumed, missing);
+    for (const name of missing) {
+      report('макрос «' + macroName + '»: нет аргумента «' + name + '»', callNode);
+    }
 
     if (result && result.nodeType === 'MEANING' && result.valueType === 'OBJECT') {
       result.__macroExpanded = true;
-      if (inherited) {
+      if (inherited !== null) {
         result.key = inherited;
+      }
+
+      // Аргументы, которые не были подставлены по имени, остаются детьми
+      // результата: это обычные поля объекта, а не «магические» параметры.
+      const extras = (callNode.children || []).filter(child =>
+        child && child.nodeType === 'MEANING' && !consumed.has(child.key));
+      if (extras.length) {
+        result.children = (result.children || []).concat(extras.map(clone));
       }
     }
     return result;
